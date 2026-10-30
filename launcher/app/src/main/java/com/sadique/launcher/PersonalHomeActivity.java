@@ -59,7 +59,7 @@ public final class PersonalHomeActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private SharedPreferences prefs;
     private LinearLayout page, header, actions;
-    private GridLayout grid;
+    private GridLayout grid, dock;
     private TextView userName, time, date, networkStatus;
     private ImageView avatar;
     private Bitmap avatarBitmap;
@@ -100,9 +100,15 @@ public final class PersonalHomeActivity extends Activity {
 
     private GradientDrawable surface(boolean focused) {
         GradientDrawable shape = new GradientDrawable();
-        shape.setColor(focused ? 0xff153d5b : 0xef0a2036);
+        shape.setColor(focused ? 0xee153d5b : 0xd0092038);
         shape.setCornerRadius(dp(16));
         shape.setStroke(dp(focused ? 3 : 1), focused ? CYAN : 0xff28435e);
+        return shape;
+    }
+
+    private GradientDrawable avatarSurface(boolean focused) {
+        GradientDrawable shape = surface(focused);
+        shape.setShape(GradientDrawable.OVAL);
         return shape;
     }
 
@@ -162,11 +168,11 @@ public final class PersonalHomeActivity extends Activity {
         avatar = new ImageView(this);
         avatar.setContentDescription("Edit profile photo");
         avatar.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        avatar.setBackground(surface(false));
+        avatar.setBackground(avatarSurface(false));
         avatar.setClipToOutline(true);
         avatar.setFocusable(true);
         avatar.setOnClickListener(v -> editProfile());
-        avatar.setOnFocusChangeListener((v, focus) -> v.setBackground(surface(focus)));
+        avatar.setOnFocusChangeListener((v, focus) -> v.setBackground(avatarSurface(focus)));
         header.addView(avatar, new LinearLayout.LayoutParams(dp(48), dp(48)));
         LinearLayout identity = new LinearLayout(this);
         identity.setPadding(dp(12), 0, dp(4), 0);
@@ -175,7 +181,7 @@ public final class PersonalHomeActivity extends Activity {
         userName.setMaxLines(2);
         userName.setEllipsize(android.text.TextUtils.TruncateAt.END);
         identity.addView(userName);
-        identity.addView(text("Personal Home", 12, MUTED));
+        identity.addView(text("Personal Launcher", 12, MUTED));
         header.addView(identity, new LinearLayout.LayoutParams(0, -2, 1));
         networkStatus = text("", 13, MUTED);
         networkStatus.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
@@ -193,20 +199,41 @@ public final class PersonalHomeActivity extends Activity {
         addAction(actions, "Search apps", () -> searchApps());
         addAction(actions, "✦ Gemini", () -> openGemini());
         addAction(actions, "Settings", () -> showSettings());
-        page.addView(actions, new LinearLayout.LayoutParams(-1, -2));
+        if (tv) {
+            header.addView(actions, new LinearLayout.LayoutParams(dp(310), -2));
+        } else {
+            page.addView(actions, new LinearLayout.LayoutParams(-1, -2));
+        }
         LinearLayout clock = new LinearLayout(this);
         clock.setOrientation(LinearLayout.VERTICAL);
         clock.setGravity(Gravity.CENTER);
-        clock.setPadding(0, dp(tv ? 22 : 30), 0, dp(tv ? 24 : 32));
+        clock.setPadding(0, dp(tv ? 18 : 30), 0, dp(tv ? 20 : 32));
         time = text("", tv ? 66 : 56, TEXT);
         time.setGravity(Gravity.CENTER);
         time.setSingleLine(true);
+        time.setTypeface(android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL));
         time.setAutoSizeTextTypeUniformWithConfiguration(26, tv ? 66 : 56, 2, android.util.TypedValue.COMPLEX_UNIT_SP);
         date = text("", tv ? 14 : 13, MUTED);
         date.setGravity(Gravity.CENTER);
         clock.addView(time, new LinearLayout.LayoutParams(-1, dp(tv ? 90 : 80)));
         clock.addView(date);
         page.addView(clock);
+        time.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            int[] position = new int[2], origin = new int[2];
+            time.getLocationInWindow(position);
+            root.getLocationInWindow(origin);
+            sky.clockX = position[0] - origin[0] + time.getWidth() / 2f;
+            sky.clockY = position[1] - origin[1] + time.getHeight() / 2f;
+            sky.invalidate();
+        });
+        if (tv) {
+            dock = new GridLayout(this);
+            dock.setContentDescription("Favourite apps");
+            page.addView(dock, new LinearLayout.LayoutParams(-1, -2));
+            TextView quickHeading = text("Quick access", 16, MUTED);
+            quickHeading.setPadding(dp(4), dp(14), 0, dp(4));
+            page.addView(quickHeading);
+        }
         LinearLayout shortcuts = new LinearLayout(this);
         if (tv) addAction(shortcuts, "Inputs", () -> showInputs());
         addAction(shortcuts, "Play Store", () -> openStore(""));
@@ -234,7 +261,11 @@ public final class PersonalHomeActivity extends Activity {
 
     private void updateClock() {
         Calendar now = Calendar.getInstance();
-        time.setText(PersonalHomeModel.time(now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE)));
+        String value = PersonalHomeModel.time(now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE));
+        android.text.SpannableString clockText = new android.text.SpannableString(value);
+        clockText.setSpan(new android.text.style.RelativeSizeSpan(.42f), value.length() - 2,
+                value.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        time.setText(clockText);
         date.setText(new java.text.SimpleDateFormat("EEE, d MMM yyyy", Locale.getDefault()).format(now.getTime()));
         sky.minute = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
         sky.invalidate();
@@ -277,9 +308,14 @@ public final class PersonalHomeActivity extends Activity {
                 try {
                     String label = info.loadLabel(getPackageManager()).toString();
                     App old = previous.get(pkg);
-                    android.graphics.drawable.Drawable icon = old != null && old.name.equals(label)
-                            && java.util.Objects.equals(old.info.activityInfo.applicationInfo.sourceDir, info.activityInfo.applicationInfo.sourceDir)
-                            ? old.icon : info.loadIcon(getPackageManager());
+                    android.graphics.drawable.Drawable icon;
+                    if (old != null && old.name.equals(label)
+                            && java.util.Objects.equals(old.info.activityInfo.applicationInfo.sourceDir, info.activityInfo.applicationInfo.sourceDir)) {
+                        icon = old.icon;
+                    } else {
+                        icon = tv ? info.activityInfo.loadBanner(getPackageManager()) : null;
+                        if (icon == null) icon = info.loadIcon(getPackageManager());
+                    }
                     // Icon resource access/decoding can be expensive on low-memory TVs. Never do it on UI.
                     apps.add(new App(label, info, icon));
                 } catch (RuntimeException removedDuringQuery) {
@@ -319,7 +355,32 @@ public final class PersonalHomeActivity extends Activity {
                 prefs.getInt(tv ? "tv_columns" : "phone_columns", 0));
         grid.setColumnCount(columns);
         int width = pageWidth / columns;
-        for (App app : apps) {
+        if (dock != null) {
+            dock.removeAllViews();
+            int slots = PersonalHomeModel.dockSlots((int) (pageWidth / getResources().getDisplayMetrics().density));
+            dock.setColumnCount(slots);
+            List<App> favourites = new ArrayList<>(apps);
+            Collections.sort(favourites, (a, b) -> Integer.compare(
+                    PersonalHomeModel.dockRank(a.info.activityInfo.packageName),
+                    PersonalHomeModel.dockRank(b.info.activityInfo.packageName)));
+            for (int i = 0; i < Math.min(slots - 1, favourites.size()); i++) {
+                addAppTile(dock, favourites.get(i), pageWidth / slots);
+            }
+            Button allApps = button("All apps", () -> {
+                if (grid.getChildCount() > 0) grid.getChildAt(0).requestFocus();
+            });
+            allApps.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_apps, 0, 0);
+            allApps.setCompoundDrawablePadding(dp(8));
+            GridLayout.LayoutParams appsPosition = new GridLayout.LayoutParams();
+            appsPosition.width = pageWidth / slots - dp(8);
+            appsPosition.height = dp(128);
+            appsPosition.setMargins(dp(4), dp(4), dp(4), dp(4));
+            dock.addView(allApps, appsPosition);
+        }
+        for (App app : apps) addAppTile(grid, app, width);
+    }
+
+    private void addAppTile(GridLayout parent, App app, int width) {
             LinearLayout tile = new LinearLayout(this);
             tile.setOrientation(LinearLayout.VERTICAL);
             tile.setGravity(Gravity.CENTER);
@@ -331,10 +392,11 @@ public final class PersonalHomeActivity extends Activity {
             tile.setOnFocusChangeListener((v, focus) -> v.setBackground(surface(focus)));
             ImageView icon = new ImageView(this);
             icon.setImageDrawable(app.icon);
-            tile.addView(icon, new LinearLayout.LayoutParams(dp(tv ? 58 : 44), dp(tv ? 58 : 44)));
+            icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            tile.addView(icon, new LinearLayout.LayoutParams(tv ? -1 : dp(44), dp(tv ? 76 : 44)));
             TextView name = text(app.name, 14, TEXT);
             name.setGravity(Gravity.CENTER);
-            name.setMaxLines(2);
+            name.setMaxLines(tv ? 1 : 2);
             name.setEllipsize(android.text.TextUtils.TruncateAt.END);
             name.setPadding(0, dp(8), 0, 0);
             tile.addView(name, new LinearLayout.LayoutParams(-1, -2));
@@ -350,8 +412,7 @@ public final class PersonalHomeActivity extends Activity {
             p.width = width - dp(8);
             p.height = dp(tv ? 128 : 112);
             p.setMargins(dp(4), dp(4), dp(4), dp(4));
-            grid.addView(tile, p);
-        }
+            parent.addView(tile, p);
     }
 
     private void searchApps() {
@@ -598,7 +659,7 @@ public final class PersonalHomeActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         if (panel != null) panel.dismiss();
-        if (grid.getChildCount() > 0) grid.getChildAt(0).requestFocus();
+        focusFirstApp();
         handleHomeAction(intent);
     }
 
@@ -609,7 +670,12 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     @Override public void onBackPressed() {
-        if (grid.getChildCount() > 0) grid.getChildAt(0).requestFocus();
+        focusFirstApp();
+    }
+
+    private void focusFirstApp() {
+        GridLayout target = dock != null && dock.getChildCount() > 0 ? dock : grid;
+        if (target.getChildCount() > 0) target.getChildAt(0).requestFocus();
     }
 
     @Override protected void onDestroy() {
@@ -623,6 +689,7 @@ public final class PersonalHomeActivity extends Activity {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Bitmap backdrop = BitmapFactory.decodeResource(getResources(), R.drawable.personal_wallpaper);
         int minute;
+        float clockX = -1, clockY = -1;
         SkyClock() { super(PersonalHomeActivity.this); setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO); }
         @Override protected void onDraw(Canvas canvas) {
             float day = PersonalHomeModel.daylight(minute);
@@ -639,7 +706,8 @@ public final class PersonalHomeActivity extends Activity {
                         left + backdrop.getWidth() * scale, height), paint);
                 canvas.drawColor(((int) (35 + 125 * (1 - day)) << 24) | 0x00051327);
             }
-            float x = getWidth() / 2f, y = dp(tv ? 178 : 190), radius = dp(tv ? 40 : 36);
+            float x = clockX >= 0 ? clockX : getWidth() / 2f;
+            float y = clockY >= 0 ? clockY : dp(tv ? 178 : 190), radius = dp(tv ? 40 : 36);
             boolean sun = minute >= 360 && minute < 1080;
             int glow = sun ? 0x60ffd78a : 0x504ac8ff;
             paint.setShader(new RadialGradient(x, y, radius * 2.5f, glow, Color.TRANSPARENT, Shader.TileMode.CLAMP));

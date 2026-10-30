@@ -4,6 +4,18 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class PersonalHomeModelTest {
+    @Test public void tvDockFitsTheAvailableWidth() {
+        assertEquals(5, PersonalHomeModel.dockSlots(896));
+        assertEquals(3, PersonalHomeModel.dockSlots(480));
+        assertEquals(2, PersonalHomeModel.dockSlots(280));
+    }
+
+    @Test public void installedStreamingAppsComeFirstWithoutInventingTiles() {
+        assertTrue(PersonalHomeModel.dockRank("com.google.android.youtube.tv") < PersonalHomeModel.dockRank("com.netflix.ninja"));
+        assertTrue(PersonalHomeModel.dockRank("com.netflix.ninja") < PersonalHomeModel.dockRank("org.videolan.vlc"));
+        assertEquals(4, PersonalHomeModel.dockRank("com.example.localapp"));
+    }
+
     @Test public void twelveHourTimeHandlesMidnightNoonAndEvening() {
         assertEquals("12:00 AM", PersonalHomeModel.time(0, 0));
         assertEquals("09:05 AM", PersonalHomeModel.time(9, 5));

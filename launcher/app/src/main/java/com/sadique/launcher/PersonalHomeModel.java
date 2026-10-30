@@ -2,6 +2,18 @@ package com.sadique.launcher;
 
 /** Device-independent rules for the personal home. Times follow the device clock, not location. */
 final class PersonalHomeModel {
+    static int dockSlots(int widthDp) {
+        return Math.max(2, Math.min(5, widthDp / 144));
+    }
+
+    static int dockRank(String packageName) {
+        if ("com.google.android.youtube.tv".equals(packageName) || "com.google.android.youtube".equals(packageName)) return 0;
+        if ("com.netflix.ninja".equals(packageName) || "com.netflix.mediaclient".equals(packageName)) return 1;
+        if ("com.amazon.amazonvideo.livingroom".equals(packageName) || "com.amazon.avod.thirdpartyclient".equals(packageName)) return 2;
+        if ("org.videolan.vlc".equals(packageName)) return 3;
+        return 4;
+    }
+
     static String time(int hour, int minute) {
         hour = Math.floorMod(hour, 24);
         return String.format(java.util.Locale.ENGLISH, "%02d:%02d %s",
