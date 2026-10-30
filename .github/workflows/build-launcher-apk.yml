@@ -1,0 +1,59 @@
+name: Build Personal Launcher APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'launcher/**'
+      - '.github/workflows/build-launcher-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+
+      - name: Install Android SDK packages
+        run: |
+          SDKMGR="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKMGR" ] || SDKMGR="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
+          yes | "$SDKMGR" --licenses > /dev/null || true
+          "$SDKMGR" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Build release APK
+        working-directory: launcher
+        run: gradle assembleRelease --console=plain
+
+      - name: Prepare APK
+        run: |
+          cp launcher/app/build/outputs/apk/release/app-release.apk PersonalLauncher.apk
+          ls -la PersonalLauncher.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PersonalLauncher-apk
+          path: PersonalLauncher.apk
+
+      - name: Create GitHub release
+        run: |
+          TAG="v4.0-build-${{ github.run_number }}"
+          gh release create "$TAG" PersonalLauncher.apk --title "Personal Launcher v4.0 (build ${{ github.run_number }})" --notes "Personal Launcher v4.0 by Sadique Sadiq. Debug-signed release build."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
