@@ -26,6 +26,10 @@ final class AppArtwork {
         int height = ratio >= 1 ? Math.round(size / ratio) : size;
         icon.setBounds((size - width) / 2, (size - height) / 2, (size + width) / 2, (size + height) / 2);
         icon.draw(canvas);
+        // Sample before trimming: a cropped logo's corner may be red (Netflix N),
+        // which must never become the background colour of the whole card.
+        int nativeCorner = bitmap.getPixel(0, 0);
+        int nativeBackground = Color.alpha(nativeCorner) > 240 ? nativeCorner : 0xff092038;
         // Remove baked-in transparent margins from legacy icons, not just ImageView padding.
         int left = size, top = size, right = -1, bottom = -1;
         for (int y = 0; y < size; y++) for (int x = 0; x < size; x++) {
@@ -55,10 +59,7 @@ final class AppArtwork {
         // A clean card background and proportional logo; never stretch icon edge pixels.
         Bitmap card = Bitmap.createBitmap(320, 180, Bitmap.Config.ARGB_8888);
         Canvas cardCanvas = new Canvas(card);
-        int background = 0xff092038;
-        int corner = bitmap.getPixel(0, 0);
-        if (Color.alpha(corner) > 240) background = corner;
-        cardCanvas.drawColor(background);
+        cardCanvas.drawColor(nativeBackground);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
         float scale = Math.min(270f / bitmap.getWidth(), 140f / bitmap.getHeight());
         float w = bitmap.getWidth() * scale, h = bitmap.getHeight() * scale;
