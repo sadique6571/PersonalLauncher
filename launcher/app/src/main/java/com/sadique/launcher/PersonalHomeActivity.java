@@ -52,23 +52,32 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Personal fork UI: responsive touch/D-pad home, no account access or network requests of its own. */
+/** Responsive personal Home. Profile/search stay local; online scenery/weather use their own view. */
 public final class PersonalHomeActivity extends Activity {
     private static final int CYAN = 0xff40d9ff, TEXT = 0xfff0f7ff, MUTED = 0xffa4bcd6;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private SharedPreferences prefs;
     private LinearLayout page, header, actions;
-    private GridLayout grid, dock;
-    private TextView userName, time, date, networkStatus;
+    private GridLayout grid;
+    private TextView userName, time, date, networkStatus, appHeading;
     private ImageView avatar;
     private Bitmap avatarBitmap;
+    private Bitmap customWallpaper;
+    private ContinueWatchingView continueWatching;
     private SkyClock sky;
     private ConnectivityManager connectivity;
     private boolean networkRegistered, resumed, tv;
     private int pageWidth;
     private List<App> cachedApps;
     private AlertDialog panel, profile;
+    private AlertDialog searchDialog;
+    private EditText searchInput;
+    private Runnable searchRefresh;
+    private final Runnable idleScreensaver = () -> {
+        if (resumed && hasWindowFocus()) launch(new Intent(this, LandscapeActivity.class));
+        else armIdleScreensaver();
+    };
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
         @Override public void onAvailable(Network network) { handler.post(() -> updateNetwork()); }
         @Override public void onLost(Network network) { handler.post(() -> updateNetwork()); }
@@ -92,6 +101,7 @@ public final class PersonalHomeActivity extends Activity {
         connectivity = getSystemService(ConnectivityManager.class);
         buildHome();
         loadAvatar();
+        loadWallpaper();
         if (!prefs.getBoolean("setup", false)) handler.post(() -> editProfile());
         else handleHomeAction(getIntent());
     }
@@ -135,31 +145,41 @@ public final class PersonalHomeActivity extends Activity {
         return view;
     }
 
-    private Button addAction(LinearLayout parent, String title, Runnable action) {
-        Button view = button(title, action);
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(52), 1);
-        p.setMargins(dp(3), dp(5), dp(3), dp(5));
-        parent.addView(view, p);
-        return view;
+    private void iconAction(String title, int resource, Runnable action) {
+        android.widget.ImageButton icon = new android.widget.ImageButton(this);
+        icon.setImageResource(resource);
+        icon.setColorFilter(TEXT);
+        icon.setContentDescription(title);
+        icon.setTooltipText(title);
+        icon.setPadding(dp(11), dp(11), dp(11), dp(11));
+        icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        icon.setBackground(surface(false));
+        icon.setFocusable(true);
+        icon.setOnFocusChangeListener((v, focus) -> v.setBackground(surface(focus)));
+        icon.setOnClickListener(v -> action.run());
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(tv ? 48 : 44), dp(tv ? 48 : 44));
+        p.setMargins(dp(2), 0, dp(2), 0);
+        actions.addView(icon, p);
     }
 
     private void buildHome() {
+        if (continueWatching != null) continueWatching.stop();
+        pageWidth = 0;
         android.widget.FrameLayout root = new android.widget.FrameLayout(this);
         root.setBackgroundColor(0xff031126);
         sky = new SkyClock();
         root.addView(sky, new ViewGroup.LayoutParams(-1, -1));
         ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
+        scroll.setFillViewport(false);
         scroll.setClipToPadding(false);
         page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
         int inset = dp(tv ? 32 : 16);
-        page.setPadding(inset, dp(14), inset, dp(28));
-        scroll.addView(page, new ViewGroup.LayoutParams(-1, -2));
-        root.addView(scroll, new ViewGroup.LayoutParams(-1, -1));
+        page.setPadding(inset, dp(14), inset, dp(12));
+        root.addView(page, new ViewGroup.LayoutParams(-1, -1));
         root.setOnApplyWindowInsetsListener((v, insets) -> {
-            scroll.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
-                    insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+            page.setPadding(inset + insets.getSystemWindowInsetLeft(), dp(14) + insets.getSystemWindowInsetTop(),
+                    inset + insets.getSystemWindowInsetRight(), dp(12) + insets.getSystemWindowInsetBottom());
             return insets;
         });
         setContentView(root);
@@ -192,31 +212,38 @@ public final class PersonalHomeActivity extends Activity {
             if (focus) v.setBackground(surface(true));
             else v.setBackgroundColor(Color.TRANSPARENT);
         });
-        networkStatus.setPadding(dp(8), dp(8), dp(8), dp(8));
+        networkStatus.setPadding(dp(tv ? 13 : 11), dp(8), dp(tv ? 13 : 11), dp(8));
         networkStatus.setOnClickListener(v -> openSetting(Settings.ACTION_WIFI_SETTINGS));
-        header.addView(networkStatus, new LinearLayout.LayoutParams(-2, dp(48)));
         page.addView(header);
         actions = new LinearLayout(this);
-        addAction(actions, "Search apps", () -> searchApps());
-        addAction(actions, "✦ Gemini", () -> openGemini());
-        addAction(actions, "Settings", () -> showSettings());
+        actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        actions.addView(networkStatus, new LinearLayout.LayoutParams(dp(tv ? 48 : 44), dp(tv ? 48 : 44)));
+        iconAction("Search apps", R.drawable.ic_search, () -> searchApps());
+        iconAction("TV Assistant / voice search", R.drawable.ic_microphone, () -> voiceSearch());
+        if (tv) iconAction("Inputs", R.drawable.ic_input, () -> showInputs());
+        iconAction("Play Store", R.drawable.ic_apps_pill, () -> openStore(""));
+        iconAction("Screensaver", R.drawable.ic_picture, () -> launch(new Intent(this, LandscapeActivity.class)));
+        iconAction("Settings", R.drawable.ic_settings, () -> showSettings());
         if (tv) {
-            header.addView(actions, new LinearLayout.LayoutParams(dp(340), -2));
+            header.addView(actions, new LinearLayout.LayoutParams(-2, -2));
         } else {
             page.addView(actions, new LinearLayout.LayoutParams(-1, -2));
         }
         LinearLayout clock = new LinearLayout(this);
         clock.setOrientation(LinearLayout.VERTICAL);
         clock.setGravity(Gravity.CENTER);
-        clock.setPadding(0, dp(tv ? 18 : 30), 0, dp(tv ? 20 : 32));
-        time = text("", tv ? 66 : 56, TEXT);
+        boolean compact = getResources().getConfiguration().screenHeightDp < 480;
+        clock.setPadding(0, dp(compact ? 0 : tv ? 18 : 24), 0, dp(compact ? 8 : 16));
+        int clockSize = prefs.getInt("clock_size", tv ? 66 : 56);
+        if (compact) clockSize = Math.min(clockSize, 44);
+        time = text("", clockSize, TEXT);
         time.setGravity(Gravity.CENTER);
         time.setSingleLine(true);
         time.setTypeface(android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL));
-        time.setAutoSizeTextTypeUniformWithConfiguration(26, tv ? 66 : 56, 2, android.util.TypedValue.COMPLEX_UNIT_SP);
+        time.setAutoSizeTextTypeUniformWithConfiguration(26, clockSize, 2, android.util.TypedValue.COMPLEX_UNIT_SP);
         date = text("", tv ? 14 : 13, MUTED);
         date.setGravity(Gravity.CENTER);
-        clock.addView(time, new LinearLayout.LayoutParams(-1, dp(tv ? 90 : 80)));
+        clock.addView(time, new LinearLayout.LayoutParams(-1, dp(clockSize + (compact ? 10 : 24))));
         clock.addView(date);
         page.addView(clock);
         time.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
@@ -227,25 +254,31 @@ public final class PersonalHomeActivity extends Activity {
             sky.clockY = position[1] - origin[1] + time.getHeight() / 2f;
             sky.invalidate();
         });
-        if (tv) {
-            dock = new GridLayout(this);
-            dock.setContentDescription("Favourite apps");
-            page.addView(dock, new LinearLayout.LayoutParams(-1, -2));
-            TextView quickHeading = text("Quick access", 16, MUTED);
-            quickHeading.setPadding(dp(4), dp(14), 0, dp(4));
-            page.addView(quickHeading);
-        }
-        LinearLayout shortcuts = new LinearLayout(this);
-        if (tv) shortcutIcon(addAction(shortcuts, "Inputs", () -> showInputs()), R.drawable.ic_input);
-        shortcutIcon(addAction(shortcuts, "Play Store", () -> openStore("")), R.drawable.ic_apps_pill);
-        if (tv) shortcutIcon(addAction(shortcuts, "Screensaver", () -> launch(new Intent(this, ClockActivity.class))), R.drawable.ic_picture);
-        else shortcutIcon(addAction(shortcuts, "Default Home", () -> launch(new Intent(this, HomeSettingsActivity.class))), R.drawable.ic_home_settings_pill);
-        page.addView(shortcuts);
-        TextView heading = text("Your apps", 20, TEXT);
-        heading.setPadding(dp(4), dp(20), 0, dp(12));
-        page.addView(heading);
+        appHeading = text("Your apps", prefs.getInt("focus_title_size", tv ? 32 : 26), TEXT);
+        appHeading.setSingleLine(true);
+        appHeading.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        appHeading.setPadding(dp(4), dp(8), 0, dp(12));
+        page.addView(appHeading);
         grid = new GridLayout(this);
-        page.addView(grid, new LinearLayout.LayoutParams(-1, -2));
+        grid.setClipChildren(false);
+        grid.setClipToPadding(false);
+        LinearLayout appBody = new LinearLayout(this);
+        appBody.setOrientation(LinearLayout.VERTICAL);
+        appBody.addView(grid, new LinearLayout.LayoutParams(-1, -2));
+        continueWatching = new ContinueWatchingView(this, label -> appHeading.setText(label));
+        appBody.addView(continueWatching, new LinearLayout.LayoutParams(-1, -2));
+        scroll.addView(appBody, new ViewGroup.LayoutParams(-1, -2));
+        page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        scroll.setOnScrollChangeListener((v, x, y, oldX, oldY) -> {
+            View focused = getCurrentFocus();
+            if (focused != null && focused.getTag() instanceof Integer && prefs.getBoolean("focus_glow", true)) {
+                int[] position = new int[2], origin = new int[2];
+                focused.getLocationInWindow(position); sky.getLocationInWindow(origin);
+                sky.focusX = position[0] - origin[0] + focused.getWidth() / 2f;
+                sky.focusY = position[1] - origin[1] + focused.getHeight() / 2f;
+                sky.invalidate();
+            }
+        });
         page.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             int width = page.getWidth() - page.getPaddingLeft() - page.getPaddingRight();
             if (width > 0 && width != pageWidth) {
@@ -258,6 +291,7 @@ public final class PersonalHomeActivity extends Activity {
         updateClock();
         updateNetwork();
         applyBrightness(prefs.getInt("brightness", 80));
+        if (resumed) continueWatching.start();
     }
 
     private void updateClock() {
@@ -272,21 +306,14 @@ public final class PersonalHomeActivity extends Activity {
         sky.invalidate();
     }
 
-    private void shortcutIcon(Button button, int resource) {
-        android.graphics.drawable.Drawable icon = getDrawable(resource).mutate();
-        icon.setTint(MUTED);
-        icon.setBounds(0, 0, dp(22), dp(22));
-        button.setCompoundDrawables(icon, null, null, null);
-        button.setCompoundDrawablePadding(dp(9));
-    }
-
     private void updateNetwork() {
         if (networkStatus == null) return;
         Network active = connectivity == null ? null : connectivity.getActiveNetwork();
         NetworkCapabilities caps = active == null ? null : connectivity.getNetworkCapabilities(active);
         boolean online = caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
         boolean wifi = caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
-        networkStatus.setText(online ? (wifi ? "Wi-Fi · Online" : "Online") : "No internet");
+        networkStatus.setText("");
+        networkStatus.setTooltipText(online ? (wifi ? "Wi-Fi · Internet available" : "Internet available") : "No internet");
         int color = online ? 0xff59e493 : 0xffff6c78;
         networkStatus.setTextColor(color);
         int iconId = wifi || caps == null ? R.drawable.ic_wifi
@@ -317,16 +344,14 @@ public final class PersonalHomeActivity extends Activity {
                 try {
                     String label = info.loadLabel(getPackageManager()).toString();
                     App old = previous.get(pkg);
-                    android.graphics.drawable.Drawable icon;
+                    AppArtwork artwork;
                     if (old != null && old.name.equals(label)
                             && java.util.Objects.equals(old.info.activityInfo.applicationInfo.sourceDir, info.activityInfo.applicationInfo.sourceDir)) {
-                        icon = old.icon;
+                        apps.add(new App(label, info, old.icon, old.accent));
                     } else {
-                        icon = tv ? info.activityInfo.loadBanner(getPackageManager()) : null;
-                        if (icon == null) icon = info.loadIcon(getPackageManager());
+                        artwork = AppArtwork.create(getResources(), info.loadIcon(getPackageManager()));
+                        apps.add(new App(label, info, artwork.image, artwork.accent));
                     }
-                    // Icon resource access/decoding can be expensive on low-memory TVs. Never do it on UI.
-                    apps.add(new App(label, info, icon));
                 } catch (RuntimeException removedDuringQuery) {
                     // A package can be replaced or removed between queryIntentActivities and loading its resources.
                 }
@@ -342,8 +367,9 @@ public final class PersonalHomeActivity extends Activity {
         final String name;
         final ResolveInfo info;
         final android.graphics.drawable.Drawable icon;
-        App(String name, ResolveInfo info, android.graphics.drawable.Drawable icon) {
-            this.name = name; this.info = info; this.icon = icon;
+        final int accent;
+        App(String name, ResolveInfo info, android.graphics.drawable.Drawable icon, int accent) {
+            this.name = name; this.info = info; this.icon = icon; this.accent = accent;
         }
     }
 
@@ -359,80 +385,136 @@ public final class PersonalHomeActivity extends Activity {
 
     private void renderApps(List<App> apps) {
         cachedApps = apps;
+        appHeading.setText("Your apps");
         grid.removeAllViews();
         int columns = PersonalHomeModel.columns((int) (pageWidth / getResources().getDisplayMetrics().density),
-                prefs.getInt(tv ? "tv_columns" : "phone_columns", 0));
+                prefs.getInt(tv ? "tv_columns" : "phone_columns", 0), prefs.getBoolean("large_tiles", false));
         grid.setColumnCount(columns);
         int width = pageWidth / columns;
-        if (dock != null) {
-            dock.removeAllViews();
-            int slots = PersonalHomeModel.dockSlots((int) (pageWidth / getResources().getDisplayMetrics().density));
-            dock.setColumnCount(slots);
-            List<App> favourites = new ArrayList<>(apps);
-            Collections.sort(favourites, (a, b) -> Integer.compare(
-                    PersonalHomeModel.dockRank(a.info.activityInfo.packageName),
-                    PersonalHomeModel.dockRank(b.info.activityInfo.packageName)));
-            for (int i = 0; i < Math.min(slots - 1, favourites.size()); i++) {
-                addAppTile(dock, favourites.get(i), pageWidth / slots);
-            }
-            Button allApps = button("All apps", () -> {
-                if (grid.getChildCount() > 0) grid.getChildAt(0).requestFocus();
-            });
-            android.graphics.drawable.Drawable appsIcon = getDrawable(R.drawable.ic_apps).mutate();
-            appsIcon.setBounds(0, 0, dp(44), dp(44));
-            allApps.setCompoundDrawables(null, appsIcon, null, null);
-            allApps.setCompoundDrawablePadding(dp(8));
-            GridLayout.LayoutParams appsPosition = new GridLayout.LayoutParams();
-            appsPosition.width = pageWidth / slots - dp(8);
-            appsPosition.height = dp(128);
-            appsPosition.setMargins(dp(4), dp(4), dp(4), dp(4));
-            dock.addView(allApps, appsPosition);
+        Set<String> hidden = prefs.getStringSet("hidden_apps", Collections.emptySet());
+        for (App app : apps) {
+            if (!hidden.contains(app.info.activityInfo.packageName)) addAppTile(grid, app, width);
         }
-        for (App app : apps) addAppTile(grid, app, width);
+        if (grid.getChildCount() == 0) {
+            appHeading.setText("No visible apps");
+            Toast.makeText(this, "Unhide apps in Settings → Launcher settings", Toast.LENGTH_LONG).show();
+        }
+        if (searchRefresh != null) searchRefresh.run();
     }
 
     private void addAppTile(GridLayout parent, App app, int width) {
-            LinearLayout tile = new LinearLayout(this);
-            tile.setOrientation(LinearLayout.VERTICAL);
-            tile.setGravity(Gravity.CENTER);
-            tile.setPadding(dp(8), dp(12), dp(8), dp(10));
-            tile.setBackground(surface(false));
-            tile.setFocusable(true);
-            tile.setClickable(true);
-            tile.setContentDescription(app.name);
-            tile.setOnFocusChangeListener((v, focus) -> v.setBackground(surface(focus)));
-            ImageView icon = new ImageView(this);
-            icon.setImageDrawable(app.icon);
-            icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            tile.addView(icon, new LinearLayout.LayoutParams(tv ? -1 : dp(44), dp(tv ? 76 : 44)));
-            TextView name = text(app.name, 14, TEXT);
-            name.setGravity(Gravity.CENTER);
-            name.setMaxLines(tv ? 1 : 2);
-            name.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            name.setPadding(0, dp(8), 0, 0);
-            tile.addView(name, new LinearLayout.LayoutParams(-1, -2));
-            tile.setOnClickListener(v -> launch(new Intent(Intent.ACTION_MAIN)
-                    .setClassName(app.info.activityInfo.packageName, app.info.activityInfo.name)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)));
-            tile.setOnLongClickListener(v -> {
-                launch(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        Uri.parse("package:" + app.info.activityInfo.packageName)));
-                return true;
-            });
-            GridLayout.LayoutParams p = new GridLayout.LayoutParams();
-            p.width = width - dp(8);
-            p.height = dp(tv ? 128 : 112);
-            p.setMargins(dp(4), dp(4), dp(4), dp(4));
-            parent.addView(tile, p);
+        android.widget.FrameLayout tile = new android.widget.FrameLayout(this);
+        tile.setBackground(surface(false));
+        tile.setClipToOutline(true);
+        tile.setFocusable(true);
+        tile.setClickable(true);
+        tile.setContentDescription(app.name);
+        tile.setTag(app.accent);
+        tile.setForeground(tileBorder(app.accent, false));
+        ImageView icon = new ImageView(this);
+        icon.setImageDrawable(app.icon);
+        icon.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        tile.addView(icon, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        tile.setOnFocusChangeListener((v, focus) -> {
+            tile.setBackground(surface(focus));
+            tile.setForeground(tileBorder(app.accent, focus));
+            tile.setTranslationZ(focus && prefs.getBoolean("focus_glow", true) ? dp(10) : 0);
+            if (android.os.Build.VERSION.SDK_INT >= 28) {
+                tile.setOutlineAmbientShadowColor(app.accent);
+                tile.setOutlineSpotShadowColor(app.accent);
+            }
+            if (focus) {
+                appHeading.setText(app.name);
+                appHeading.setTextColor(TEXT);
+                int[] position = new int[2], origin = new int[2];
+                tile.getLocationInWindow(position); sky.getLocationInWindow(origin);
+                sky.focusX = position[0] - origin[0] + tile.getWidth() / 2f;
+                sky.focusY = position[1] - origin[1] + tile.getHeight() / 2f;
+                sky.focusRadius = tile.getWidth(); sky.focusAccent = prefs.getBoolean("focus_glow", true) ? app.accent : 0;
+            } else sky.focusAccent = 0;
+            sky.invalidate();
+        });
+        tile.setOnClickListener(v -> launch(new Intent(Intent.ACTION_MAIN)
+                .setClassName(app.info.activityInfo.packageName, app.info.activityInfo.name)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)));
+        tile.setOnLongClickListener(v -> {
+            new AlertDialog.Builder(this).setTitle(app.name).setItems(new String[]{"App info", "Hide from launcher"}, (dialog, which) -> {
+                if (which == 0) launch(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + app.info.activityInfo.packageName)));
+                else {
+                    Set<String> hidden = new HashSet<>(prefs.getStringSet("hidden_apps", Collections.emptySet()));
+                    hidden.add(app.info.activityInfo.packageName);
+                    prefs.edit().putStringSet("hidden_apps", hidden).apply();
+                    refreshApps(); focusFirstApp();
+                }
+            }).show();
+            return true;
+        });
+        GridLayout.LayoutParams position = new GridLayout.LayoutParams();
+        position.width = width - dp(16);
+        position.height = position.width;
+        position.setMargins(dp(8), dp(8), dp(8), dp(8));
+        parent.addView(tile, position);
     }
 
     private void searchApps() {
-        EditText input = new EditText(this);
-        input.setSingleLine(true);
-        input.setHint("App name, e.g. YouTube");
-        new AlertDialog.Builder(this).setTitle("Search Google Play apps").setView(input)
-                .setPositiveButton("Search", (d, which) -> openStore(input.getText().toString().trim()))
-                .setNegativeButton(android.R.string.cancel, null).show();
+        if (searchDialog != null && searchDialog.isShowing()) return;
+        LinearLayout form = new LinearLayout(this); form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(16), dp(8), dp(16), dp(8));
+        EditText input = new EditText(this); input.setSingleLine(true); input.setHint("Search installed apps");
+        searchInput = input;
+        input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+        form.addView(input);
+        LinearLayout results = new LinearLayout(this); results.setOrientation(LinearLayout.VERTICAL);
+        ScrollView matches = new ScrollView(this); matches.addView(results);
+        form.addView(matches, new LinearLayout.LayoutParams(-1, dp(tv ? 250 : 300)));
+        searchDialog = new AlertDialog.Builder(this).setTitle("Search apps").setView(form)
+                .setPositiveButton("Find on Play Store", (dialog, which) -> openStore(input.getText().toString().trim()))
+                .setNeutralButton("Voice search", (dialog, which) -> recognizeIntoSearch())
+                .setNegativeButton("Close", null).create();
+        searchRefresh = () -> {
+            results.removeAllViews();
+            String query = input.getText().toString().trim().toLowerCase(Locale.ROOT);
+            Set<String> hidden = prefs.getStringSet("hidden_apps", Collections.emptySet());
+            int count = 0;
+            if (cachedApps != null) for (App app : cachedApps) {
+                if (hidden.contains(app.info.activityInfo.packageName) || !(app.name + " " + app.info.activityInfo.packageName).toLowerCase(Locale.ROOT).contains(query)) continue;
+                Button result = button(app.name, () -> {
+                    if (searchDialog != null) searchDialog.dismiss();
+                    launch(new Intent(Intent.ACTION_MAIN).setClassName(app.info.activityInfo.packageName, app.info.activityInfo.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                });
+                LinearLayout.LayoutParams position = new LinearLayout.LayoutParams(-1, -2); position.setMargins(0, dp(4), 0, dp(4));
+                results.addView(result, position);
+                if (++count == 16) break;
+            }
+            if (count == 0) results.addView(text(cachedApps == null ? "Loading apps…" : "No installed matches. Find new apps on Play Store.", 15, MUTED));
+        };
+        input.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence value, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence value, int start, int before, int count) { if (searchRefresh != null) searchRefresh.run(); }
+            @Override public void afterTextChanged(android.text.Editable value) { }
+        });
+        searchDialog.setOnDismissListener(dialog -> { searchRefresh = null; searchDialog = null; searchInput = null; });
+        searchDialog.show(); searchRefresh.run();
+    }
+
+    private boolean launchAssistant() {
+        return tryLaunch(new Intent(Intent.ACTION_ASSIST)) || tryLaunch(new Intent(Intent.ACTION_VOICE_COMMAND))
+                || tryLaunch(new Intent(android.speech.RecognizerIntent.ACTION_WEB_SEARCH));
+    }
+
+    private void voiceSearch() { if (!launchAssistant()) recognizeIntoSearch(); }
+
+    private void recognizeIntoSearch() {
+        try {
+            startActivityForResult(new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                    .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+                    .putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                    .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Search launcher apps"), 9);
+        } catch (ActivityNotFoundException | SecurityException unavailable) {
+            if (!launchAssistant()) Toast.makeText(this, "Enable your TV's Assistant or speech service in system settings", Toast.LENGTH_LONG).show();
+        }
     }
 
     private void openStore(String query) {
@@ -445,15 +527,6 @@ public final class PersonalHomeActivity extends Activity {
                 .setPackage("com.android.vending");
         if (!tryLaunch(market)) launch(new Intent(Intent.ACTION_VIEW,
                 Uri.parse("https://play.google.com/store/" + (suffix.isEmpty() ? "apps" : suffix))));
-    }
-
-    private void openGemini() {
-        Intent gemini = getPackageManager().getLaunchIntentForPackage("com.google.android.apps.bard");
-        if (gemini != null && tryLaunch(gemini)) return;
-        Intent market = new Intent(Intent.ACTION_VIEW,
-                Uri.parse("market://details?id=com.google.android.apps.bard")).setPackage("com.android.vending");
-        if (!tryLaunch(market)) launch(new Intent(Intent.ACTION_VIEW,
-                Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.apps.bard")));
     }
 
     private boolean tryLaunch(Intent target) {
@@ -497,22 +570,7 @@ public final class PersonalHomeActivity extends Activity {
         addPanelRow(rows, "Launcher settings", () -> launcherSettings());
         addPanelRow(rows, "Wi-Fi", () -> openSetting(Settings.ACTION_WIFI_SETTINGS));
         addPanelRow(rows, "Bluetooth", () -> openSetting(Settings.ACTION_BLUETOOTH_SETTINGS));
-        addPanelRow(rows, "TV / device brightness", () -> openSetting(Settings.ACTION_DISPLAY_SETTINGS));
-        TextView hint = text("Launcher brightness (this app only)", 13, MUTED);
-        hint.setPadding(dp(12), dp(10), 0, 0);
-        rows.addView(hint);
-        SeekBar brightness = new SeekBar(this);
-        brightness.setMax(90);
-        brightness.setProgress(prefs.getInt("brightness", 80) - 10);
-        brightness.setContentDescription("Launcher brightness");
-        brightness.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar s, int value, boolean fromUser) {
-                if (fromUser) { prefs.edit().putInt("brightness", value + 10).apply(); applyBrightness(value + 10); }
-            }
-            @Override public void onStartTrackingTouch(SeekBar s) { }
-            @Override public void onStopTrackingTouch(SeekBar s) { }
-        });
-        rows.addView(brightness, new LinearLayout.LayoutParams(-1, dp(48)));
+        Runnable releaseControls = QuickControls.attach(this, rows, prefs, this::applyBrightness, () -> { if (panel != null) panel.dismiss(); });
         if (tv) addPanelRow(rows, "Input · HDMI / Live TV", () -> showInputs());
         addPanelRow(rows, "Choose default Home", () -> launch(new Intent(this, HomeSettingsActivity.class)));
         addPanelRow(rows, "TV / device settings", () -> openSetting(Settings.ACTION_SETTINGS));
@@ -520,6 +578,7 @@ public final class PersonalHomeActivity extends Activity {
         scroll.addView(rows);
         panel = new AlertDialog.Builder(this).setTitle("Quick settings").setView(scroll)
                 .setNegativeButton("Close", null).create();
+        panel.setOnDismissListener(dialog -> releaseControls.run());
         panel.show();
         if (tv && panel.getWindow() != null) {
             panel.getWindow().setGravity(Gravity.END);
@@ -535,19 +594,114 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void launcherSettings() {
-        String[] labels = {"App columns", "Profile name & photo", "Choose default Home"};
-        new AlertDialog.Builder(this).setTitle("Launcher settings").setItems(labels, (d, index) -> {
-            if (index == 0) {
-                String[] options = {"Automatic", "2", "3", "4", "5", "6"};
-                new AlertDialog.Builder(this).setTitle("App columns").setItems(options, (choice, which) -> {
-                    prefs.edit().putInt(tv ? "tv_columns" : "phone_columns", which == 0 ? 0 : which + 1).apply();
-                    if (cachedApps != null) renderApps(cachedApps);
-                    else loadApps();
-                }).show();
-            } else if (index == 1) editProfile();
-            else launch(new Intent(this, HomeSettingsActivity.class));
-        }).show();
+        String[] labels = {"Hide / unhide apps", "App columns", "Tile size", "Focused app title size", "Clock size", "Dark mode", "Wallpaper", "Wallpaper darkness", "App colour glow", "Screensaver & weather", "Continue watching", "Profile name & photo", "Choose default Home", "Reset layout & unhide apps"};
+        Runnable[] choices = {
+            this::hiddenApps,
+            () -> chooseSetting("App columns", new String[]{"Automatic", "2", "3", "4", "5", "6"}, which -> {
+                prefs.edit().putInt(tv ? "tv_columns" : "phone_columns", which == 0 ? 0 : which + 1).apply(); refreshApps();
+            }),
+            () -> chooseSetting("Tile size", new String[]{"Compact", "Large"}, which -> {
+                prefs.edit().putBoolean("large_tiles", which == 1).putInt(tv ? "tv_columns" : "phone_columns", 0).apply(); refreshApps();
+            }),
+            () -> chooseSetting("Focused app title size", new String[]{"Small", "Normal", "Large", "Extra large"}, which -> {
+                int size = new int[]{24,32,40,48}[which]; prefs.edit().putInt("focus_title_size", size).apply(); appHeading.setTextSize(size);
+            }),
+            () -> chooseSetting("Clock size", new String[]{"Small", "Normal", "Large"}, which -> {
+                prefs.edit().putInt("clock_size", (tv ? new int[]{54,66,80} : new int[]{44,56,66})[which]).apply(); buildHome();
+            }),
+            () -> chooseSetting("Dark mode", new String[]{"Dark (Midnight Cyan)", "Automatic day / night", "Light"}, which -> {
+                prefs.edit().putString("theme_mode", new String[]{"dark","auto","light"}[which]).apply(); sky.invalidate();
+            }),
+            this::wallpaperSettings,
+            () -> chooseSetting("Wallpaper darkness", new String[]{"Light", "Medium", "Dark"}, which -> {
+                prefs.edit().putInt("background_dim", which * 20).apply(); sky.invalidate();
+            }),
+            () -> chooseSetting("App colour glow", new String[]{"On", "Off"}, which -> {
+                prefs.edit().putBoolean("focus_glow", which == 0).apply(); sky.focusAccent = 0; sky.invalidate();
+            }),
+            this::screensaverSettings,
+            () -> chooseSetting("Continue watching", new String[]{"Show below apps", "Hide row", "Allow TV Watch Next access"}, which -> {
+                if (which == 2) continueWatching.requestAccess();
+                else { prefs.edit().putBoolean("continue_watching", which == 0).apply(); continueWatching.reload(); }
+            }),
+            this::editProfile,
+            () -> launch(new Intent(this, HomeSettingsActivity.class)),
+            () -> new AlertDialog.Builder(this).setTitle("Reset layout and show all apps?").setPositiveButton("Reset", (dialog, which) -> {
+                prefs.edit().remove("hidden_apps").remove("tv_columns").remove("phone_columns").remove("large_tiles")
+                        .remove("focus_title_size").remove("clock_size").remove("background_dim").remove("theme_mode")
+                        .remove("wallpaper_mode").remove("focus_glow").remove("continue_watching").apply(); buildHome();
+            }).setNegativeButton(android.R.string.cancel, null).show()
+        };
+        new AlertDialog.Builder(this).setTitle("Launcher settings").setItems(labels, (dialog, which) -> choices[which].run()).show();
     }
+
+    private void wallpaperSettings() {
+        chooseSetting("Home wallpaper", new String[]{"Midnight mountains", "Solid midnight", "Choose picture", "Saved custom picture"}, which -> {
+            if (which == 2) {
+                try { startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), 8); }
+                catch (ActivityNotFoundException | SecurityException unavailable) { Toast.makeText(this, "No image picker available on this device", Toast.LENGTH_LONG).show(); }
+            } else if (which == 3) {
+                if (!new File(getFilesDir(), "personal-wallpaper.jpg").exists()) { Toast.makeText(this, "Choose a picture first", Toast.LENGTH_SHORT).show(); return; }
+                prefs.edit().putString("wallpaper_mode", "custom").apply(); loadWallpaper();
+            } else {
+                prefs.edit().putString("wallpaper_mode", which == 0 ? "mountains" : "solid").apply(); customWallpaper = null; sky.invalidate();
+            }
+        });
+    }
+
+    private void loadWallpaper() {
+        if (!"custom".equals(prefs.getString("wallpaper_mode", "mountains"))) return;
+        worker.execute(() -> {
+            Bitmap image = BitmapFactory.decodeFile(new File(getFilesDir(), "personal-wallpaper.jpg").getPath());
+            handler.post(() -> { if (!isDestroyed()) { customWallpaper = image; if (sky != null) sky.invalidate(); } });
+        });
+    }
+
+    private void chooseSetting(String title, String[] options, java.util.function.IntConsumer selected) {
+        new AlertDialog.Builder(this).setTitle(title).setItems(options, (dialog, which) -> selected.accept(which)).show();
+    }
+
+    private void refreshApps() {
+        appHeading.setText("Your apps");
+        if (cachedApps != null) renderApps(cachedApps); else loadApps();
+        if (continueWatching != null) continueWatching.reload();
+    }
+
+    private void hiddenApps() {
+        if (cachedApps == null) { loadApps(); return; }
+        Set<String> hidden = new HashSet<>(prefs.getStringSet("hidden_apps", Collections.emptySet()));
+        String[] names = new String[cachedApps.size()];
+        boolean[] checked = new boolean[names.length];
+        List<App> listed = new ArrayList<>(cachedApps);
+        for (int i = 0; i < names.length; i++) { names[i] = listed.get(i).name; checked[i] = hidden.contains(listed.get(i).info.activityInfo.packageName); }
+        new AlertDialog.Builder(this).setTitle("Hide apps · checked = hidden").setMultiChoiceItems(names, checked, (dialog, which, value) -> {
+            String pkg = listed.get(which).info.activityInfo.packageName;
+            if (value) hidden.add(pkg); else hidden.remove(pkg);
+        }).setPositiveButton("Save", (dialog, which) -> {
+            prefs.edit().putStringSet("hidden_apps", hidden).apply(); refreshApps();
+        }).setNegativeButton(android.R.string.cancel, null).show();
+    }
+
+    private void screensaverSettings() {
+        chooseSetting("Online landscape screensaver", new String[]{"Preview", "Weather city", "Temperature unit", "Photo change interval", "Start after idle", "Android screensaver settings"}, which -> {
+            if (which == 0) launch(new Intent(this, LandscapeActivity.class));
+            else if (which == 1) WeatherSettings.show(this);
+            else if (which == 2) chooseSetting("Temperature unit", new String[]{"Celsius", "Fahrenheit"}, value -> prefs.edit().putBoolean("weather_fahrenheit", value == 1).apply());
+            else if (which == 3) chooseSetting("Photo change interval", new String[]{"1 minute", "2 minutes", "5 minutes"}, value -> prefs.edit().putInt("photo_seconds", new int[]{60,120,300}[value]).apply());
+            else if (which == 4) chooseSetting("Start screensaver after idle", new String[]{"Off", "2 minutes", "5 minutes", "10 minutes", "15 minutes"}, value -> {
+                prefs.edit().putInt("idle_screensaver_minutes", new int[]{0,2,5,10,15}[value]).apply(); armIdleScreensaver();
+            });
+            else launch(new Intent(Settings.ACTION_DREAM_SETTINGS));
+        });
+    }
+
+    private void armIdleScreensaver() {
+        handler.removeCallbacks(idleScreensaver);
+        int minutes = prefs.getInt("idle_screensaver_minutes", 0);
+        if (resumed && minutes > 0) handler.postDelayed(idleScreensaver, minutes * 60_000L);
+    }
+
+    @Override public void onUserInteraction() { super.onUserInteraction(); armIdleScreensaver(); }
 
     private void applyBrightness(int percent) {
         WindowManager.LayoutParams p = getWindow().getAttributes();
@@ -612,7 +766,18 @@ public final class PersonalHomeActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
-        if (request != 7 || result != RESULT_OK || data == null || data.getData() == null) return;
+        if (request == 9) {
+            if (result == RESULT_OK && data != null) {
+                ArrayList<String> words = data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);
+                if (words != null && !words.isEmpty()) {
+                    if (searchDialog == null) searchApps();
+                    if (searchInput != null) { searchInput.setText(words.get(0)); searchInput.setSelection(searchInput.length()); }
+                }
+            }
+            return;
+        }
+        if ((request != 7 && request != 8) || result != RESULT_OK || data == null || data.getData() == null) return;
+        boolean wallpaper = request == 8;
         Uri uri = data.getData();
         worker.execute(() -> {
             try {
@@ -624,19 +789,23 @@ public final class PersonalHomeActivity extends Activity {
                 if (options.outWidth <= 0 || options.outHeight <= 0) throw new java.io.IOException("Invalid image");
                 options.inJustDecodeBounds = false;
                 options.inSampleSize = 1;
-                while (Math.max(options.outWidth, options.outHeight) / options.inSampleSize > 512) options.inSampleSize *= 2;
+                while (Math.max(options.outWidth, options.outHeight) / options.inSampleSize > (wallpaper ? 1920 : 512)) options.inSampleSize *= 2;
                 Bitmap decoded;
                 try (InputStream input = getContentResolver().openInputStream(uri)) {
                     decoded = BitmapFactory.decodeStream(input, null, options);
                 }
                 if (decoded == null) throw new java.io.IOException("Invalid image");
-                android.util.AtomicFile destination = new android.util.AtomicFile(new File(getFilesDir(), "personal-avatar.png"));
+                android.util.AtomicFile destination = new android.util.AtomicFile(new File(getFilesDir(), wallpaper ? "personal-wallpaper.jpg" : "personal-avatar.png"));
                 FileOutputStream out = destination.startWrite();
                 try {
-                    if (!decoded.compress(Bitmap.CompressFormat.PNG, 100, out)) throw new java.io.IOException("Cannot save image");
+                    if (!decoded.compress(wallpaper ? Bitmap.CompressFormat.JPEG : Bitmap.CompressFormat.PNG, wallpaper ? 85 : 100, out)) throw new java.io.IOException("Cannot save image");
                     destination.finishWrite(out);
                 } catch (Exception error) { destination.failWrite(out); throw error; }
-                handler.post(() -> { if (!isDestroyed()) { avatarBitmap = decoded; refreshProfile(); } });
+                handler.post(() -> {
+                    if (isDestroyed()) return;
+                    if (wallpaper) { customWallpaper = decoded; prefs.edit().putString("wallpaper_mode", "custom").apply(); sky.invalidate(); }
+                    else { avatarBitmap = decoded; refreshProfile(); }
+                });
             } catch (Exception error) {
                 handler.post(() -> { if (!isDestroyed()) Toast.makeText(this, "Could not read this photo. Choose another image.", Toast.LENGTH_LONG).show(); });
             }
@@ -646,9 +815,11 @@ public final class PersonalHomeActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         resumed = true;
+        armIdleScreensaver();
         handler.removeCallbacks(tick);
         tick.run();
         updateNetwork();
+        continueWatching.start();
         if (pageWidth > 0) loadApps();
         if (connectivity != null && !networkRegistered) {
             try { connectivity.registerDefaultNetworkCallback(networkCallback); networkRegistered = true; }
@@ -658,6 +829,8 @@ public final class PersonalHomeActivity extends Activity {
 
     @Override protected void onPause() {
         resumed = false;
+        if (continueWatching != null) continueWatching.stop();
+        handler.removeCallbacks(idleScreensaver);
         handler.removeCallbacks(tick);
         if (connectivity != null && networkRegistered) {
             connectivity.unregisterNetworkCallback(networkCallback);
@@ -670,6 +843,7 @@ public final class PersonalHomeActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         if (panel != null) panel.dismiss();
+        if (searchDialog != null) searchDialog.dismiss();
         focusFirstApp();
         handleHomeAction(intent);
     }
@@ -685,56 +859,76 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void focusFirstApp() {
-        GridLayout target = dock != null && dock.getChildCount() > 0 ? dock : grid;
-        if (target.getChildCount() > 0) target.getChildAt(0).requestFocus();
+        if (grid.getChildCount() > 0) grid.getChildAt(0).requestFocus();
+    }
+
+    @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(request, permissions, results);
+        if (request == ContinueWatchingView.PERMISSION_REQUEST && continueWatching != null) continueWatching.reload();
     }
 
     @Override protected void onDestroy() {
+        if (panel != null) panel.dismiss();
+        if (profile != null) profile.dismiss();
+        if (searchDialog != null) searchDialog.dismiss();
         handler.removeCallbacksAndMessages(null);
+        if (continueWatching != null) continueWatching.stop();
         worker.shutdownNow();
         super.onDestroy();
     }
 
-    /** One static draw when the minute changes; no frame loop, location permission or network. */
+    /** Static dark wallpaper and a single focus glow; no continuously running animation. */
     private final class SkyClock extends View {
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
         private final Bitmap backdrop = BitmapFactory.decodeResource(getResources(), R.drawable.personal_wallpaper);
-        int minute;
-        float clockX = -1, clockY = -1;
+        int minute, focusAccent;
+        float clockX = -1, clockY = -1, focusX, focusY, focusRadius;
         SkyClock() { super(PersonalHomeActivity.this); setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO); }
         @Override protected void onDraw(Canvas canvas) {
-            float day = PersonalHomeModel.daylight(minute);
-            int top = blend(0xff030b1c, 0xff145d85, day);
-            int bottom = blend(0xff071a32, 0xff092b4a, day);
+            String theme = prefs.getString("theme_mode", "dark");
+            float day = theme.equals("dark") ? 0 : theme.equals("light") ? 1 : PersonalHomeModel.daylight(minute);
+            int top = blend(0xff020817, 0xff145d85, day), bottom = blend(0xff07172b, 0xff092b4a, day);
             paint.setShader(new LinearGradient(0, 0, 0, getHeight(), top, bottom, Shader.TileMode.CLAMP));
-            canvas.drawRect(0, 0, getWidth(), getHeight(), paint);
-            paint.setShader(null);
-            if (backdrop != null) {
-                float scale = Math.max(getWidth() / (float) backdrop.getWidth(), getHeight() / (float) backdrop.getHeight());
-                float left = (getWidth() - backdrop.getWidth() * scale) / 2f;
-                float height = backdrop.getHeight() * scale;
-                canvas.drawBitmap(backdrop, null, new android.graphics.RectF(left, 0,
-                        left + backdrop.getWidth() * scale, height), paint);
-                canvas.drawColor(((int) (35 + 125 * (1 - day)) << 24) | 0x00051327);
+            canvas.drawRect(0, 0, getWidth(), getHeight(), paint); paint.setShader(null);
+            String mode = prefs.getString("wallpaper_mode", "mountains");
+            Bitmap picture = mode.equals("custom") && customWallpaper != null ? customWallpaper : backdrop;
+            float x = clockX >= 0 ? clockX : getWidth() / 2f, y = clockY >= 0 ? clockY : dp(150);
+            if (!mode.equals("solid") && picture != null) {
+                boolean mountains = picture == backdrop;
+                float scale = Math.max(getWidth() / (float) picture.getWidth(), getHeight() / (float) picture.getHeight()) * (mountains ? 1.65f : 1f);
+                float width = picture.getWidth() * scale, height = picture.getHeight() * scale;
+                float left = (getWidth() - width) / 2f;
+                // Put the mountain ridge behind the clock rather than far below it.
+                float upper = mountains ? Math.max(getHeight() - height, Math.min(0, y - height * .49f)) : (getHeight() - height) / 2f;
+                canvas.drawBitmap(picture, null, new android.graphics.RectF(left, upper, left + width, upper + height), paint);
+                int shade = theme.equals("dark") ? 145 : (int) (30 + 125 * (1 - day));
+                canvas.drawColor((Math.min(235, shade + prefs.getInt("background_dim", 0) * 2) << 24) | 0x00051327);
             }
-            float x = clockX >= 0 ? clockX : getWidth() / 2f;
-            float y = clockY >= 0 ? clockY : dp(tv ? 178 : 190), radius = dp(tv ? 40 : 36);
+            if (focusAccent != 0 && focusRadius > 0) {
+                int glow = (focusAccent & 0x00ffffff) | 0x80000000;
+                paint.setShader(new RadialGradient(focusX, focusY, focusRadius, glow, Color.TRANSPARENT, Shader.TileMode.CLAMP));
+                canvas.drawCircle(focusX, focusY, focusRadius, paint); paint.setShader(null);
+            }
+            float radius = dp(tv ? 36 : 30);
             boolean sun = minute >= 360 && minute < 1080;
-            int glow = sun ? 0x60ffd78a : 0x504ac8ff;
-            paint.setShader(new RadialGradient(x, y, radius * 2.5f, glow, Color.TRANSPARENT, Shader.TileMode.CLAMP));
-            canvas.drawCircle(x, y, radius * 2.5f, paint);
-            paint.setShader(null);
-            paint.setColor(sun ? 0x90ffd68a : 0x9adcefff);
+            paint.setShader(new RadialGradient(x, y, radius * 2f, sun ? 0x40ffd78a : 0x304ac8ff, Color.TRANSPARENT, Shader.TileMode.CLAMP));
+            canvas.drawCircle(x, y, radius * 2f, paint); paint.setShader(null);
+            paint.setColor(sun ? 0x60ffd68a : 0x80dcefff);
             if (sun) canvas.drawCircle(x, y, radius, paint);
             else {
-                android.graphics.Path moon = new android.graphics.Path();
+                android.graphics.Path moon = new android.graphics.Path(), cut = new android.graphics.Path();
                 moon.addCircle(x, y, radius, android.graphics.Path.Direction.CW);
-                android.graphics.Path cut = new android.graphics.Path();
                 cut.addCircle(x + radius * .45f, y - radius * .2f, radius * .86f, android.graphics.Path.Direction.CW);
-                moon.op(cut, android.graphics.Path.Op.DIFFERENCE);
-                canvas.drawPath(moon, paint);
+                moon.op(cut, android.graphics.Path.Op.DIFFERENCE); canvas.drawPath(moon, paint);
             }
         }
+    }
+
+    private GradientDrawable tileBorder(int accent, boolean focused) {
+        GradientDrawable border = new GradientDrawable();
+        border.setColor(Color.TRANSPARENT); border.setCornerRadius(dp(16));
+        border.setStroke(dp(focused ? 3 : 1), focused ? accent : 0x4028435e);
+        return border;
     }
 
     private static int blend(int a, int b, float part) {

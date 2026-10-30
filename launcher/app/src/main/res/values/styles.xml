@@ -4,6 +4,49 @@
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:colorBackground">@android:color/black</item>
         <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:alertDialogTheme">@style/Theme.PersonalDialog</item>
+        <item name="android:colorAccent">#40D9FF</item>
+        <item name="android:editTextStyle">@style/PersonalDialogInput</item>
+        <item name="android:buttonStyle">@style/PersonalDialogButton</item>
+    </style>
+
+    <style name="Theme.PersonalDialog" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/personal_glass_panel</item>
+        <item name="android:colorBackground">#101F32</item>
+        <item name="android:colorAccent">#40D9FF</item>
+        <item name="android:textColorPrimary">#F0F7FF</item>
+        <item name="android:textColorSecondary">#A4BCD6</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.55</item>
+        <item name="android:windowElevation">14dp</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:listPreferredItemHeightSmall">54dp</item>
+        <item name="android:listSelector">@drawable/personal_dialog_button</item>
+        <item name="android:editTextStyle">@style/PersonalDialogInput</item>
+        <item name="android:buttonBarPositiveButtonStyle">@style/PersonalDialogButton</item>
+        <item name="android:buttonBarNegativeButtonStyle">@style/PersonalDialogButton</item>
+        <item name="android:buttonBarNeutralButtonStyle">@style/PersonalDialogButton</item>
+    </style>
+
+    <style name="PersonalDialogInput" parent="android:Widget.Material.EditText">
+        <item name="android:background">@drawable/personal_dialog_button</item>
+        <item name="android:textColor">#F0F7FF</item>
+        <item name="android:textColorHint">#91ABC5</item>
+        <item name="android:padding">12dp</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:textSize">18sp</item>
+    </style>
+
+    <style name="PersonalDialogButton" parent="android:Widget.Material.Button.Borderless">
+        <item name="android:background">@drawable/personal_dialog_button</item>
+        <item name="android:textColor">#DDF8FF</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:paddingLeft">16dp</item>
+        <item name="android:paddingRight">16dp</item>
     </style>
 
     <!-- Frosted pill, tvOS style. -->

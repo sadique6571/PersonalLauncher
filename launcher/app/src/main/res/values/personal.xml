@@ -1,3 +1,4 @@
 <resources>
     <string name="personal_app_name" translatable="false">Personal Launcher</string>
+    <string name="personal_screensaver_name" translatable="false">Online Landscapes · Personal Launcher</string>
 </resources>

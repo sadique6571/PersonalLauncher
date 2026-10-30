@@ -40,8 +40,22 @@ The profile is stored only on this device; it does not sign in to Google or read
 Use Settings → Profile to change the name/photo later. If a TV has no document picker, the name still works.
 
 Search apps opens Google Play search; installation uses the Play Store's normal confirmation flow.
-Gemini opens the installed Gemini app, or its Play Store page (with a browser fallback). App availability,
-device compatibility and sign-in are handled by those apps; this launcher does not embed Gemini.
+The compact top toolbar contains network, local Search, native Assistant/mic, Inputs (TV), Play Store,
+Screensaver and Settings icons. Local search excludes hidden apps and filters results while typing.
+The explicit Play Store button handles installing new apps. Voice uses the configured system Assistant
+or an installed recognition activity; the launcher does not record audio itself.
+The app grid sits directly below the clock; its left heading expands to show the focused app name.
+Gemini and favorites have been removed. One drawer shows default app icons filling rounded tiles;
+names only appear in the large focused heading, not below icons. Icon-colour glow/borders mark focus.
+Launcher settings controls hidden apps, columns, tile/title sizes, clock size, dark mode, wallpaper
+choice/darkness and layout reset. Hidden apps remain installed and can be restored there.
+All launcher dialogs use one dark-glass theme, with rounded panels and cyan focus styling.
+Dark Midnight is the default; the mountain ridge sits behind the clock. Choose a custom image through
+Launcher settings → Wallpaper. The clock/title stay visible as the app drawer scrolls.
+
+Continue Watching is a separate row after the app drawer. It reads only shared Android TV Watch Next
+entries with user-granted TV-listings access when the provider permits it. It never scrapes private app
+histories or puts resume entries among default app icons. Unsupported/empty providers show a message.
 
 The center clock uses 12-hour AM/PM time in the device's timezone, with a small date below it.
 Its drawn sun/moon and blue backdrop
@@ -52,11 +66,19 @@ as an optimised WebP; it is not downloaded at runtime.
 The network indicator is green only when Android reports validated internet access and red otherwise,
 including a Wi-Fi connection with no validated internet. It also recognises other active transports.
 
-Quick settings offers profile, launcher columns, Wi-Fi, Bluetooth, display settings, default Home and,
-on TVs, available input sources. The brightness slider changes this launcher's window brightness only;
-device/TV brightness opens the system display settings. Firmware may not expose every system setting.
+Quick settings offers profile, launcher customization, Wi-Fi, Bluetooth, inline brightness/media volume,
+default Home and TV inputs. Standard device brightness requires optional user-granted write-settings
+access; without it, brightness is labelled Home-only. Firmware may ignore standard panel-brightness APIs
+or fix CEC/media volume; unavailable controls are not treated as successful hardware changes.
 Both the app grid and settings support touch and D-pad focus. Phone columns adapt to screen width;
 portrait and landscape use the same responsive screen.
+
+The online landscape screensaver is separate from the bundled Home wallpaper. Its preview and Android
+Dream service share the same large center clock/date, top-right network status and bottom-left weather.
+Landscapes stream from Unsplash into memory only; weather and city lookup use Open-Meteo, defaulting to
+Okara, Pakistan. Photos/weather need internet; an offline screen never invents a temperature or uses a
+saved landscape. Configure the city, units, photo interval and optional Home-idle timeout under
+Launcher settings → Screensaver & weather. The idle timeout defaults to Off and stops when Home pauses.
 
 The package and `.MainActivity` Home component remain stable: that component is now an alias for
 `PersonalHomeActivity`. No stock launcher is disabled automatically. Keep the stock Home enabled until

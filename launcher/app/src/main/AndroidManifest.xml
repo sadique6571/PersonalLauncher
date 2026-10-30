@@ -8,6 +8,13 @@
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- User-requested online landscape screensaver and city weather. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Optional special access is requested through Android's user-controlled settings screen. -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
+    <!-- Runtime consent for searchable/shared TV Watch Next rows, when the TV exposes this permission. -->
+    <uses-permission android:name="android.permission.READ_TV_LISTINGS" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- Needed since Android 10 to read the Wi-Fi network name for the network pill. Never requested at
          runtime: build-and-install grants it with pm grant, so lint's Android 12 "ask for COARSE with
@@ -25,6 +32,7 @@
     <!-- Android 11+ package visibility: lets the launcher list the TV apps it shows as tiles, and the
          apps that declare a module card (docs/specs/card.md). -->
     <queries>
+        <provider android:authorities="android.media.tv" />
         <!-- The standard settings handlers, so package visibility doesn't hide them and send the pills to a vendor fallback by mistake. -->
         <intent>
             <action android:name="android.settings.SETTINGS" />
@@ -65,7 +73,6 @@
         <package android:name="com.xiaomi.mitv.settings" />
         <package android:name="com.tcl.settings" />
         <package android:name="com.amazon.tv.launcher" />
-        <package android:name="com.google.android.apps.bard" />
         <package android:name="com.android.vending" />
         <!-- Coocaa OS sources for the Inputs menu (coocaa_sources); see CoocaaSources. -->
         <provider android:authorities="com.skyworth.tv.provider" />
@@ -88,6 +95,15 @@
             android:stateNotNeeded="true"
             android:clearTaskOnLaunch="true"
             android:label="@string/personal_app_name" />
+        <activity android:name=".LandscapeActivity" android:exported="false" android:excludeFromRecents="true" />
+        <service android:name=".LandscapeDream" android:exported="true"
+            android:label="@string/personal_screensaver_name"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
         <!-- Keep the installed Home component stable across upgrades and existing ADB tooling. -->
         <activity-alias
             android:name=".MainActivity"
