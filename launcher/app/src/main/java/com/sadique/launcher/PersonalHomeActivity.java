@@ -135,11 +135,12 @@ public final class PersonalHomeActivity extends Activity {
         return view;
     }
 
-    private void addAction(LinearLayout parent, String title, Runnable action) {
+    private Button addAction(LinearLayout parent, String title, Runnable action) {
         Button view = button(title, action);
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(52), 1);
         p.setMargins(dp(3), dp(5), dp(3), dp(5));
         parent.addView(view, p);
+        return view;
     }
 
     private void buildHome() {
@@ -200,7 +201,7 @@ public final class PersonalHomeActivity extends Activity {
         addAction(actions, "✦ Gemini", () -> openGemini());
         addAction(actions, "Settings", () -> showSettings());
         if (tv) {
-            header.addView(actions, new LinearLayout.LayoutParams(dp(310), -2));
+            header.addView(actions, new LinearLayout.LayoutParams(dp(340), -2));
         } else {
             page.addView(actions, new LinearLayout.LayoutParams(-1, -2));
         }
@@ -235,10 +236,10 @@ public final class PersonalHomeActivity extends Activity {
             page.addView(quickHeading);
         }
         LinearLayout shortcuts = new LinearLayout(this);
-        if (tv) addAction(shortcuts, "Inputs", () -> showInputs());
-        addAction(shortcuts, "Play Store", () -> openStore(""));
-        if (tv) addAction(shortcuts, "Screensaver", () -> launch(new Intent(this, ClockActivity.class)));
-        else addAction(shortcuts, "Default Home", () -> launch(new Intent(this, HomeSettingsActivity.class)));
+        if (tv) shortcutIcon(addAction(shortcuts, "Inputs", () -> showInputs()), R.drawable.ic_input);
+        shortcutIcon(addAction(shortcuts, "Play Store", () -> openStore("")), R.drawable.ic_apps_pill);
+        if (tv) shortcutIcon(addAction(shortcuts, "Screensaver", () -> launch(new Intent(this, ClockActivity.class))), R.drawable.ic_picture);
+        else shortcutIcon(addAction(shortcuts, "Default Home", () -> launch(new Intent(this, HomeSettingsActivity.class))), R.drawable.ic_home_settings_pill);
         page.addView(shortcuts);
         TextView heading = text("Your apps", 20, TEXT);
         heading.setPadding(dp(4), dp(20), 0, dp(12));
@@ -269,6 +270,14 @@ public final class PersonalHomeActivity extends Activity {
         date.setText(new java.text.SimpleDateFormat("EEE, d MMM yyyy", Locale.getDefault()).format(now.getTime()));
         sky.minute = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
         sky.invalidate();
+    }
+
+    private void shortcutIcon(Button button, int resource) {
+        android.graphics.drawable.Drawable icon = getDrawable(resource).mutate();
+        icon.setTint(MUTED);
+        icon.setBounds(0, 0, dp(22), dp(22));
+        button.setCompoundDrawables(icon, null, null, null);
+        button.setCompoundDrawablePadding(dp(9));
     }
 
     private void updateNetwork() {
@@ -369,7 +378,9 @@ public final class PersonalHomeActivity extends Activity {
             Button allApps = button("All apps", () -> {
                 if (grid.getChildCount() > 0) grid.getChildAt(0).requestFocus();
             });
-            allApps.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_apps, 0, 0);
+            android.graphics.drawable.Drawable appsIcon = getDrawable(R.drawable.ic_apps).mutate();
+            appsIcon.setBounds(0, 0, dp(44), dp(44));
+            allApps.setCompoundDrawables(null, appsIcon, null, null);
             allApps.setCompoundDrawablePadding(dp(8));
             GridLayout.LayoutParams appsPosition = new GridLayout.LayoutParams();
             appsPosition.width = pageWidth / slots - dp(8);
