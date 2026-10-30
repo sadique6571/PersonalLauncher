@@ -36,9 +36,32 @@ jobs:
           yes | "$SDKMGR" --licenses > /dev/null || true
           "$SDKMGR" "platforms;android-34" "build-tools;34.0.0"
 
+      - name: Restore persistent APK signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.LAUNCHER_KEYSTORE_BASE64 }}
+          LAUNCHER_KEYSTORE_PASSWORD: ${{ secrets.LAUNCHER_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$LAUNCHER_KEYSTORE_PASSWORD" ]; then
+            echo "::error::Set LAUNCHER_KEYSTORE_BASE64 and LAUNCHER_KEYSTORE_PASSWORD repository secrets. Refusing to publish another temporary-key APK that cannot update existing installations."
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/personal-launcher.p12"
+          keytool -list -keystore "$RUNNER_TEMP/personal-launcher.p12" -storepass:env LAUNCHER_KEYSTORE_PASSWORD -alias personal-launcher > /dev/null
+
       - name: Build release APK
         working-directory: launcher
+        env:
+          LAUNCHER_KEYSTORE_PATH: ${{ runner.temp }}/personal-launcher.p12
+          LAUNCHER_KEYSTORE_PASSWORD: ${{ secrets.LAUNCHER_KEYSTORE_PASSWORD }}
         run: gradle assembleRelease --console=plain
+
+      - name: Verify APK signature
+        run: '"$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs launcher/app/build/outputs/apk/release/app-release.apk'
+
+      - name: Remove signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/personal-launcher.p12"
 
       - name: Prepare APK
         run: |
@@ -53,7 +76,7 @@ jobs:
 
       - name: Create GitHub release
         run: |
-          TAG="v4.0-build-${{ github.run_number }}"
-          gh release create "$TAG" PersonalLauncher.apk --title "Personal Launcher v4.0 (build ${{ github.run_number }})" --notes "Personal Launcher v4.0 by Sadique Sadiq. Debug-signed release build."
+          TAG="v4.3-build-${{ github.run_number }}"
+          gh release create "$TAG" PersonalLauncher.apk --title "Personal Launcher 4.3 (build ${{ github.run_number }})" --notes "Personal Launcher 4.3: glass settings cards, visible midnight wallpaper, standalone app logos and persistent release signing. First migration from older temporary-key APKs requires a reinstall; subsequent releases use the same signing key."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

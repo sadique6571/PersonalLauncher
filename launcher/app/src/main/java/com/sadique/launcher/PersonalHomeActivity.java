@@ -100,6 +100,9 @@ public final class PersonalHomeActivity extends Activity {
             prefs.edit().putBoolean("reference_layout_v42", true).putString("theme_mode", "dark")
                     .putInt("photo_seconds", 30).apply();
         }
+        if (!prefs.getBoolean("reference_layout_v43", false)) {
+            prefs.edit().putBoolean("reference_layout_v43", true).putInt("background_dim", 0).apply();
+        }
         UiModeManager modes = getSystemService(UiModeManager.class);
         tv = modes != null && modes.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION;
         connectivity = getSystemService(ConnectivityManager.class);
@@ -352,9 +355,11 @@ public final class PersonalHomeActivity extends Activity {
                             && java.util.Objects.equals(old.info.activityInfo.applicationInfo.sourceDir, info.activityInfo.applicationInfo.sourceDir)) {
                         apps.add(new App(label, info, old.icon, old.accent));
                     } else {
-                        artwork = AppArtwork.create(getResources(), info.loadIcon(getPackageManager()));
-                        android.graphics.drawable.Drawable banner = info.activityInfo.loadBanner(getPackageManager());
-                        apps.add(new App(label, info, banner != null ? banner : artwork.image, artwork.accent));
+                        android.graphics.drawable.Drawable logo = info.loadIcon(getPackageManager());
+                        if (pkg.equals("com.google.android.youtube.tv") || pkg.equals("com.google.android.youtube")) logo = getDrawable(R.drawable.logo_youtube);
+                        if (pkg.equals("com.netflix.ninja") || pkg.equals("com.netflix.mediaclient")) logo = getDrawable(R.drawable.logo_netflix);
+                        artwork = AppArtwork.create(getResources(), logo);
+                        apps.add(new App(label, info, artwork.image, artwork.accent));
                     }
                 } catch (RuntimeException removedDuringQuery) {
                     // A package can be replaced or removed between queryIntentActivities and loading its resources.
@@ -417,8 +422,8 @@ public final class PersonalHomeActivity extends Activity {
         tile.setForeground(tileBorder(app.accent, false));
         ImageView icon = new ImageView(this);
         icon.setImageDrawable(app.icon);
-        icon.setScaleType(app.icon.getIntrinsicWidth() > app.icon.getIntrinsicHeight() * 1.3f
-                ? ImageView.ScaleType.FIT_XY : ImageView.ScaleType.FIT_CENTER);
+        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        icon.setPadding(dp(8), dp(6), dp(8), dp(6));
         icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         tile.addView(icon, new android.widget.FrameLayout.LayoutParams(-1, -1));
         tile.setOnFocusChangeListener((v, focus) -> {
@@ -563,52 +568,30 @@ public final class PersonalHomeActivity extends Activity {
             launch(new Intent("com.android.tv.action.VIEW_INPUTS"));
             return;
         }
-        new AlertDialog.Builder(this).setTitle("Inputs").setItems(labels.toArray(new String[0]),
-                (d, which) -> launch(targets.get(which))).setNegativeButton(android.R.string.cancel, null).show();
+        chooseSetting("Inputs", labels.toArray(new String[0]), which -> launch(targets.get(which)));
     }
 
     private void showSettings() {
-        LinearLayout rows = new LinearLayout(this);
-        rows.setOrientation(LinearLayout.VERTICAL);
-        rows.setPadding(dp(8), dp(4), dp(8), dp(8));
-        addPanelRow(rows, "Launcher settings", () -> launcherSettings());
-        addPanelRow(rows, "Profile · name & photo", () -> editProfile());
-        addPanelRow(rows, "Wi-Fi", () -> openSetting(Settings.ACTION_WIFI_SETTINGS));
-        addPanelRow(rows, "Bluetooth", () -> openSetting(Settings.ACTION_BLUETOOTH_SETTINGS));
-        Runnable releaseControls = QuickControls.attach(this, rows, prefs, this::applyBrightness, () -> { if (panel != null) panel.dismiss(); });
-        if (tv) addPanelRow(rows, "Input · HDMI / Live TV", () -> showInputs());
-        addPanelRow(rows, "Choose default Home", () -> launch(new Intent(this, HomeSettingsActivity.class)));
-        addPanelRow(rows, "TV / device settings", () -> openSetting(Settings.ACTION_SETTINGS));
-        ScrollView scroll = new ScrollView(this);
-        scroll.addView(rows);
-        panel = new AlertDialog.Builder(this).setTitle("Quick settings").setView(scroll)
-                .setNegativeButton("Close", null).create();
-        panel.setOnDismissListener(dialog -> releaseControls.run());
-        panel.show();
-        if (tv && panel.getWindow() != null) {
-            panel.getWindow().setGravity(Gravity.END);
-            panel.getWindow().setLayout(dp(370), -1);
-        }
+        LinearLayout rows = new LinearLayout(this); rows.setOrientation(LinearLayout.VERTICAL);
+        panel = GlassSettings.panel(this, "Settings", rows);
+        addPanelRow(rows, "Launcher settings", "Layout, wallpaper & apps", R.drawable.ic_settings, CYAN, this::launcherSettings);
+        boolean online = networkStatus.getCurrentTextColor() == 0xff59e493;
+        addPanelRow(rows, "Wi-Fi", online ? "Internet connected" : "No internet / disconnected", R.drawable.ic_wifi,
+                networkStatus.getCurrentTextColor(), () -> openSetting(Settings.ACTION_WIFI_SETTINGS));
+        android.bluetooth.BluetoothManager bluetooth = getSystemService(android.bluetooth.BluetoothManager.class);
+        String bluetoothState = "Open Bluetooth settings";
+        try { if (bluetooth != null && bluetooth.getAdapter() != null) bluetoothState = bluetooth.getAdapter().isEnabled() ? "On" : "Off"; }
+        catch (SecurityException unavailable) { /* Android 12+ can restrict adapter state. */ }
+        addPanelRow(rows, "Bluetooth", bluetoothState, android.R.drawable.stat_sys_data_bluetooth, 0xff67baff,
+                () -> openSetting(Settings.ACTION_BLUETOOTH_SETTINGS));
+        Runnable release = QuickControls.attach(this, rows, prefs, this::applyBrightness, () -> panel.dismiss());
+        if (tv) addPanelRow(rows, "Input", "HDMI / Live TV", R.drawable.ic_input, 0xffbdd5e5, this::showInputs);
+        addPanelRow(rows, "TV system settings", "Display, sound & device", R.drawable.ic_settings, 0xffbdd5e5, () -> openSetting(Settings.ACTION_SETTINGS));
+        panel.setOnDismissListener(d -> release.run()); panel.show();
     }
 
-    private void addPanelRow(LinearLayout parent, String label, Runnable action) {
-        Button row = button(label, () -> { if (panel != null) panel.dismiss(); action.run(); });
-        row.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-        row.setTextSize(15);
-        row.setMinHeight(dp(54));
-        row.setPadding(dp(16), dp(10), dp(12), dp(10));
-        int image = label.startsWith("Launcher") ? R.drawable.ic_settings
-                : label.startsWith("Wi-Fi") ? R.drawable.ic_wifi
-                : label.startsWith("Bluetooth") ? android.R.drawable.stat_sys_data_bluetooth
-                : label.startsWith("Input") ? R.drawable.ic_input : R.drawable.ic_settings;
-        android.graphics.drawable.Drawable symbol = getDrawable(image).mutate();
-        symbol.setTint(label.startsWith("Wi-Fi") ? networkStatus.getCurrentTextColor() : CYAN);
-        symbol.setBounds(0, 0, dp(23), dp(23));
-        row.setCompoundDrawables(symbol, null, null, null);
-        row.setCompoundDrawablePadding(dp(14));
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
-        p.setMargins(0, dp(4), 0, dp(4));
-        parent.addView(row, p);
+    private void addPanelRow(LinearLayout rows, String label, String hint, int icon, int color, Runnable action) {
+        rows.addView(GlassSettings.row(this, label, hint, icon, color, () -> { if (panel != null) panel.dismiss(); action.run(); }));
     }
 
     private void launcherSettings() {
@@ -650,7 +633,8 @@ public final class PersonalHomeActivity extends Activity {
                         .remove("wallpaper_mode").remove("focus_glow").remove("continue_watching").apply(); buildHome();
             }).setNegativeButton(android.R.string.cancel, null).show()
         };
-        new AlertDialog.Builder(this).setTitle("Launcher settings").setItems(labels, (dialog, which) -> choices[which].run()).show();
+        String[] hints = {"Choose which apps appear", "Number of cards per row", "Compact or large cards", "Name above the app grid", "12-hour clock with date", "Midnight, automatic or light", "Mountains or your own picture", "Keep the landscape visible", "Match the focused app", "Slideshow, weather & idle timer", "Resume titles after your apps", "Name and local profile picture", "Set this launcher as Home", "Restore the default layout"};
+        GlassSettings.options(this, "Launcher settings", labels, hints, which -> choices[which].run());
     }
 
     private void wallpaperSettings() {
@@ -676,7 +660,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void chooseSetting(String title, String[] options, java.util.function.IntConsumer selected) {
-        new AlertDialog.Builder(this).setTitle(title).setItems(options, (dialog, which) -> selected.accept(which)).show();
+        GlassSettings.options(this, title, options, null, selected);
     }
 
     private void refreshApps() {
@@ -688,16 +672,23 @@ public final class PersonalHomeActivity extends Activity {
     private void hiddenApps() {
         if (cachedApps == null) { loadApps(); return; }
         Set<String> hidden = new HashSet<>(prefs.getStringSet("hidden_apps", Collections.emptySet()));
-        String[] names = new String[cachedApps.size()];
-        boolean[] checked = new boolean[names.length];
-        List<App> listed = new ArrayList<>(cachedApps);
-        for (int i = 0; i < names.length; i++) { names[i] = listed.get(i).name; checked[i] = hidden.contains(listed.get(i).info.activityInfo.packageName); }
-        new AlertDialog.Builder(this).setTitle("Hide apps · checked = hidden").setMultiChoiceItems(names, checked, (dialog, which, value) -> {
-            String pkg = listed.get(which).info.activityInfo.packageName;
-            if (value) hidden.add(pkg); else hidden.remove(pkg);
-        }).setPositiveButton("Save", (dialog, which) -> {
-            prefs.edit().putStringSet("hidden_apps", hidden).apply(); refreshApps();
-        }).setNegativeButton(android.R.string.cancel, null).show();
+        LinearLayout rows = new LinearLayout(this); rows.setOrientation(LinearLayout.VERTICAL);
+        AlertDialog dialog = GlassSettings.panel(this, "Show / hide apps", rows);
+        for (App app : cachedApps) {
+            String pkg = app.info.activityInfo.packageName;
+            View row = GlassSettings.row(this, app.name, hidden.contains(pkg) ? "Hidden · select to show" : "Visible · select to hide",
+                    R.drawable.ic_apps, CYAN, () -> {});
+            row.setOnClickListener(v -> {
+                if (!hidden.add(pkg)) hidden.remove(pkg);
+                prefs.edit().putStringSet("hidden_apps", new HashSet<>(hidden)).apply();
+                LinearLayout copy = (LinearLayout) ((LinearLayout) row).getChildAt(1);
+                ((TextView) copy.getChildAt(1)).setText(hidden.contains(pkg) ? "Hidden · select to show" : "Visible · select to hide");
+                row.setContentDescription(app.name + (hidden.contains(pkg) ? ", hidden" : ", visible"));
+                refreshApps();
+            });
+            rows.addView(row);
+        }
+        dialog.show();
     }
 
     private void screensaverSettings() {
@@ -919,8 +910,8 @@ public final class PersonalHomeActivity extends Activity {
                 // Put the mountain ridge behind the clock rather than far below it.
                 float upper = mountains ? Math.max(getHeight() - height, Math.min(0, y - height * .49f)) : (getHeight() - height) / 2f;
                 canvas.drawBitmap(picture, null, new android.graphics.RectF(left, upper, left + width, upper + height), paint);
-                int shade = theme.equals("dark") ? 185 : (int) (55 + 130 * (1 - day));
-                canvas.drawColor((Math.min(235, shade + prefs.getInt("background_dim", 0) * 2) << 24) | 0x00051327);
+                int shade = theme.equals("dark") ? 75 : (int) (30 + 65 * (1 - day));
+                canvas.drawColor((Math.min(175, shade + prefs.getInt("background_dim", 0)) << 24) | 0x00051327);
             }
             if (focusAccent != 0 && focusRadius > 0) {
                 int glow = (focusAccent & 0x00ffffff) | 0x80000000;

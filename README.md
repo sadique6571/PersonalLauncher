@@ -3,7 +3,7 @@
 **Personal Launcher by Sadique Sadiq** — a clean, fast home-screen launcher for Android TV / Google TV.
 
 - Package: `com.sadique.launcher`
-- Version: 4.2
+- Version: 4.3
 - Plain Java, AndroidX RecyclerView, `minSdk` 26. Internet permission is used for online screensaver photos, weather and city lookup.
 - Day/night Home wallpaper, compact toolbar, configurable app grid, quick settings and local profile.
 
@@ -12,7 +12,7 @@
 - TV: profile at the top left; small network, Search, native Assistant/mic, Inputs, Play Store, Screensaver and Settings icons at the top right.
 - A centered 12-hour clock with small AM/PM and date; the sun/moon glow stays behind the clock as the layout changes.
 - Apps appear directly below the clock. The left heading shows the focused app's name in large text.
-- There is one app drawer. Small 16:9 rounded cards use each app’s native TV banner where supplied, or its original icon without zooming or distortion. No labels underneath.
+- There is one app drawer. Small 16:9 rounded cards show original app icons without wordmark banners; YouTube uses the red play mark and Netflix uses its N. No labels underneath.
 - Focus uses a matching icon-colour glow/border. The clock and focused-title area stay visible while apps scroll.
 - Dark Midnight mode is the default, with the mountain ridge behind the clock. Dark/automatic/light modes and a custom wallpaper picker are available.
 - No favorites, duplicate dock/quick-access rows or Gemini button.
@@ -84,3 +84,17 @@ before disabling the stock launcher.
 ## License
 
 MIT License — see [LICENSE](LICENSE).
+
+## APK updates and release signing
+
+Older releases used a fresh runner-generated debug key, so Android reports a package conflict when
+installing a later build. Version 4.3 publishing requires one persistent release keystore, stored in
+GitHub repository Actions secrets `LAUNCHER_KEYSTORE_BASE64` and `LAUNCHER_KEYSTORE_PASSWORD`.
+Use PKCS12, alias `personal-launcher`, with the same store/key password; keep a private backup.
+Never commit or publish the keystore. The release workflow refuses to publish when signing secrets
+are missing. CI still builds and tests independently with a temporary debug key.
+
+An installed APK signed by a lost temporary key cannot accept the new release key. A **one-time
+uninstall/reinstall** is necessary, which removes local launcher preferences. Keep another working
+Home enabled before doing this. After migration, APKs with this same package/key and increasing
+version codes install as updates. Do not uninstall anything automatically.

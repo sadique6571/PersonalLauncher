@@ -11,8 +11,21 @@ android {
         applicationId providers.gradleProperty('launcherApplicationId').getOrElse('com.sadique.launcher')
         minSdk 26
         targetSdk 34
-        versionCode 13
-        versionName '4.2'
+        versionCode 14
+        versionName '4.3'
+    }
+
+    // CI may compile with the debug key; published APKs require the persistent release key.
+    signingConfigs {
+        personalRelease {
+            def keyPath = System.getenv('LAUNCHER_KEYSTORE_PATH')
+            if (keyPath) {
+                storeFile file(keyPath)
+                storePassword System.getenv('LAUNCHER_KEYSTORE_PASSWORD')
+                keyAlias 'personal-launcher'
+                keyPassword System.getenv('LAUNCHER_KEYSTORE_PASSWORD')
+            }
+        }
     }
 
     buildTypes {
@@ -21,8 +34,7 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            // Sideloaded over ADB, never published: sign with the debug key so it installs over a debug build.
-            signingConfig signingConfigs.debug
+            signingConfig System.getenv('LAUNCHER_KEYSTORE_PATH') ? signingConfigs.personalRelease : signingConfigs.debug
         }
     }
 

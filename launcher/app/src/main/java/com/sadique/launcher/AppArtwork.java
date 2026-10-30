@@ -18,7 +18,11 @@ final class AppArtwork {
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         Drawable icon = source.getConstantState() == null ? source.mutate() : source.getConstantState().newDrawable().mutate();
-        icon.setBounds(0, 0, size, size);
+        float ratio = icon.getIntrinsicWidth() > 0 && icon.getIntrinsicHeight() > 0
+                ? icon.getIntrinsicWidth() / (float) icon.getIntrinsicHeight() : 1f;
+        int width = ratio >= 1 ? size : Math.round(size * ratio);
+        int height = ratio >= 1 ? Math.round(size / ratio) : size;
+        icon.setBounds((size - width) / 2, (size - height) / 2, (size + width) / 2, (size + height) / 2);
         icon.draw(canvas);
         float[] weights = new float[12];
         float[][] sums = new float[12][3];
