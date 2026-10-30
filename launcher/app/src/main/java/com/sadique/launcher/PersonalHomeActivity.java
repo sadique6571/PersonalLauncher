@@ -96,6 +96,10 @@ public final class PersonalHomeActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         prefs = getSharedPreferences("personal_home", MODE_PRIVATE);
+        if (!prefs.getBoolean("reference_layout_v42", false)) {
+            prefs.edit().putBoolean("reference_layout_v42", true).putString("theme_mode", "dark")
+                    .putInt("photo_seconds", 30).apply();
+        }
         UiModeManager modes = getSystemService(UiModeManager.class);
         tv = modes != null && modes.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION;
         connectivity = getSystemService(ConnectivityManager.class);
@@ -202,7 +206,6 @@ public final class PersonalHomeActivity extends Activity {
         userName.setMaxLines(2);
         userName.setEllipsize(android.text.TextUtils.TruncateAt.END);
         identity.addView(userName);
-        identity.addView(text("Personal Launcher", 12, MUTED));
         header.addView(identity, new LinearLayout.LayoutParams(0, -2, 1));
         networkStatus = text("", 13, MUTED);
         networkStatus.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
@@ -350,7 +353,8 @@ public final class PersonalHomeActivity extends Activity {
                         apps.add(new App(label, info, old.icon, old.accent));
                     } else {
                         artwork = AppArtwork.create(getResources(), info.loadIcon(getPackageManager()));
-                        apps.add(new App(label, info, artwork.image, artwork.accent));
+                        android.graphics.drawable.Drawable banner = info.activityInfo.loadBanner(getPackageManager());
+                        apps.add(new App(label, info, banner != null ? banner : artwork.image, artwork.accent));
                     }
                 } catch (RuntimeException removedDuringQuery) {
                     // A package can be replaced or removed between queryIntentActivities and loading its resources.
@@ -413,7 +417,8 @@ public final class PersonalHomeActivity extends Activity {
         tile.setForeground(tileBorder(app.accent, false));
         ImageView icon = new ImageView(this);
         icon.setImageDrawable(app.icon);
-        icon.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        icon.setScaleType(app.icon.getIntrinsicWidth() > app.icon.getIntrinsicHeight() * 1.3f
+                ? ImageView.ScaleType.FIT_XY : ImageView.ScaleType.FIT_CENTER);
         icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         tile.addView(icon, new android.widget.FrameLayout.LayoutParams(-1, -1));
         tile.setOnFocusChangeListener((v, focus) -> {
@@ -452,8 +457,8 @@ public final class PersonalHomeActivity extends Activity {
         });
         GridLayout.LayoutParams position = new GridLayout.LayoutParams();
         position.width = width - dp(16);
-        position.height = position.width;
-        position.setMargins(dp(8), dp(8), dp(8), dp(8));
+        position.height = Math.round(position.width * 9f / 16f);
+        position.setMargins(dp(8), dp(10), dp(8), dp(10));
         parent.addView(tile, position);
     }
 
@@ -566,8 +571,8 @@ public final class PersonalHomeActivity extends Activity {
         LinearLayout rows = new LinearLayout(this);
         rows.setOrientation(LinearLayout.VERTICAL);
         rows.setPadding(dp(8), dp(4), dp(8), dp(8));
-        addPanelRow(rows, "Profile · name & photo", () -> editProfile());
         addPanelRow(rows, "Launcher settings", () -> launcherSettings());
+        addPanelRow(rows, "Profile · name & photo", () -> editProfile());
         addPanelRow(rows, "Wi-Fi", () -> openSetting(Settings.ACTION_WIFI_SETTINGS));
         addPanelRow(rows, "Bluetooth", () -> openSetting(Settings.ACTION_BLUETOOTH_SETTINGS));
         Runnable releaseControls = QuickControls.attach(this, rows, prefs, this::applyBrightness, () -> { if (panel != null) panel.dismiss(); });
@@ -588,8 +593,21 @@ public final class PersonalHomeActivity extends Activity {
 
     private void addPanelRow(LinearLayout parent, String label, Runnable action) {
         Button row = button(label, () -> { if (panel != null) panel.dismiss(); action.run(); });
+        row.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        row.setTextSize(15);
+        row.setMinHeight(dp(54));
+        row.setPadding(dp(16), dp(10), dp(12), dp(10));
+        int image = label.startsWith("Launcher") ? R.drawable.ic_settings
+                : label.startsWith("Wi-Fi") ? R.drawable.ic_wifi
+                : label.startsWith("Bluetooth") ? android.R.drawable.stat_sys_data_bluetooth
+                : label.startsWith("Input") ? R.drawable.ic_input : R.drawable.ic_settings;
+        android.graphics.drawable.Drawable symbol = getDrawable(image).mutate();
+        symbol.setTint(label.startsWith("Wi-Fi") ? networkStatus.getCurrentTextColor() : CYAN);
+        symbol.setBounds(0, 0, dp(23), dp(23));
+        row.setCompoundDrawables(symbol, null, null, null);
+        row.setCompoundDrawablePadding(dp(14));
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
-        p.setMargins(0, dp(3), 0, dp(3));
+        p.setMargins(0, dp(4), 0, dp(4));
         parent.addView(row, p);
     }
 
@@ -687,7 +705,7 @@ public final class PersonalHomeActivity extends Activity {
             if (which == 0) launch(new Intent(this, LandscapeActivity.class));
             else if (which == 1) WeatherSettings.show(this);
             else if (which == 2) chooseSetting("Temperature unit", new String[]{"Celsius", "Fahrenheit"}, value -> prefs.edit().putBoolean("weather_fahrenheit", value == 1).apply());
-            else if (which == 3) chooseSetting("Photo change interval", new String[]{"1 minute", "2 minutes", "5 minutes"}, value -> prefs.edit().putInt("photo_seconds", new int[]{60,120,300}[value]).apply());
+            else if (which == 3) chooseSetting("Photo change interval", new String[]{"30 seconds", "1 minute", "2 minutes", "5 minutes"}, value -> prefs.edit().putInt("photo_seconds", new int[]{30,60,120,300}[value]).apply());
             else if (which == 4) chooseSetting("Start screensaver after idle", new String[]{"Off", "2 minutes", "5 minutes", "10 minutes", "15 minutes"}, value -> {
                 prefs.edit().putInt("idle_screensaver_minutes", new int[]{0,2,5,10,15}[value]).apply(); armIdleScreensaver();
             });
@@ -895,13 +913,13 @@ public final class PersonalHomeActivity extends Activity {
             float x = clockX >= 0 ? clockX : getWidth() / 2f, y = clockY >= 0 ? clockY : dp(150);
             if (!mode.equals("solid") && picture != null) {
                 boolean mountains = picture == backdrop;
-                float scale = Math.max(getWidth() / (float) picture.getWidth(), getHeight() / (float) picture.getHeight()) * (mountains ? 1.65f : 1f);
+                float scale = Math.max(getWidth() / (float) picture.getWidth(), getHeight() / (float) picture.getHeight()) * (mountains ? 1.08f : 1f);
                 float width = picture.getWidth() * scale, height = picture.getHeight() * scale;
                 float left = (getWidth() - width) / 2f;
                 // Put the mountain ridge behind the clock rather than far below it.
                 float upper = mountains ? Math.max(getHeight() - height, Math.min(0, y - height * .49f)) : (getHeight() - height) / 2f;
                 canvas.drawBitmap(picture, null, new android.graphics.RectF(left, upper, left + width, upper + height), paint);
-                int shade = theme.equals("dark") ? 145 : (int) (30 + 125 * (1 - day));
+                int shade = theme.equals("dark") ? 185 : (int) (55 + 130 * (1 - day));
                 canvas.drawColor((Math.min(235, shade + prefs.getInt("background_dim", 0) * 2) << 24) | 0x00051327);
             }
             if (focusAccent != 0 && focusRadius > 0) {
@@ -911,9 +929,9 @@ public final class PersonalHomeActivity extends Activity {
             }
             float radius = dp(tv ? 36 : 30);
             boolean sun = minute >= 360 && minute < 1080;
-            paint.setShader(new RadialGradient(x, y, radius * 2f, sun ? 0x40ffd78a : 0x304ac8ff, Color.TRANSPARENT, Shader.TileMode.CLAMP));
+            paint.setShader(new RadialGradient(x, y, radius * 2f, sun ? 0x18ffd78a : 0x184ac8ff, Color.TRANSPARENT, Shader.TileMode.CLAMP));
             canvas.drawCircle(x, y, radius * 2f, paint); paint.setShader(null);
-            paint.setColor(sun ? 0x60ffd68a : 0x80dcefff);
+            paint.setColor(sun ? 0x20ffd68a : 0x38dcefff);
             if (sun) canvas.drawCircle(x, y, radius, paint);
             else {
                 android.graphics.Path moon = new android.graphics.Path(), cut = new android.graphics.Path();

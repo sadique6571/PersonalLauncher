@@ -32,6 +32,7 @@ public final class LandscapeView extends FrameLayout {
     private final TextView clock, date, wifi, weather, city, status;
     private ExecutorService worker;
     private boolean running, registered, photoBusy, weatherBusy, hasPhoto;
+    private int displayedPhoto = -1;
     private int generation, photoIndex = (int) (System.currentTimeMillis() / 60_000);
 
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
@@ -50,7 +51,7 @@ public final class LandscapeView extends FrameLayout {
         @Override public void run() {
             if (!running) return;
             requestPhoto();
-            handler.postDelayed(this, Math.max(60, Math.min(300, prefs.getInt("photo_seconds", 120))) * 1000L);
+            handler.postDelayed(this, Math.max(30, Math.min(300, prefs.getInt("photo_seconds", 30))) * 1000L);
         }
     };
     private final Runnable weatherTick = new Runnable() {
@@ -193,11 +194,17 @@ public final class LandscapeView extends FrameLayout {
         if (!running || photoBusy || !online()) return;
         photoBusy = true;
         int request = generation;
-        String url = LandscapeModel.photoUrl(photoIndex++);
+        int previousPhoto = displayedPhoto;
+        int firstPhoto = photoIndex;
+        photoIndex++;
         worker.execute(() -> {
             Bitmap result = null;
-            try {
-                byte[] bytes = OnlineContent.get(url, 6 * 1024 * 1024);
+            int selectedPhoto = -1;
+            for (int attempt = 0; attempt < 3 && result == null && !Thread.currentThread().isInterrupted(); attempt++) {
+              int candidate = Math.floorMod(firstPhoto + attempt, 6);
+              if (candidate == previousPhoto) continue;
+              try {
+                byte[] bytes = OnlineContent.get(LandscapeModel.photoUrl(candidate), 6 * 1024 * 1024);
                 BitmapFactory.Options bounds = new BitmapFactory.Options();
                 bounds.inJustDecodeBounds = true;
                 BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
@@ -206,15 +213,22 @@ public final class LandscapeView extends FrameLayout {
                 bounds.inSampleSize = 1;
                 while (Math.max(bounds.outWidth, bounds.outHeight) / bounds.inSampleSize > 1920) bounds.inSampleSize *= 2;
                 result = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
-            } catch (Exception unavailable) { /* A failed image never replaces the clock with an error screen. */ }
+                selectedPhoto = candidate;
+              } catch (Exception unavailable) { /* Try another landscape instead of retaining one failed source forever. */ }
+            }
             Bitmap image = result;
+            int loadedPhoto = selectedPhoto;
             handler.post(() -> {
                 if (!running || request != generation) return;
                 photoBusy = false;
                 if (image != null && online()) {
-                    photo.setImageBitmap(image); hasPhoto = true;
+                    photo.setImageBitmap(image); hasPhoto = true; displayedPhoto = loadedPhoto;
                     status.setText("Photos: Unsplash · Weather: Open-Meteo");
-                } else if (!hasPhoto) status.setText("Landscape unavailable · retrying automatically");
+                } else {
+                    status.setText("Landscape rotation unavailable · retrying automatically");
+                    handler.removeCallbacks(rotate);
+                    handler.postDelayed(rotate, 15_000);
+                }
             });
         });
     }

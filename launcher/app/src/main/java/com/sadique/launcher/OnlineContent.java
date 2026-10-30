@@ -21,7 +21,7 @@ final class OnlineContent {
         connection.setInstanceFollowRedirects(false);
         connection.setUseCaches(false);
         connection.setRequestProperty("Cache-Control", "no-cache");
-        connection.setRequestProperty("User-Agent", "PersonalLauncher/4.1");
+        connection.setRequestProperty("User-Agent", "PersonalLauncher/4.2");
         connection.setRequestProperty("Accept", host.equals("images.unsplash.com") ? "image/jpeg,image/webp,image/png" : "application/json");
         try {
             int status = connection.getResponseCode();

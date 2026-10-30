@@ -8,6 +8,8 @@ import android.content.pm.PackageManager;
 import android.database.ContentObserver;
 import android.database.Cursor;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.widget.ImageView;
 import android.graphics.drawable.GradientDrawable;
 import android.media.tv.TvContract;
 import android.os.CancellationSignal;
@@ -74,7 +76,7 @@ public final class ContinueWatchingView extends LinearLayout {
     }
     public void start() {
         if (running) { reload(); return; }
-        running = true; worker = Executors.newSingleThreadExecutor();
+        running = true; worker = Executors.newFixedThreadPool(2);
         try { host.getContentResolver().registerContentObserver(TvContract.WatchNextPrograms.CONTENT_URI, true, observer); observing = true; }
         catch (RuntimeException unavailable) { observing = false; }
         reload();
@@ -124,7 +126,8 @@ public final class ContinueWatchingView extends LinearLayout {
             String[] columns = {TvContract.WatchNextPrograms.COLUMN_TITLE, TvContract.WatchNextPrograms.COLUMN_PACKAGE_NAME,
                 TvContract.WatchNextPrograms.COLUMN_INTENT_URI, TvContract.WatchNextPrograms.COLUMN_WATCH_NEXT_TYPE,
                 TvContract.WatchNextPrograms.COLUMN_LAST_PLAYBACK_POSITION_MILLIS, TvContract.WatchNextPrograms.COLUMN_DURATION_MILLIS,
-                TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS, TvContract.WatchNextPrograms.COLUMN_BROWSABLE};
+                TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS, TvContract.WatchNextPrograms.COLUMN_BROWSABLE,
+                TvContract.WatchNextPrograms.COLUMN_POSTER_ART_URI, TvContract.WatchNextPrograms.COLUMN_THUMBNAIL_URI};
             Set<String> hidden = prefs.getStringSet("hidden_apps", Collections.emptySet());
             try (Cursor cursor = host.getContentResolver().query(TvContract.WatchNextPrograms.CONTENT_URI, columns, null, null,
                     TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS + " DESC", cancellation)) {
@@ -137,7 +140,7 @@ public final class ContinueWatchingView extends LinearLayout {
                     String owner;
                     try { owner = host.getPackageManager().getApplicationLabel(host.getPackageManager().getApplicationInfo(pkg, 0)).toString(); }
                     catch (PackageManager.NameNotFoundException removed) { continue; }
-                    entries.add(new Item(title, pkg, owner, intent, position, duration));
+                    entries.add(new Item(title, pkg, owner, intent, position, duration, cursor.getString(8), cursor.getString(9)));
                 }
             } catch (RuntimeException unavailable) { error = "Your TV has not exposed shared Watch Next entries to this launcher."; }
             String message = error;
@@ -155,7 +158,21 @@ public final class ContinueWatchingView extends LinearLayout {
         LinearLayout card = new LinearLayout(host); card.setOrientation(VERTICAL);
         card.setPadding(dp(16), dp(16), dp(16), dp(16)); card.setFocusable(true); card.setClickable(true);
         card.setBackground(background(false)); card.setContentDescription("Resume " + item.title + " in " + item.owner);
-        TextView title = label(item.title, 19); title.setMaxLines(2); title.setMinLines(2); title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        ImageView poster = new ImageView(host);
+        poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        poster.setBackground(background(false)); poster.setClipToOutline(true);
+        poster.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+        card.addView(poster, new LayoutParams(-1, dp(106)));
+        try { poster.setImageDrawable(host.getPackageManager().getApplicationIcon(item.pkg)); }
+        catch (PackageManager.NameNotFoundException ignored) { }
+        int request = generation;
+        worker.execute(() -> {
+            Bitmap bitmap = ResumeArtwork.load(host, item.thumbnail, item.poster);
+            if (bitmap != null) handler.post(() -> {
+                if (running && request == generation) poster.setImageBitmap(bitmap);
+            });
+        });
+        TextView title = label(item.title, 19); title.setPadding(0, dp(10), 0, 0); title.setMaxLines(2); title.setMinLines(2); title.setEllipsize(android.text.TextUtils.TruncateAt.END);
         card.addView(title, new LayoutParams(-1, -2));
         TextView owner = label(item.owner, 13); owner.setPadding(0, dp(6), 0, dp(8)); card.addView(owner);
         if (item.duration > 0) {
@@ -182,9 +199,9 @@ public final class ContinueWatchingView extends LinearLayout {
         shape.setStroke(dp(focused ? 3 : 1), focused ? 0xff40d9ff : 0xff28435e); return shape;
     }
     private static final class Item {
-        final String title, pkg, owner, intent; final long position, duration;
-        Item(String title, String pkg, String owner, String intent, long position, long duration) {
-            this.title=title; this.pkg=pkg; this.owner=owner; this.intent=intent; this.position=position; this.duration=duration;
+        final String title, pkg, owner, intent, poster, thumbnail; final long position, duration;
+        Item(String title, String pkg, String owner, String intent, long position, long duration, String poster, String thumbnail) {
+            this.title=title; this.pkg=pkg; this.owner=owner; this.intent=intent; this.position=position; this.duration=duration; this.poster=poster; this.thumbnail=thumbnail;
         }
     }
 }

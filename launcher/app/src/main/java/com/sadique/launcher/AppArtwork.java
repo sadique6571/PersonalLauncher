@@ -4,7 +4,6 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.drawable.AdaptiveIconDrawable;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 
@@ -19,24 +18,8 @@ final class AppArtwork {
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         Drawable icon = source.getConstantState() == null ? source.mutate() : source.getConstantState().newDrawable().mutate();
-        if (icon instanceof AdaptiveIconDrawable) {
-            AdaptiveIconDrawable adaptive = (AdaptiveIconDrawable) icon;
-            Drawable background = adaptive.getBackground(), foreground = adaptive.getForeground();
-            if (background != null) { background.setBounds(0, 0, size, size); background.draw(canvas); }
-            if (foreground != null) {
-                int inset = Math.round(size * AdaptiveIconDrawable.getExtraInsetFraction());
-                foreground.setBounds(-inset, -inset, size + inset, size + inset); foreground.draw(canvas);
-            }
-        } else {
-            icon.setBounds(0, 0, size, size); icon.draw(canvas);
-            int left = size, top = size, right = -1, bottom = -1;
-            for (int y = 0; y < size; y++) for (int x = 0; x < size; x++) {
-                if (Color.alpha(bitmap.getPixel(x, y)) <= 24) continue;
-                left = Math.min(left, x); right = Math.max(right, x); top = Math.min(top, y); bottom = Math.max(bottom, y);
-            }
-            if (right >= left && bottom >= top && (right - left < size - 4 || bottom - top < size - 4))
-                bitmap = Bitmap.createBitmap(bitmap, left, top, right - left + 1, bottom - top + 1);
-        }
+        icon.setBounds(0, 0, size, size);
+        icon.draw(canvas);
         float[] weights = new float[12];
         float[][] sums = new float[12][3];
         float[] hsv = new float[3];
