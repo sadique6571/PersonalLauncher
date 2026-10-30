@@ -5,9 +5,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.Rect;
 import android.graphics.RectF;
-import android.graphics.drawable.AdaptiveIconDrawable;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 
@@ -27,17 +25,7 @@ final class AppArtwork {
         int width = ratio >= 1 ? size : Math.round(size * ratio);
         int height = ratio >= 1 ? Math.round(size / ratio) : size;
         icon.setBounds((size - width) / 2, (size - height) / 2, (size + width) / 2, (size + height) / 2);
-        Drawable adaptiveBackground = null;
-        if (icon instanceof AdaptiveIconDrawable) {
-            AdaptiveIconDrawable adaptive = (AdaptiveIconDrawable) icon;
-            adaptiveBackground = adaptive.getBackground();
-            if (adaptiveBackground != null) { adaptiveBackground.setBounds(0, 0, size, size); adaptiveBackground.draw(canvas); }
-            Drawable foreground = adaptive.getForeground();
-            if (foreground != null) {
-                int inset = Math.round(size * AdaptiveIconDrawable.getExtraInsetFraction());
-                foreground.setBounds(-inset, -inset, size + inset, size + inset); foreground.draw(canvas);
-            }
-        } else icon.draw(canvas);
+        icon.draw(canvas);
         // Remove baked-in transparent margins from legacy icons, not just ImageView padding.
         int left = size, top = size, right = -1, bottom = -1;
         for (int y = 0; y < size; y++) for (int x = 0; x < size; x++) {
@@ -64,24 +52,17 @@ final class AppArtwork {
         for (int i = 1; i < weights.length; i++) if (weights[i] > weights[best]) best = i;
         int accent = weights[best] < 1 ? 0xff40d9ff : Color.rgb((int) (sums[best][0] / weights[best]),
                 (int) (sums[best][1] / weights[best]), (int) (sums[best][2] / weights[best]));
-        // Compose the wide card once off the UI thread. Extend the native background to
-        // every edge while preserving the foreground logo's proportions and complete shape.
+        // A clean card background and proportional logo; never stretch icon edge pixels.
         Bitmap card = Bitmap.createBitmap(320, 180, Bitmap.Config.ARGB_8888);
         Canvas cardCanvas = new Canvas(card);
-        cardCanvas.drawColor(0xff092038);
+        int background = 0xff092038;
+        int corner = bitmap.getPixel(0, 0);
+        if (Color.alpha(corner) > 240) background = corner;
+        cardCanvas.drawColor(background);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-        if (adaptiveBackground != null) {
-            adaptiveBackground.setBounds(0, 0, 320, 180); adaptiveBackground.draw(cardCanvas);
-        }
-        float scale = Math.min(320f / bitmap.getWidth(), 180f / bitmap.getHeight());
+        float scale = Math.min(270f / bitmap.getWidth(), 140f / bitmap.getHeight());
         float w = bitmap.getWidth() * scale, h = bitmap.getHeight() * scale;
         float x = (320 - w) / 2f, y = (180 - h) / 2f;
-        if (adaptiveBackground == null) {
-            // Matching edge colours avoid a small square pasted onto an unrelated tile.
-            cardCanvas.drawBitmap(bitmap, new Rect(0, 0, 1, bitmap.getHeight()), new RectF(0, y, x, y + h), paint);
-            cardCanvas.drawBitmap(bitmap, new Rect(bitmap.getWidth() - 1, 0, bitmap.getWidth(), bitmap.getHeight()),
-                    new RectF(x + w, y, 320, y + h), paint);
-        }
         cardCanvas.drawBitmap(bitmap, null, new RectF(x, y, x + w, y + h), paint);
         return new AppArtwork(new BitmapDrawable(resources, card), accent);
     }

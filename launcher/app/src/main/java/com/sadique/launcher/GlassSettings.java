@@ -49,40 +49,95 @@ final class GlassSettings {
         position.setMargins(0, dp(host, 3), 0, dp(host, 3)); row.setLayoutParams(position);
         return row;
     }
+    private static final java.util.WeakHashMap<Activity, java.lang.ref.WeakReference<Panel>> PANELS = new java.util.WeakHashMap<>();
+    private static final class Panel {
+        final AlertDialog dialog;
+        final LinearLayout content;
+        final java.util.ArrayDeque<View> pages = new java.util.ArrayDeque<>();
+        Panel(AlertDialog dialog, LinearLayout content) { this.dialog = dialog; this.content = content; }
+    }
     static AlertDialog panel(Activity host, String title, LinearLayout rows) {
-        LinearLayout content = new LinearLayout(host); content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(host, 12), dp(host, 12), dp(host, 12), dp(host, 12));
+        java.lang.ref.WeakReference<Panel> reference = PANELS.get(host);
+        Panel state = reference == null ? null : reference.get();
+        if (state == null || !state.dialog.isShowing()) {
+            LinearLayout container = new LinearLayout(host); container.setOrientation(LinearLayout.VERTICAL);
+            AlertDialog dialog = new AlertDialog.Builder(host).setView(container).create();
+            state = new Panel(dialog, container);
+            PANELS.put(host, new java.lang.ref.WeakReference<>(state));
+            Panel current = state;
+            dialog.setOnKeyListener((d, key, event) -> {
+                if (key != android.view.KeyEvent.KEYCODE_BACK || current.pages.isEmpty()) return false;
+                if (event.getAction() == android.view.KeyEvent.ACTION_UP) back(current);
+                return true;
+            });
+            // Configure BEFORE show: no center-to-right reposition on the first visible frame.
+            dialog.create();
+            android.view.Window window = dialog.getWindow();
+            if (window != null) {
+                boolean tv = (host.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_TYPE_MASK) == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION;
+                int width = Math.min(dp(host, 350), host.getResources().getDisplayMetrics().widthPixels - dp(host, 24));
+                window.setGravity(tv ? Gravity.END : Gravity.CENTER);
+                window.setLayout(width, tv ? -1 : Math.round(host.getResources().getDisplayMetrics().heightPixels * .88f));
+                window.setWindowAnimations(0);
+                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+                window.setDimAmount(.12f);
+            }
+        }
+        Panel current = state;
+        if (current.content.getChildCount() > 0) {
+            View old = current.content.getChildAt(0); current.content.removeView(old); current.pages.push(old);
+        }
+        LinearLayout page = new LinearLayout(host); page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(host, 12), dp(host, 12), dp(host, 12), dp(host, 12));
         LinearLayout bar = new LinearLayout(host); bar.setGravity(Gravity.CENTER_VERTICAL);
+        if (!current.pages.isEmpty()) {
+            TextView back = label(host, "‹", 26, Color.WHITE); back.setGravity(Gravity.CENTER);
+            back.setContentDescription("Back to settings"); back.setFocusable(true);
+            back.setBackground(background(host, false)); back.setOnClickListener(v -> back(current));
+            bar.addView(back, new LinearLayout.LayoutParams(dp(host, 32), dp(host, 36)));
+        }
         TextView heading = label(host, title, 21, Color.WHITE); heading.setTypeface(null, Typeface.BOLD);
         bar.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
         TextView close = label(host, "×", 26, 0xffc9dfef); close.setGravity(Gravity.CENTER);
         close.setContentDescription("Close settings"); close.setFocusable(true); close.setBackground(background(host, false));
         close.setOnFocusChangeListener((v, f) -> close.setBackground(background(host, f)));
         bar.addView(close, new LinearLayout.LayoutParams(dp(host, 36), dp(host, 36)));
-        content.addView(bar);
-        ScrollView scroll = new ScrollView(host); scroll.setFillViewport(false); scroll.setVerticalScrollBarEnabled(false);
-        scroll.addView(rows); content.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        AlertDialog dialog = new AlertDialog.Builder(host).setView(content).create();
-        close.setOnClickListener(v -> dialog.dismiss());
-        dialog.setOnShowListener(d -> {
-            if (dialog.getWindow() == null) return;
-            boolean tv = (host.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_TYPE_MASK) == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION;
-            dialog.getWindow().setGravity(tv ? Gravity.END : Gravity.CENTER);
-            int width = Math.min(dp(host, 350), host.getResources().getDisplayMetrics().widthPixels - dp(host, 24));
-            dialog.getWindow().setLayout(width, tv ? -1 : Math.round(host.getResources().getDisplayMetrics().heightPixels * .88f));
-            dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-            dialog.getWindow().setDimAmount(.12f);
-            for (int i = 0; i < rows.getChildCount(); i++) if (rows.getChildAt(i).isFocusable()) { rows.getChildAt(i).requestFocus(); break; }
-        });
-        return dialog;
+        page.addView(bar);
+        ScrollView scroll = new ScrollView(host); scroll.setVerticalScrollBarEnabled(false);
+        scroll.addView(rows); page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        current.content.addView(page, new LinearLayout.LayoutParams(-1, -1));
+        close.setOnClickListener(v -> current.dialog.dismiss());
+        current.dialog.setOnShowListener(d -> focusRows(rows));
+        if (current.dialog.isShowing()) rows.post(() -> focusRows(rows));
+        return current.dialog;
+    }
+    private static void focusRows(LinearLayout rows) {
+        for (int i = 0; i < rows.getChildCount(); i++) if (rows.getChildAt(i).isFocusable()) { rows.getChildAt(i).requestFocus(); break; }
+    }
+    private static void back(Panel current) {
+        if (current.pages.isEmpty()) { current.dialog.dismiss(); return; }
+        current.content.removeAllViews();
+        View previous = current.pages.pop(); current.content.addView(previous, new LinearLayout.LayoutParams(-1, -1));
+        previous.restoreDefaultFocus();
     }
     static void options(Activity host, String title, String[] names, String[] hints, java.util.function.IntConsumer selected) {
         LinearLayout rows = new LinearLayout(host); rows.setOrientation(LinearLayout.VERTICAL);
         AlertDialog dialog = panel(host, title, rows);
+        boolean navigation = hints != null || title.equals("Online landscape screensaver");
         for (int i = 0; i < names.length; i++) {
             final int index = i;
-            rows.addView(row(host, names[i], hints == null ? null : hints[i], R.drawable.ic_settings, 0xff9ad6ed,
-                    () -> { dialog.dismiss(); selected.accept(index); }));
+            View option = row(host, names[i], hints == null ? null : hints[i], R.drawable.ic_settings, 0xff9ad6ed, () -> {});
+            option.setOnClickListener(v -> {
+                selected.accept(index);
+                if (!navigation) {
+                    for (int j = 0; j < rows.getChildCount(); j++) {
+                        LinearLayout copy = (LinearLayout) ((LinearLayout) rows.getChildAt(j)).getChildAt(1);
+                        ((TextView) copy.getChildAt(0)).setText(names[j].replace("  ✓", "") + (j == index ? "  ✓" : ""));
+                        rows.getChildAt(j).setBackground(background(host, j == index));
+                    }
+                }
+            });
+            rows.addView(option);
         }
         dialog.show();
     }

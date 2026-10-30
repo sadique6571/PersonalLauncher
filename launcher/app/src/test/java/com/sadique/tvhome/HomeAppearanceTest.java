@@ -9,21 +9,22 @@ public class HomeAppearanceTest {
         assertEquals(1f, HomeAppearance.daylight("light", 0), 0f);
         assertEquals(0f, HomeAppearance.daylight("auto", 0), 0f);
         assertEquals(1f, HomeAppearance.daylight("auto", 720), 0f);
-        assertEquals(64, HomeAppearance.shade("dark", 720, 0));
+        assertEquals(104, HomeAppearance.shade("dark", 720, 0));
         assertEquals(0, HomeAppearance.shade("light", 0, 0));
         assertEquals(150, HomeAppearance.shade("dark", 0, 999));
     }
-    @Test public void portraitMountainsStayNearClockWithoutFullHeightMagnification() {
+    @Test public void portraitKeepsTheSkyWithoutFullHeightMagnification() {
         float[] frame = HomeAppearance.frame(393, 850, 1280, 720, 170, true);
         float height = frame[3] - frame[1];
         assertTrue(height < 400);
-        assertEquals(170, frame[1] + height * .49f, .1f);
+        assertEquals(0, frame[1], .1f);
+        assertTrue(frame[1] + height * .49f > 140);
         assertTrue(frame[0] <= 0 && frame[2] >= 393);
     }
-    @Test public void televisionRidgeStaysAtTheClockWhilePhotoStillCoversTheScreen() {
+    @Test public void televisionShowsFullSkyAndDoesNotZoomToAlignRidgeWithClock() {
         float[] frame = HomeAppearance.frame(960, 540, 1280, 720, 160, true);
-        assertEquals(160, frame[1] + (frame[3] - frame[1]) * .49f, .1f);
-        assertTrue(frame[1] <= 0 && frame[3] >= 540);
+        assertArrayEquals(new float[]{0, 0, 960, 540}, frame, .1f);
+        assertTrue((frame[3] - frame[1]) * .49f > 160);
     }
     @Test public void landscapeAndCustomPhotosCoverTheirViewportWithoutDistortion() {
         for (boolean mountains : new boolean[]{true, false}) {

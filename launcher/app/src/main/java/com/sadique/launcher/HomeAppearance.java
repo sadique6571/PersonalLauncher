@@ -7,20 +7,17 @@ final class HomeAppearance {
     }
 
     static int shade(String mode, int minute, int extra) {
-        return Math.max(0, Math.min(150, Math.round(64 * (1 - daylight(mode, minute))) + Math.max(0, extra)));
+        return Math.max(0, Math.min(150, Math.round(104 * (1 - daylight(mode, minute))) + Math.max(0, extra)));
     }
 
     // Portrait uses a landscape hero instead of magnifying a 16:9 photo to phone height.
     static float[] frame(int width, int height, int imageWidth, int imageHeight, float clockY, boolean mountains) {
         boolean portrait = height > width;
-        float areaHeight = mountains && portrait ? Math.min(height, Math.max(width * .5625f, clockY / .49f)) : height;
-        float requiredHeight = mountains && !portrait
-                ? Math.max(height, Math.max(clockY / .49f, (height - clockY) / .51f)) : areaHeight;
-        float scale = Math.max(width / (float) imageWidth, requiredHeight / imageHeight);
+        float areaHeight = mountains && portrait ? Math.min(height, Math.max(width * .75f, clockY * 1.8f)) : height;
+        float scale = Math.max(width / (float) imageWidth, areaHeight / imageHeight);
         float photoWidth = imageWidth * scale, photoHeight = imageHeight * scale;
         float left = (width - photoWidth) / 2f;
-        float upper = mountains ? Math.max(areaHeight - photoHeight, Math.min(0, clockY - photoHeight * .49f))
-                : (height - photoHeight) / 2f;
+        float upper = mountains ? 0 : (height - photoHeight) / 2f;
         return new float[]{left, upper, left + photoWidth, upper + photoHeight};
     }
 }

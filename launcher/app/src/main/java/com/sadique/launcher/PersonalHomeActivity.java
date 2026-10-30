@@ -308,7 +308,9 @@ public final class PersonalHomeActivity extends Activity {
         refreshProfile();
         updateClock();
         updateNetwork();
-        applyBrightness(prefs.getInt("brightness", 80));
+        WindowManager.LayoutParams brightness = getWindow().getAttributes();
+        brightness.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
+        getWindow().setAttributes(brightness);
         if (resumed) continueWatching.start();
     }
 
@@ -427,6 +429,7 @@ public final class PersonalHomeActivity extends Activity {
         android.widget.FrameLayout tile = new android.widget.FrameLayout(this);
         tile.setBackground(surface(false));
         tile.setClipToOutline(true);
+        tile.setElevation(dp(3));
         tile.setFocusable(true);
         tile.setClickable(true);
         tile.setContentDescription(app.name);
@@ -596,14 +599,14 @@ public final class PersonalHomeActivity extends Activity {
         catch (SecurityException unavailable) { /* Android 12+ can restrict adapter state. */ }
         addPanelRow(rows, "Bluetooth", bluetoothState, android.R.drawable.stat_sys_data_bluetooth, 0xff67baff,
                 () -> openSetting(Settings.ACTION_BLUETOOTH_SETTINGS));
-        Runnable release = QuickControls.attach(this, rows, prefs, this::applyBrightness, () -> panel.dismiss());
+        Runnable release = QuickControls.attach(this, rows);
         if (tv) addPanelRow(rows, "Input", "HDMI / Live TV", R.drawable.ic_input, 0xffbdd5e5, this::showInputs);
         addPanelRow(rows, "TV system settings", "Display, sound & device", R.drawable.ic_settings, 0xffbdd5e5, () -> openSetting(Settings.ACTION_SETTINGS));
         panel.setOnDismissListener(d -> release.run()); panel.show();
     }
 
     private void addPanelRow(LinearLayout rows, String label, String hint, int icon, int color, Runnable action) {
-        rows.addView(GlassSettings.row(this, label, hint, icon, color, () -> { if (panel != null) panel.dismiss(); action.run(); }));
+        rows.addView(GlassSettings.row(this, label, hint, icon, color, () -> { if (!label.equals("Launcher settings") && panel != null) panel.dismiss(); action.run(); }));
     }
 
     private void launcherSettings() {
@@ -731,12 +734,6 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     @Override public void onUserInteraction() { super.onUserInteraction(); armIdleScreensaver(); }
-
-    private void applyBrightness(int percent) {
-        WindowManager.LayoutParams p = getWindow().getAttributes();
-        p.screenBrightness = Math.max(.1f, Math.min(1f, percent / 100f));
-        getWindow().setAttributes(p);
-    }
 
     private void editProfile() {
         if (profile != null && profile.isShowing()) return;
@@ -961,11 +958,14 @@ public final class PersonalHomeActivity extends Activity {
         }
     }
 
-    private GradientDrawable tileBorder(int accent, boolean focused) {
+    private android.graphics.drawable.Drawable tileBorder(int accent, boolean focused) {
         GradientDrawable border = new GradientDrawable();
         border.setColor(Color.TRANSPARENT); border.setCornerRadius(dp(16));
         border.setStroke(dp(focused ? 3 : 1), focused ? accent : 0x4028435e);
-        return border;
+        GradientDrawable bevel = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0x20ffffff, 0x00ffffff, 0x28000000});
+        bevel.setCornerRadius(dp(16));
+        return new android.graphics.drawable.LayerDrawable(new android.graphics.drawable.Drawable[]{bevel, border});
     }
 
     private static int blend(int a, int b, float part) {

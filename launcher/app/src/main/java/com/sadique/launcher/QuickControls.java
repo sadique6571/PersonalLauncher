@@ -5,19 +5,14 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.SharedPreferences;
 import android.media.AudioManager;
-import android.net.Uri;
 import android.os.Build;
-import android.provider.Settings;
-import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
-import java.util.function.IntConsumer;
 
-/** Inline controls; optional device brightness uses Android's user-granted special access. */
+/** Inline media-volume control; display brightness belongs to the TV settings. */
 final class QuickControls {
     private static TextView label(Activity host, String value) {
         return GlassSettings.label(host, value, 13, 0xffe0ecf7);
@@ -40,49 +35,7 @@ final class QuickControls {
         LinearLayout.LayoutParams position = new LinearLayout.LayoutParams(-1, -2);
         position.setMargins(0, GlassSettings.dp(host, 3), 0, GlassSettings.dp(host, 3)); rows.addView(card, position);
     }
-    static Runnable attach(Activity host, LinearLayout rows, SharedPreferences prefs, IntConsumer homeBrightness, Runnable leavePanel) {
-        boolean deviceBrightness = Settings.System.canWrite(host);
-        TextView lightLabel = label(host, deviceBrightness ? "Device brightness" : "Home brightness");
-        int percent = prefs.getInt("brightness", 80);
-        if (deviceBrightness) {
-            try { percent = Settings.System.getInt(host.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, 204) * 100 / 255; }
-            catch (RuntimeException unavailable) { /* The local Home value remains usable. */ }
-        }
-        SeekBar light = new SeekBar(host); light.setMax(90); light.setProgress(Math.max(0, Math.min(90, percent - 10)));
-        light.setContentDescription("Brightness");
-        lightLabel.setText((deviceBrightness ? "Device brightness · " : "Home brightness · ") + percent + "%");
-        sliderCard(host, rows, lightLabel, light, R.drawable.ic_brightness);
-        light.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
-                int value = progress + 10;
-                lightLabel.setText((Settings.System.canWrite(host) ? "Device brightness · " : "Home brightness · ") + value + "%");
-                if (!fromUser) return;
-                prefs.edit().putInt("brightness", value).apply(); homeBrightness.accept(value);
-                if (Settings.System.canWrite(host)) {
-                    try {
-                        boolean mode = Settings.System.putInt(host.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL);
-                        boolean saved = Settings.System.putInt(host.getContentResolver(), Settings.System.SCREEN_BRIGHTNESS, Math.round(value * 2.55f));
-                        if (!mode || !saved) throw new IllegalStateException("Brightness rejected");
-                    } catch (RuntimeException rejected) {
-                        lightLabel.setText("Home brightness · " + value + "%");
-                        Toast.makeText(host, "TV device brightness is unavailable; Home brightness was adjusted", Toast.LENGTH_LONG).show();
-                    }
-                }
-            }
-            @Override public void onStartTrackingTouch(SeekBar bar) { }
-            @Override public void onStopTrackingTouch(SeekBar bar) { }
-        });
-        if (!deviceBrightness) {
-            Button grant = new Button(host); grant.setAllCaps(false); grant.setText("Enable device brightness control");
-            grant.setTextSize(11); grant.setTextColor(0xffb7cede); grant.setBackground(GlassSettings.background(host, false));
-            grant.setOnFocusChangeListener((v, focus) -> grant.setBackground(GlassSettings.background(host, focus)));
-            grant.setOnClickListener(v -> {
-                leavePanel.run();
-                try { host.startActivity(new Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:" + host.getPackageName()))); }
-                catch (RuntimeException unavailable) { Toast.makeText(host, "This TV only supports Home-window brightness here", Toast.LENGTH_LONG).show(); }
-            });
-            rows.addView(grant);
-        }
+    static Runnable attach(Activity host, LinearLayout rows) {
         AudioManager audio = host.getSystemService(AudioManager.class);
         int maximum = audio == null ? 0 : audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
         boolean fixed = audio == null || maximum <= 0 || audio.isVolumeFixed();

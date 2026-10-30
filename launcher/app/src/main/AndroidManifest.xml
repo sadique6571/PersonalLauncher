@@ -11,8 +11,6 @@
     <!-- User-requested online landscape screensaver and city weather. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <!-- Optional special access is requested through Android's user-controlled settings screen. -->
-    <uses-permission android:name="android.permission.WRITE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <!-- Runtime consent for searchable/shared TV Watch Next rows, when the TV exposes this permission. -->
     <uses-permission android:name="android.permission.READ_TV_LISTINGS" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
