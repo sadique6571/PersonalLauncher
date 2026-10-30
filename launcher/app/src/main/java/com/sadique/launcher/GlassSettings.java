@@ -16,8 +16,13 @@ import android.widget.TextView;
 final class GlassSettings {
     static int dp(Activity host, float n) { return Math.round(n * host.getResources().getDisplayMetrics().density); }
     static GradientDrawable background(Activity host, boolean focused) {
+        java.util.Calendar now = java.util.Calendar.getInstance();
+        float day = HomeAppearance.daylight(host.getSharedPreferences("personal_home", 0).getString("theme_mode", "dark"),
+                now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE));
+        boolean light = day >= .5f;
         GradientDrawable shape = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{focused ? 0xe51a374b : 0xc5132539, focused ? 0xed0b2337 : 0xd009182a});
+                light ? new int[]{focused ? 0xf04c7b99 : 0xed3b607d, focused ? 0xf0375d7b : 0xed28475f}
+                        : new int[]{focused ? 0xe51a374b : 0xc5132539, focused ? 0xed0b2337 : 0xd009182a});
         shape.setCornerRadius(dp(host, 10));
         shape.setStroke(dp(host, focused ? 2 : 1), focused ? 0xff27d5ff : 0x55415a72);
         return shape;

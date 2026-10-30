@@ -115,9 +115,21 @@ public final class PersonalHomeActivity extends Activity {
 
     private int dp(float value) { return Math.round(value * getResources().getDisplayMetrics().density); }
 
+    private float appearanceDaylight() {
+        Calendar now = Calendar.getInstance();
+        return HomeAppearance.daylight(prefs.getString("theme_mode", "dark"), now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE));
+    }
+
+    private void applyAppearance() {
+        // Recreate surfaces as well as the wallpaper; changing only the canvas left cards unchanged.
+        buildHome();
+    }
+
     private GradientDrawable surface(boolean focused) {
         GradientDrawable shape = new GradientDrawable();
-        shape.setColor(focused ? 0xee153d5b : 0xd0092038);
+        float day = appearanceDaylight();
+        shape.setColor(blend(focused ? 0xff153d5b : 0xff092038, focused ? 0xff407596 : 0xff335975, day));
+        shape.setAlpha(focused ? 238 : 208);
         shape.setCornerRadius(dp(16));
         shape.setStroke(dp(focused ? 3 : 1), focused ? CYAN : 0xff28435e);
         return shape;
@@ -422,8 +434,8 @@ public final class PersonalHomeActivity extends Activity {
         tile.setForeground(tileBorder(app.accent, false));
         ImageView icon = new ImageView(this);
         icon.setImageDrawable(app.icon);
-        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        icon.setPadding(dp(8), dp(6), dp(8), dp(6));
+        // Artwork is composed at the card's 16:9 ratio; no second inset or crop here.
+        icon.setScaleType(ImageView.ScaleType.FIT_XY);
         icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         tile.addView(icon, new android.widget.FrameLayout.LayoutParams(-1, -1));
         tile.setOnFocusChangeListener((v, focus) -> {
@@ -611,7 +623,7 @@ public final class PersonalHomeActivity extends Activity {
                 prefs.edit().putInt("clock_size", (tv ? new int[]{54,66,80} : new int[]{44,56,66})[which]).apply(); buildHome();
             }),
             () -> chooseSetting("Dark mode", new String[]{"Dark (Midnight Cyan)", "Automatic day / night", "Light"}, which -> {
-                prefs.edit().putString("theme_mode", new String[]{"dark","auto","light"}[which]).apply(); sky.invalidate();
+                prefs.edit().putString("theme_mode", new String[]{"dark","auto","light"}[which]).apply(); applyAppearance();
             }),
             this::wallpaperSettings,
             () -> chooseSetting("Wallpaper darkness", new String[]{"Light", "Medium", "Dark"}, which -> {
@@ -660,7 +672,15 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void chooseSetting(String title, String[] options, java.util.function.IntConsumer selected) {
-        GlassSettings.options(this, title, options, null, selected);
+        String[] shown = options.clone();
+        int current = -1;
+        if (title.equals("Dark mode")) {
+            String mode = prefs.getString("theme_mode", "dark");
+            current = mode.equals("auto") ? 1 : mode.equals("light") ? 2 : 0;
+        } else if (title.equals("Wallpaper darkness")) current = Math.min(2, prefs.getInt("background_dim", 0) / 20);
+        else if (title.equals("App colour glow")) current = prefs.getBoolean("focus_glow", true) ? 0 : 1;
+        if (current >= 0 && current < shown.length) shown[current] += "  ✓";
+        GlassSettings.options(this, title, shown, null, selected);
     }
 
     private void refreshApps() {
@@ -889,13 +909,17 @@ public final class PersonalHomeActivity extends Activity {
     /** Static dark wallpaper and a single focus glow; no continuously running animation. */
     private final class SkyClock extends View {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        // Never share the bitmap paint with translucent sun/moon or focus effects.
+        private final Paint wallpaperPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
         private final Bitmap backdrop = BitmapFactory.decodeResource(getResources(), R.drawable.personal_wallpaper);
         int minute, focusAccent;
         float clockX = -1, clockY = -1, focusX, focusY, focusRadius;
         SkyClock() { super(PersonalHomeActivity.this); setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO); }
         @Override protected void onDraw(Canvas canvas) {
+            paint.setColor(Color.WHITE);
+            paint.setShader(null);
             String theme = prefs.getString("theme_mode", "dark");
-            float day = theme.equals("dark") ? 0 : theme.equals("light") ? 1 : PersonalHomeModel.daylight(minute);
+            float day = HomeAppearance.daylight(theme, minute);
             int top = blend(0xff020817, 0xff145d85, day), bottom = blend(0xff07172b, 0xff092b4a, day);
             paint.setShader(new LinearGradient(0, 0, 0, getHeight(), top, bottom, Shader.TileMode.CLAMP));
             canvas.drawRect(0, 0, getWidth(), getHeight(), paint); paint.setShader(null);
@@ -904,14 +928,18 @@ public final class PersonalHomeActivity extends Activity {
             float x = clockX >= 0 ? clockX : getWidth() / 2f, y = clockY >= 0 ? clockY : dp(150);
             if (!mode.equals("solid") && picture != null) {
                 boolean mountains = picture == backdrop;
-                float scale = Math.max(getWidth() / (float) picture.getWidth(), getHeight() / (float) picture.getHeight()) * (mountains ? 1.08f : 1f);
-                float width = picture.getWidth() * scale, height = picture.getHeight() * scale;
-                float left = (getWidth() - width) / 2f;
-                // Put the mountain ridge behind the clock rather than far below it.
-                float upper = mountains ? Math.max(getHeight() - height, Math.min(0, y - height * .49f)) : (getHeight() - height) / 2f;
-                canvas.drawBitmap(picture, null, new android.graphics.RectF(left, upper, left + width, upper + height), paint);
-                int shade = theme.equals("dark") ? 75 : (int) (30 + 65 * (1 - day));
-                canvas.drawColor((Math.min(175, shade + prefs.getInt("background_dim", 0)) << 24) | 0x00051327);
+                float[] frame = HomeAppearance.frame(getWidth(), getHeight(), picture.getWidth(), picture.getHeight(), y, mountains);
+                canvas.drawBitmap(picture, null, new android.graphics.RectF(frame[0], frame[1], frame[2], frame[3]), wallpaperPaint);
+                int shade = HomeAppearance.shade(theme, minute, prefs.getInt("background_dim", 0));
+                canvas.drawColor((shade << 24) | 0x00051327);
+                if (mountains && getHeight() > getWidth()) {
+                    // Blend the portrait hero into midnight below the lake, keeping the ridge visible.
+                    int base = blend(0xff07172b, 0xff092b4a, day);
+                    paint.setShader(new LinearGradient(0, frame[3] * .78f, 0, frame[3],
+                            base & 0x00ffffff, base, Shader.TileMode.CLAMP));
+                    canvas.drawRect(0, frame[3] * .78f, getWidth(), frame[3], paint);
+                    paint.setShader(null);
+                }
             }
             if (focusAccent != 0 && focusRadius > 0) {
                 int glow = (focusAccent & 0x00ffffff) | 0x80000000;

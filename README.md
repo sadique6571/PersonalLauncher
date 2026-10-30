@@ -3,7 +3,7 @@
 **Personal Launcher by Sadique Sadiq** — a clean, fast home-screen launcher for Android TV / Google TV.
 
 - Package: `com.sadique.launcher`
-- Version: 4.3
+- Version: 4.4
 - Plain Java, AndroidX RecyclerView, `minSdk` 26. Internet permission is used for online screensaver photos, weather and city lookup.
 - Day/night Home wallpaper, compact toolbar, configurable app grid, quick settings and local profile.
 
@@ -12,8 +12,9 @@
 - TV: profile at the top left; small network, Search, native Assistant/mic, Inputs, Play Store, Screensaver and Settings icons at the top right.
 - A centered 12-hour clock with small AM/PM and date; the sun/moon glow stays behind the clock as the layout changes.
 - Apps appear directly below the clock. The left heading shows the focused app's name in large text.
-- There is one app drawer. Small 16:9 rounded cards show original app icons without wordmark banners; YouTube uses the red play mark and Netflix uses its N. No labels underneath.
+- There is one app drawer. Small 16:9 rounded cards show original app icons without wordmark banners; YouTube uses the red play mark and Netflix uses its N. Native icon backgrounds extend to every rounded edge without cropping or stretching the logo. No labels underneath.
 - Focus uses a matching icon-colour glow/border. The clock and focused-title area stay visible while apps scroll.
+- Wallpaper rendering uses a separate opaque paint from clock/focus effects so redraws cannot fade it away. Portrait phones preserve a mountain hero instead of magnifying the scene to screen height. Dark/light selections refresh Home surfaces immediately.
 - Dark Midnight mode is the default, with the mountain ridge behind the clock. Dark/automatic/light modes and a custom wallpaper picker are available.
 - No favorites, duplicate dock/quick-access rows or Gemini button.
 - Phones keep a portrait/touch layout with adaptive columns. Profile photos are chosen locally through Android's picker.
