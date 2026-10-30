@@ -33,7 +33,7 @@ final class GlassSettings {
     static View row(Activity host, String title, String subtitle, int icon, int tint, Runnable action) {
         LinearLayout row = new LinearLayout(host); row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(host, 12), dp(host, 7), dp(host, 12), dp(host, 7));
-        row.setMinimumHeight(dp(host, 49)); row.setFocusable(true); row.setClickable(true);
+        row.setMinimumHeight(dp(host, 49)); row.setFocusable(true); row.setFocusableInTouchMode(true); row.setClickable(true);
         row.setBackground(background(host, false));
         row.setOnFocusChangeListener((v, focus) -> row.setBackground(background(host, focus)));
         ImageView symbol = new ImageView(host); symbol.setImageResource(icon); symbol.setColorFilter(tint);
@@ -44,7 +44,7 @@ final class GlassSettings {
         if (subtitle != null && !subtitle.isEmpty()) copy.addView(label(host, subtitle, 11, 0xffa9bfd3));
         row.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
         TextView arrow = label(host, "›", 26, 0xff9bb6cb); row.addView(arrow);
-        row.setOnClickListener(v -> action.run());
+        row.setOnClickListener(v -> { v.requestFocus(); action.run(); });
         LinearLayout.LayoutParams position = new LinearLayout.LayoutParams(-1, -2);
         position.setMargins(0, dp(host, 3), 0, dp(host, 3)); row.setLayoutParams(position);
         return row;
@@ -53,8 +53,22 @@ final class GlassSettings {
     private static final class Panel {
         final AlertDialog dialog;
         final LinearLayout content;
-        final java.util.ArrayDeque<View> pages = new java.util.ArrayDeque<>();
+        final java.util.ArrayDeque<Page> pages = new java.util.ArrayDeque<>();
         Panel(AlertDialog dialog, LinearLayout content) { this.dialog = dialog; this.content = content; }
+    }
+    private static final class Page {
+        final View root, focus;
+        final ScrollView scroll;
+        final int scrollY;
+        Page(View root) {
+            this.root = root; this.focus = root.findFocus();
+            this.scroll = (ScrollView) ((LinearLayout) root).getChildAt(1);
+            this.scrollY = scroll.getScrollY();
+        }
+        void restore() {
+            if (focus != null) focus.requestFocus();
+            scroll.post(() -> scroll.scrollTo(0, scrollY));
+        }
     }
     static AlertDialog panel(Activity host, String title, LinearLayout rows) {
         java.lang.ref.WeakReference<Panel> reference = PANELS.get(host);
@@ -85,7 +99,7 @@ final class GlassSettings {
         }
         Panel current = state;
         if (current.content.getChildCount() > 0) {
-            View old = current.content.getChildAt(0); current.content.removeView(old); current.pages.push(old);
+            View old = current.content.getChildAt(0); Page saved = new Page(old); current.content.removeView(old); current.pages.push(saved);
         }
         LinearLayout page = new LinearLayout(host); page.setOrientation(LinearLayout.VERTICAL);
         page.setPadding(dp(host, 12), dp(host, 12), dp(host, 12), dp(host, 12));
@@ -117,8 +131,8 @@ final class GlassSettings {
     private static void back(Panel current) {
         if (current.pages.isEmpty()) { current.dialog.dismiss(); return; }
         current.content.removeAllViews();
-        View previous = current.pages.pop(); current.content.addView(previous, new LinearLayout.LayoutParams(-1, -1));
-        previous.restoreDefaultFocus();
+        Page previous = current.pages.pop(); current.content.addView(previous.root, new LinearLayout.LayoutParams(-1, -1));
+        previous.restore();
     }
     static void options(Activity host, String title, String[] names, String[] hints, java.util.function.IntConsumer selected) {
         LinearLayout rows = new LinearLayout(host); rows.setOrientation(LinearLayout.VERTICAL);
@@ -128,6 +142,7 @@ final class GlassSettings {
             final int index = i;
             View option = row(host, names[i], hints == null ? null : hints[i], R.drawable.ic_settings, 0xff9ad6ed, () -> {});
             option.setOnClickListener(v -> {
+                v.requestFocus();
                 selected.accept(index);
                 if (!navigation) {
                     for (int j = 0; j < rows.getChildCount(); j++) {

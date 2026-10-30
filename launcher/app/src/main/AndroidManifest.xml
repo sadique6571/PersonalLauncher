@@ -94,6 +94,7 @@
             android:clearTaskOnLaunch="true"
             android:label="@string/personal_app_name" />
         <activity android:name=".LandscapeActivity" android:exported="false" android:excludeFromRecents="true" />
+        <activity android:name=".ScreensaverSetupActivity" android:exported="true" />
         <service android:name=".LandscapeDream" android:exported="true"
             android:label="@string/personal_screensaver_name"
             android:permission="android.permission.BIND_DREAM_SERVICE">
@@ -101,6 +102,7 @@
                 <action android:name="android.service.dreams.DreamService" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+            <meta-data android:name="android.service.dream" android:resource="@xml/landscape_dream" />
         </service>
         <!-- Keep the installed Home component stable across upgrades and existing ADB tooling. -->
         <activity-alias

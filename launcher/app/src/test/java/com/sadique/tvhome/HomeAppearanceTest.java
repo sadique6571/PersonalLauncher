@@ -9,7 +9,7 @@ public class HomeAppearanceTest {
         assertEquals(1f, HomeAppearance.daylight("light", 0), 0f);
         assertEquals(0f, HomeAppearance.daylight("auto", 0), 0f);
         assertEquals(1f, HomeAppearance.daylight("auto", 720), 0f);
-        assertEquals(104, HomeAppearance.shade("dark", 720, 0));
+        assertEquals(24, HomeAppearance.shade("dark", 720, 0));
         assertEquals(0, HomeAppearance.shade("light", 0, 0));
         assertEquals(150, HomeAppearance.shade("dark", 0, 999));
     }

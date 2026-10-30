@@ -3,19 +3,19 @@
 **Personal Launcher by Sadique Sadiq** — a clean, fast home-screen launcher for Android TV / Google TV.
 
 - Package: `com.sadique.launcher`
-- Version: 4.5
+- Version: 4.6
 - Plain Java, AndroidX RecyclerView, `minSdk` 26. Internet permission is used for online screensaver photos, weather and city lookup.
 - Day/night Home wallpaper, compact toolbar, configurable app grid, quick settings and local profile.
 
 ## Midnight Cyan home
 
-- TV: profile at the top left; small network, Search, native Assistant/mic, Inputs, Play Store, Screensaver and Settings icons at the top right.
+- TV: profile at the top left; a wider network status, Quick actions drawer and Settings at the top right. Search, Play Store and Screensaver are inside Quick actions; Inputs stay in Settings and voice uses the remote Assistant button.
 - A centered 12-hour clock with small AM/PM and date; the sun/moon glow stays behind the clock as the layout changes.
 - Apps appear directly below the clock. The left heading shows the focused app's name in large text.
-- There is one app drawer. Small 16:9 rounded cards show original app icons without wordmark banners; YouTube uses the red play mark and Netflix uses its N. Clean card backgrounds and proportional logos avoid stretched edge pixels; a subtle highlight and shadow give tiles a raised appearance. No labels underneath.
+- There is one app drawer. Long-press an app → Move app, or use Launcher settings → Rearrange apps; saved order survives restarts and new apps append. Small 16:9 rounded cards show original app icons without wordmark banners; YouTube uses the red play mark and Netflix uses its N. Clean card backgrounds and proportional logos avoid stretched edge pixels; a subtle highlight and shadow give tiles a raised appearance. No labels underneath.
 - Focus uses a matching icon-colour glow/border. The clock and focused-title area stay visible while apps scroll.
 - Wallpaper rendering uses a separate opaque paint from clock/focus effects so redraws cannot fade it away. Portrait phones preserve a mountain hero instead of magnifying the scene to screen height. Dark/light selections refresh Home surfaces immediately.
-- Dark Midnight mode is the default, with wider aurora framing and the mountain ridge below the clock. Dark/automatic/light modes and a custom wallpaper picker are available.
+- Dark Midnight mode is the default, with a newly generated dark night aurora/mountain wallpaper and wider aurora framing and the mountain ridge below the clock. Dark/automatic/light modes and a custom wallpaper picker are available.
 - No favorites, duplicate dock/quick-access rows or Gemini button.
 - Phones keep a portrait/touch layout with adaptive columns. Profile photos are chosen locally through Android's picker.
 - Wi-Fi is green only with Android-validated internet access; missing internet is red. Ethernet/mobile data use their own indicators.
@@ -27,7 +27,7 @@ does not record audio or request microphone permission. Availability depends on 
 
 Quick settings contains an inline media-volume slider. Brightness controls, their special permission,
 and the Home-window brightness override have been removed; brightness follows the device setting.
-Settings pages share one panel with Back navigation and stay open when a local option changes.
+Settings pages share one panel with Back navigation, restoring the previous row focus and scroll position, and stay open when a local option changes.
 The panel position is configured before showing it, without a slide/reposition animation.
 
 Launcher settings offers hide/unhide apps, columns, tile/focused-title sizes, clock size, dark mode,
@@ -98,3 +98,5 @@ An installed APK signed by a lost temporary key cannot accept the new release ke
 uninstall/reinstall** is necessary, which removes local launcher preferences. Keep another working
 Home enabled before doing this. After migration, APKs with this same package/key and increasing
 version codes install as updates. Do not uninstall anything automatically.
+
+Automatic system screensavers require selecting **Personal Launcher Landscapes** in Android settings. Use Screensaver → Set automatic screensaver for selection instructions and status. The DreamService declares the system binding permission and settings metadata; there is no ordinary runtime permission that can silently replace the Android-selected screensaver. A 5-minute Home-only idle fallback can be enabled from setup when firmware restricts the picker.

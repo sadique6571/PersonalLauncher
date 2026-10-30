@@ -76,7 +76,7 @@ jobs:
 
       - name: Create GitHub release
         run: |
-          TAG="v4.5-build-${{ github.run_number }}"
-          gh release create "$TAG" PersonalLauncher.apk --title "Personal Launcher 4.5 (build ${{ github.run_number }})" --notes "Personal Launcher 4.5: persistent settings navigation, clean proportional logos with subtle raised cards, wider aurora wallpaper framing, and volume-only quick controls. Uses the same persistent signing key as 4.3."
+          TAG="v4.6-build-${{ github.run_number }}"
+          gh release create "$TAG" PersonalLauncher.apk --title "Personal Launcher 4.6 (build ${{ github.run_number }})" --notes "Personal Launcher 4.6: saved app rearrangement, restored settings focus and scroll position, a new dark aurora wallpaper, compact action drawer with network text, and Android landscape screensaver setup. Uses the same persistent signing key as 4.3."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

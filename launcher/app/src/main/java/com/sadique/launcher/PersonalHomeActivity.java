@@ -235,13 +235,9 @@ public final class PersonalHomeActivity extends Activity {
         page.addView(header);
         actions = new LinearLayout(this);
         actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-        actions.addView(networkStatus, new LinearLayout.LayoutParams(dp(tv ? 48 : 44), dp(tv ? 48 : 44)));
-        iconAction("Search apps", R.drawable.ic_search, () -> searchApps());
-        iconAction("TV Assistant / voice search", R.drawable.ic_microphone, () -> voiceSearch());
-        if (tv) iconAction("Inputs", R.drawable.ic_input, () -> showInputs());
-        iconAction("Play Store", R.drawable.ic_apps_pill, () -> openStore(""));
-        iconAction("Screensaver", R.drawable.ic_picture, () -> launch(new Intent(this, LandscapeActivity.class)));
-        iconAction("Settings", R.drawable.ic_settings, () -> showSettings());
+        actions.addView(networkStatus, new LinearLayout.LayoutParams(dp(tv ? 190 : 180), dp(44)));
+        iconAction("Quick actions", R.drawable.ic_apps, this::showActionDrawer);
+        iconAction("Settings", R.drawable.ic_settings, this::showSettings);
         if (tv) {
             header.addView(actions, new LinearLayout.LayoutParams(-2, -2));
         } else {
@@ -332,7 +328,7 @@ public final class PersonalHomeActivity extends Activity {
         NetworkCapabilities caps = active == null ? null : connectivity.getNetworkCapabilities(active);
         boolean online = caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
         boolean wifi = caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
-        networkStatus.setText("");
+        networkStatus.setText(online ? "Connected" : caps == null ? "Disconnected" : "No internet access");
         networkStatus.setTooltipText(online ? (wifi ? "Wi-Fi · Internet available" : "Internet available") : "No internet");
         int color = online ? 0xff59e493 : 0xffff6c78;
         networkStatus.setTextColor(color);
@@ -340,7 +336,7 @@ public final class PersonalHomeActivity extends Activity {
                 : caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ? R.drawable.ic_ethernet : R.drawable.ic_internet;
         android.graphics.drawable.Drawable icon = getDrawable(iconId).mutate();
         icon.setTint(color);
-        icon.setBounds(0, 0, dp(22), dp(22));
+        icon.setBounds(0, 0, dp(28), dp(24));
         networkStatus.setCompoundDrawables(icon, null, null, null);
         networkStatus.setContentDescription(online ? "Internet available. Open Wi-Fi settings" : "No validated internet access. Open Wi-Fi settings");
     }
@@ -415,7 +411,7 @@ public final class PersonalHomeActivity extends Activity {
         grid.setColumnCount(columns);
         int width = pageWidth / columns;
         Set<String> hidden = prefs.getStringSet("hidden_apps", Collections.emptySet());
-        for (App app : apps) {
+        for (App app : orderedApps(apps)) {
             if (!hidden.contains(app.info.activityInfo.packageName)) addAppTile(grid, app, width);
         }
         if (grid.getChildCount() == 0) {
@@ -464,8 +460,9 @@ public final class PersonalHomeActivity extends Activity {
                 .setClassName(app.info.activityInfo.packageName, app.info.activityInfo.name)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)));
         tile.setOnLongClickListener(v -> {
-            new AlertDialog.Builder(this).setTitle(app.name).setItems(new String[]{"App info", "Hide from launcher"}, (dialog, which) -> {
+            new AlertDialog.Builder(this).setTitle(app.name).setItems(new String[]{"App info", "Hide from launcher", "Move app"}, (dialog, which) -> {
                 if (which == 0) launch(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + app.info.activityInfo.packageName)));
+                else if (which == 2) moveApp(app);
                 else {
                     Set<String> hidden = new HashSet<>(prefs.getStringSet("hidden_apps", Collections.emptySet()));
                     hidden.add(app.info.activityInfo.packageName);
@@ -586,6 +583,58 @@ public final class PersonalHomeActivity extends Activity {
         chooseSetting("Inputs", labels.toArray(new String[0]), which -> launch(targets.get(which)));
     }
 
+    private void showActionDrawer() {
+        GlassSettings.options(this, "Quick actions", new String[]{"Search apps", "Play Store", "Screensaver"},
+                new String[]{"Search installed apps", "Find and install new apps", "Preview or set up automatic landscapes"}, which -> {
+                    if (which == 0) searchApps();
+                    else if (which == 1) openStore("");
+                    else screensaverSettings();
+                });
+    }
+
+    private List<App> orderedApps(List<App> apps) {
+        java.util.Map<String, App> byPackage = new java.util.LinkedHashMap<>();
+        for (App app : apps) byPackage.put(app.info.activityInfo.packageName, app);
+        List<String> saved = new ArrayList<>();
+        try {
+            org.json.JSONArray array = new org.json.JSONArray(prefs.getString("app_order", "[]"));
+            for (int i = 0; i < array.length(); i++) saved.add(array.getString(i));
+        } catch (org.json.JSONException malformed) { /* Fall back to alphabetical order. */ }
+        List<App> result = new ArrayList<>();
+        for (String pkg : AppOrder.merge(new ArrayList<>(byPackage.keySet()), saved)) result.add(byPackage.get(pkg));
+        return result;
+    }
+
+    private void rearrangeApps() {
+        if (cachedApps == null) return;
+        List<App> apps = orderedApps(cachedApps);
+        Set<String> hidden = prefs.getStringSet("hidden_apps", Collections.emptySet());
+        apps.removeIf(app -> hidden.contains(app.info.activityInfo.packageName));
+        if (apps.isEmpty()) { Toast.makeText(this, "Unhide an app first", Toast.LENGTH_SHORT).show(); return; }
+        String[] names = new String[apps.size()], hints = new String[apps.size()];
+        for (int i = 0; i < apps.size(); i++) { names[i] = apps.get(i).name; hints[i] = "Select to move this app"; }
+        GlassSettings.options(this, "Rearrange apps", names, hints, which -> moveApp(apps.get(which)));
+    }
+
+    private void moveApp(App moving) {
+        if (cachedApps == null) return;
+        List<App> apps = orderedApps(cachedApps);
+        List<App> visible = new ArrayList<>(apps);
+        Set<String> hidden = prefs.getStringSet("hidden_apps", Collections.emptySet());
+        visible.removeIf(app -> hidden.contains(app.info.activityInfo.packageName));
+        String[] positions = new String[visible.size()];
+        for (int i = 0; i < visible.size(); i++) positions[i] = (i + 1) + " · " + visible.get(i).name;
+        chooseSetting("Move " + moving.name + " to position", positions, which -> {
+            List<String> packages = new ArrayList<>();
+            for (App app : orderedApps(cachedApps)) packages.add(app.info.activityInfo.packageName);
+            int destination = packages.indexOf(visible.get(which).info.activityInfo.packageName);
+            packages = AppOrder.move(packages, moving.info.activityInfo.packageName, destination);
+            prefs.edit().putString("app_order", new org.json.JSONArray(packages).toString()).apply();
+            refreshApps();
+            Toast.makeText(this, "App order saved", Toast.LENGTH_SHORT).show();
+        });
+    }
+
     private void showSettings() {
         LinearLayout rows = new LinearLayout(this); rows.setOrientation(LinearLayout.VERTICAL);
         panel = GlassSettings.panel(this, "Settings", rows);
@@ -610,7 +659,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void launcherSettings() {
-        String[] labels = {"Hide / unhide apps", "App columns", "Tile size", "Focused app title size", "Clock size", "Dark mode", "Wallpaper", "Wallpaper darkness", "App colour glow", "Screensaver & weather", "Continue watching", "Profile name & photo", "Choose default Home", "Reset layout & unhide apps"};
+        String[] labels = {"Hide / unhide apps", "App columns", "Tile size", "Focused app title size", "Clock size", "Dark mode", "Wallpaper", "Wallpaper darkness", "App colour glow", "Screensaver & weather", "Continue watching", "Profile name & photo", "Choose default Home", "Reset layout & unhide apps", "Rearrange apps"};
         Runnable[] choices = {
             this::hiddenApps,
             () -> chooseSetting("App columns", new String[]{"Automatic", "2", "3", "4", "5", "6"}, which -> {
@@ -643,12 +692,13 @@ public final class PersonalHomeActivity extends Activity {
             this::editProfile,
             () -> launch(new Intent(this, HomeSettingsActivity.class)),
             () -> new AlertDialog.Builder(this).setTitle("Reset layout and show all apps?").setPositiveButton("Reset", (dialog, which) -> {
-                prefs.edit().remove("hidden_apps").remove("tv_columns").remove("phone_columns").remove("large_tiles")
+                prefs.edit().remove("app_order").remove("hidden_apps").remove("tv_columns").remove("phone_columns").remove("large_tiles")
                         .remove("focus_title_size").remove("clock_size").remove("background_dim").remove("theme_mode")
                         .remove("wallpaper_mode").remove("focus_glow").remove("continue_watching").apply(); buildHome();
-            }).setNegativeButton(android.R.string.cancel, null).show()
+            }).setNegativeButton(android.R.string.cancel, null).show(),
+            this::rearrangeApps
         };
-        String[] hints = {"Choose which apps appear", "Number of cards per row", "Compact or large cards", "Name above the app grid", "12-hour clock with date", "Midnight, automatic or light", "Mountains or your own picture", "Keep the landscape visible", "Match the focused app", "Slideshow, weather & idle timer", "Resume titles after your apps", "Name and local profile picture", "Set this launcher as Home", "Restore the default layout"};
+        String[] hints = {"Choose which apps appear", "Number of cards per row", "Compact or large cards", "Name above the app grid", "12-hour clock with date", "Midnight, automatic or light", "Mountains or your own picture", "Keep the landscape visible", "Match the focused app", "Slideshow, weather & idle timer", "Resume titles after your apps", "Name and local profile picture", "Set this launcher as Home", "Restore the default layout", "Choose the order of app cards"};
         GlassSettings.options(this, "Launcher settings", labels, hints, which -> choices[which].run());
     }
 
@@ -715,7 +765,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void screensaverSettings() {
-        chooseSetting("Online landscape screensaver", new String[]{"Preview", "Weather city", "Temperature unit", "Photo change interval", "Start after idle", "Android screensaver settings"}, which -> {
+        chooseSetting("Online landscape screensaver", new String[]{"Preview", "Weather city", "Temperature unit", "Photo change interval", "Start after idle", "Set automatic screensaver"}, which -> {
             if (which == 0) launch(new Intent(this, LandscapeActivity.class));
             else if (which == 1) WeatherSettings.show(this);
             else if (which == 2) chooseSetting("Temperature unit", new String[]{"Celsius", "Fahrenheit"}, value -> prefs.edit().putBoolean("weather_fahrenheit", value == 1).apply());
@@ -723,7 +773,7 @@ public final class PersonalHomeActivity extends Activity {
             else if (which == 4) chooseSetting("Start screensaver after idle", new String[]{"Off", "2 minutes", "5 minutes", "10 minutes", "15 minutes"}, value -> {
                 prefs.edit().putInt("idle_screensaver_minutes", new int[]{0,2,5,10,15}[value]).apply(); armIdleScreensaver();
             });
-            else launch(new Intent(Settings.ACTION_DREAM_SETTINGS));
+            else launch(new Intent(this, ScreensaverSetupActivity.class));
         });
     }
 

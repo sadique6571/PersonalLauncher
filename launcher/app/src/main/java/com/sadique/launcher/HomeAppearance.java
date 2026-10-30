@@ -7,7 +7,7 @@ final class HomeAppearance {
     }
 
     static int shade(String mode, int minute, int extra) {
-        return Math.max(0, Math.min(150, Math.round(104 * (1 - daylight(mode, minute))) + Math.max(0, extra)));
+        return Math.max(0, Math.min(150, Math.round(24 * (1 - daylight(mode, minute))) + Math.max(0, extra)));
     }
 
     // Portrait uses a landscape hero instead of magnifying a 16:9 photo to phone height.
