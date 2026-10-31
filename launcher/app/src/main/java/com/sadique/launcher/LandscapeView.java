@@ -192,19 +192,13 @@ public final class LandscapeView extends FrameLayout {
         date.setText(new SimpleDateFormat("EEEE, d MMMM yyyy", Locale.getDefault()).format(now.getTime()));
     }
 
-    /** Fresh photo per request: Bing daily wallpaper JSON is fetched first, then the
-     *  image URL is parsed out. Nothing is disk-cached — every rotation downloads a
-     *  new photo (still bounded to 6 MB with timeouts, see OnlineContent). */
+    /** Fresh photo per request: picsum serves a different real photo per unique seed,
+     *  so nothing is disk-cached — every rotation downloads a new photo (still bounded
+     *  to 6 MB with timeouts, see OnlineContent). Endless new photos. (User 2026-10-31.)
+     */
     private byte[] freshPhotoBytes(int seed) throws java.io.IOException {
-        try {
-            String apiUrl = LandscapeModel.photoUrl(seed);
-            byte[] jsonBytes = OnlineContent.get(apiUrl, 64 * 1024);
-            String json = new String(jsonBytes, java.nio.charset.StandardCharsets.UTF_8);
-            String imageUrl = LandscapeModel.bingImageUrl(json);
-            return OnlineContent.get(imageUrl, 6 * 1024 * 1024);
-        } catch (org.json.JSONException e) {
-            throw new java.io.IOException("Bing JSON parse failed", e);
-        }
+        String url = "https://picsum.photos/seed/pl" + seed + "/1920/1080";
+        return OnlineContent.get(url, 6 * 1024 * 1024);
     }
 
     /** Average luminance of the downloaded photo (0=black, 1=white), sampled small. */
