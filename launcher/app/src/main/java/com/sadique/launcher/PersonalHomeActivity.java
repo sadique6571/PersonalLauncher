@@ -506,10 +506,13 @@ public final class PersonalHomeActivity extends Activity {
         updateNetwork();
         adaptTextColors();
         // buildHome() replaces the SkyClock instance, which drops in-memory wallpapers.
-        // Re-fetch online + reload custom from disk so a settings change never
-        // resets the wallpaper to default. (User 2026-10-31.)
+        // Reload cached online wallpaper instantly (no default flash), then re-fetch
+        // fresh in background. Custom wallpaper reloads from disk too. (User 2026-10-31.)
         if ("custom".equals(prefs.getString("wallpaper_mode", "mountains")) && customWallpaper == null) {
             loadWallpaper();
+        }
+        if (prefs.getInt("wallpaper_source", 0) == 1 && sky != null) {
+            sky.loadCachedOnlineWallpaper();
         }
         updateOnlineWallpaper();
         WindowManager.LayoutParams brightness = getWindow().getAttributes();
@@ -2154,6 +2157,28 @@ public final class PersonalHomeActivity extends Activity {
         private Bitmap backdrop;
         private float smoothDay = -1f;
 
+        /** Loads the cached online wallpaper from disk (if any) so a rebuild never
+         *  flashes the default wallpaper while the fresh one downloads. */
+        void loadCachedOnlineWallpaper() {
+            worker.execute(() -> {
+                try {
+                    java.io.File f = new java.io.File(getCacheDir(), "online-wallpaper.jpg");
+                    if (!f.exists()) return;
+                    final Bitmap bmp = BitmapFactory.decodeFile(f.getPath());
+                    if (bmp == null) return;
+                    handler.post(() -> {
+                        if (sky != this || isDestroyed()) { bmp.recycle(); return; }
+                        if (onlineWallpaper != null) onlineWallpaper.recycle();
+                        onlineWallpaper = bmp;
+                        onlineIndex = 0;
+                        crossfade = 1f;
+                        invalidate();
+                        adaptTextColors();
+                    });
+                } catch (Exception ignored) {}
+            });
+        }
+
         /** Releases transient bitmaps (online photos, crossfade buffer) under memory pressure. */
         void releaseTransient() {
             // Don't recycle backdrop — it's the built-in wallpaper, still used in onDraw.
@@ -2274,6 +2299,16 @@ public final class PersonalHomeActivity extends Activity {
                     onlineWallpaper = onlineNext;
                     onlineNext = null;
                     adaptTextColors();
+                    // Cache to disk so a rebuild never flashes the default wallpaper.
+                    final Bitmap cached = onlineWallpaper;
+                    worker.execute(() -> {
+                        try {
+                            java.io.File f = new java.io.File(getCacheDir(), "online-wallpaper.jpg");
+                            try (java.io.FileOutputStream out = new java.io.FileOutputStream(f)) {
+                                cached.compress(Bitmap.CompressFormat.JPEG, 85, out);
+                            }
+                        } catch (Exception ignored) {}
+                    });
                 } else {
                     handler.postDelayed(this, 50);
                 }
