@@ -473,15 +473,22 @@ public final class PersonalHomeActivity extends Activity {
             }
         };
         scroll.setOnScrollChangeListener(glowTracker);
-        // Synchronized scroll: when apps scroll, the clock scrolls up too and the
-        // header sticks to the top. (User request 2026-10-31.)
+        // Collapsing clock: when apps scroll, shrink the clock area's height so the
+        // header slides up and sticks to the top. Height-based (not translation) so
+        // there's no feedback loop with drawerScroll's own layout. (User 2026-10-31.)
+        final int[] clockFullH = {0};
+        scroll.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            int h = scroll.getHeight();
+            if (h > 0 && clockFullH[0] == 0) clockFullH[0] = h;
+        });
         drawerScroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
-            int clockH = scroll.getHeight();
-            if (clockH > 0) {
-                int up = Math.min(scrollY, clockH);
-                scroll.setTranslationY(-up);
-                appHeading.setTranslationY(-up);
-                appBody.setTranslationY(-up);
+            if (clockFullH[0] > 0) {
+                int newH = Math.max(0, clockFullH[0] - scrollY);
+                android.view.ViewGroup.LayoutParams lp = scroll.getLayoutParams();
+                if (lp.height != newH) {
+                    lp.height = newH;
+                    scroll.setLayoutParams(lp);
+                }
             }
             glowTracker.onScrollChange(v, scrollX, scrollY, oldScrollX, oldScrollY);
         });
