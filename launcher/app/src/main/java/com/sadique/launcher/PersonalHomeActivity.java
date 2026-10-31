@@ -340,7 +340,6 @@ public final class PersonalHomeActivity extends Activity {
         // Clock shadow for readability on bright wallpapers (toggle).
         if (prefs.getBoolean("clock_shadow", true)) {
             time.setShadowLayer(dp(8), 0, dp(3), 0xcc000000);
-            date.setShadowLayer(dp(6), 0, dp(2), 0xcc000000);
         }
         String[] clockFonts = {"sans-serif-light", "serif", "monospace"};
         time.setTypeface(android.graphics.Typeface.create(
@@ -349,6 +348,9 @@ public final class PersonalHomeActivity extends Activity {
         if (prefs.getInt("clock_style", 0) == 1) time.setVisibility(View.INVISIBLE);
         time.setAutoSizeTextTypeUniformWithConfiguration(26, clockSize, 2, android.util.TypedValue.COMPLEX_UNIT_SP);
         date = text("", tv ? 14 : 13, MUTED);
+        if (prefs.getBoolean("clock_shadow", true)) {
+            date.setShadowLayer(dp(6), 0, dp(2), 0xcc000000);
+        }
         date.setGravity(Gravity.CENTER);
         clock.addView(time, new LinearLayout.LayoutParams(-1, dp(clockSize + (compact ? 10 : 24))));
         clock.addView(date);
