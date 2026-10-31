@@ -77,7 +77,6 @@ public final class PersonalHomeActivity extends Activity {
     private boolean networkRegistered, resumed, tv;
     private int pageWidth;
     /** Wallpaper-adaptive text: true while the region behind the text is bright (dark text in use). */
-    private boolean darkTextTop, darkTextMid;
     /** Effective clock text size in sp (after the compact-screen cap), for fitClockText(). */
     private int clockTextSize = 68;
     /** Entrance animation plays only on the very first grid render, never on rebuilds. */
@@ -472,24 +471,14 @@ public final class PersonalHomeActivity extends Activity {
                 sky.invalidate();
             }
         };
-        scroll.setOnScrollChangeListener(glowTracker);
-        // Collapsing clock: when apps scroll, shrink the clock area's height so the
-        // header slides up and sticks to the top. Height-based (not translation) so
-        // there's no feedback loop with drawerScroll's own layout. (User 2026-10-31.)
-        final int[] clockFullH = {0};
-        scroll.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
-            int h = scroll.getHeight();
-            if (h > 0 && clockFullH[0] == 0) clockFullH[0] = h;
-        });
+        // Per-view adaptive text: update each label's dark/light scheme as it moves
+        // over the wallpaper during scroll. (User request 2026-10-31.)
         drawerScroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
-            if (clockFullH[0] > 0) {
-                int newH = Math.max(0, clockFullH[0] - scrollY);
-                android.view.ViewGroup.LayoutParams lp = scroll.getLayoutParams();
-                if (lp.height != newH) {
-                    lp.height = newH;
-                    scroll.setLayoutParams(lp);
-                }
-            }
+            adaptVisibleTextColors();
+            glowTracker.onScrollChange(v, scrollX, scrollY, oldScrollX, oldScrollY);
+        });
+        scroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
+            adaptVisibleTextColors();
             glowTracker.onScrollChange(v, scrollX, scrollY, oldScrollX, oldScrollY);
         });
         page.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
@@ -1676,83 +1665,65 @@ public final class PersonalHomeActivity extends Activity {
      * wallpaper's brightness. Sampling runs off the UI thread; unknown brightness
      * keeps the current scheme.
      */
-    private void adaptTextColors() {
-        // Apply the last known scheme immediately so a rebuild never flashes the wrong one.
-        darkTextTop = prefs.getBoolean("dark_text_top", false);
-        darkTextMid = prefs.getBoolean("dark_text_mid", false);
-        applyTextScheme();
+    /**
+     * Per-label wallpaper-adaptive text: each label samples the wallpaper
+     * brightness BEHIND ITSELF and picks dark or light text accordingly.
+     * Pure wallpaper — theme dark mode is NOT consulted. (User 2026-10-31.)
+     */
+    private void adaptVisibleTextColors() {
+        if (sky == null) return;
+        final Bitmap picture = sky.currentPicture();
+        if (picture == null || picture.isRecycled()) return;
+        final int screenH = getResources().getDisplayMetrics().heightPixels;
+        if (screenH <= 0) return;
         worker.execute(() -> {
-            float top = -1, mid = -1;
-            if (sky != null) {
-                Bitmap picture = sky.currentPicture();
-                if (picture != null && !picture.isRecycled()) {
-                    top = sampleLuminance(picture, 0f, 0.4f);
-                    mid = sampleLuminance(picture, 0.35f, 0.75f);
-                }
-            }
-            java.util.Calendar cal = java.util.Calendar.getInstance();
-            int shade = HomeAppearance.shade(prefs.getString("theme_mode", "dark"),
-                    cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE),
-                    prefs.getInt("background_dim", 0));
-            float dim = 1f - (shade / 255f) * 0.92f;
-            final float topEff = top < 0 ? -1 : top * dim;
-            final float midEff = mid < 0 ? -1 : mid * dim;
-            handler.post(() -> {
-                boolean changed = false;
-                if (topEff >= 0 && (topEff > 0.55f) != darkTextTop) { darkTextTop = topEff > 0.55f; changed = true; }
-                if (midEff >= 0 && (midEff > 0.55f) != darkTextMid) { darkTextMid = midEff > 0.55f; changed = true; }
-                if (changed) {
-                    prefs.edit().putBoolean("dark_text_top", darkTextTop).putBoolean("dark_text_mid", darkTextMid).apply();
-                    applyTextScheme();
-                }
+            adaptOneLabel(userName, picture, screenH, false);
+            adaptOneLabel(greeting, picture, screenH, true);
+            adaptOneLabel(time, picture, screenH, false);
+            adaptOneLabel(date, picture, screenH, true);
+            adaptOneLabel(homeWeather, picture, screenH, true);
+            adaptOneLabel(networkStatus, picture, screenH, true);
+            adaptOneLabel(appHeading, picture, screenH, false);
+        });
+    }
+
+    /** Samples wallpaper behind a single label and sets its dark/light color on UI thread. */
+    private void adaptOneLabel(final android.widget.TextView label, final Bitmap picture,
+                               final int screenH, final boolean muted) {
+        if (label == null) return;
+        final int[] pos = new int[2];
+        // Must run on UI thread to read view position; sampling stays on worker.
+        handler.post(() -> {
+            label.getLocationOnScreen(pos);
+            final float yFrac = Math.min(0.98f, Math.max(0f,
+                    (pos[1] + label.getHeight() / 2f) / screenH));
+            worker.execute(() -> {
+                float lum = sampleLuminance(picture, Math.max(0f, yFrac - 0.04f),
+                        Math.min(1f, yFrac + 0.04f));
+                if (lum < 0) return;
+                final boolean dark = lum > 0.55f;
+                handler.post(() -> applyLabelScheme(label, dark, muted));
             });
         });
     }
 
-    /** Applies the current light/dark text scheme to every wallpaper-backed label. */
-    private void applyTextScheme() {
-        int text = darkTextTop ? TEXT_DARK : TEXT;
-        int muted = darkTextTop ? MUTED_DARK : MUTED;
-        int mText = darkTextMid ? TEXT_DARK : TEXT;
-        int mMuted = darkTextMid ? MUTED_DARK : MUTED;
+    /** Applies dark/light color + contrasting shadow to one label. */
+    private void applyLabelScheme(android.widget.TextView label, boolean dark, boolean muted) {
+        if (label == null) return;
         boolean shadow = prefs.getBoolean("clock_shadow", true);
-        // Shadow color contrasts the text so labels stay readable on any wallpaper,
-        // even where the adaptive color alone is not enough.
-        int topShadow = darkTextTop ? 0x88ffffff : 0xcc000000;
-        int midShadow = darkTextMid ? 0x88ffffff : 0xcc000000;
-        if (userName != null) {
-            userName.setTextColor(text);
-            if (shadow) userName.setShadowLayer(dp(5), 0, dp(2), topShadow); else userName.setShadowLayer(0, 0, 0, 0);
-        }
-        if (greeting != null) {
-            greeting.setTextColor(muted);
-            if (shadow) greeting.setShadowLayer(dp(5), 0, dp(2), topShadow); else greeting.setShadowLayer(0, 0, 0, 0);
-        }
-        if (networkStatus != null) {
-            networkStatus.setTextColor(muted);
-            if (shadow) networkStatus.setShadowLayer(dp(5), 0, dp(2), topShadow); else networkStatus.setShadowLayer(0, 0, 0, 0);
-        }
-        if (homeWeather != null) {
-            homeWeather.setTextColor(muted);
-            if (shadow) homeWeather.setShadowLayer(dp(5), 0, dp(2), topShadow); else homeWeather.setShadowLayer(0, 0, 0, 0);
-        }
-        if (time != null) {
-            time.setTextColor(text);
-            if (shadow) time.setShadowLayer(dp(8), 0, dp(3), darkTextTop ? 0x88ffffff : 0xcc000000);
-        }
-        if (date != null) {
-            date.setTextColor(muted);
-            if (shadow) date.setShadowLayer(dp(6), 0, dp(2), darkTextTop ? 0x88ffffff : 0xcc000000);
-        }
-        if (appHeading != null) {
-            appHeading.setTextColor(mText);
-            if (shadow) appHeading.setShadowLayer(dp(5), 0, dp(2), midShadow); else appHeading.setShadowLayer(0, 0, 0, 0);
-        }
-        if (continueWatching != null) continueWatching.setTextColors(mText, mMuted);
-        if (netflixRow != null) netflixRow.setHeadingColor(mText);
-        if (youtubeRow != null) youtubeRow.setHeadingColor(mText);
+        int color = dark ? (muted ? MUTED_DARK : TEXT_DARK) : (muted ? MUTED : TEXT);
+        int shadowColor = dark ? 0x88ffffff : 0xcc000000;
+        label.setTextColor(color);
+        if (shadow) label.setShadowLayer(dp(5), 0, dp(2), shadowColor);
+        else label.setShadowLayer(0, 0, 0, 0);
     }
 
+    private void adaptTextColors() {
+        // Initial pass: per-label wallpaper sampling (no theme shade factor).
+        adaptVisibleTextColors();
+    }
+
+    /** Applies the current light/dark text scheme to every wallpaper-backed label. */
     private void chooseSetting(String title, String[] options, java.util.function.IntConsumer selected) {
         String[] shown = options.clone();
         int current = -1;
