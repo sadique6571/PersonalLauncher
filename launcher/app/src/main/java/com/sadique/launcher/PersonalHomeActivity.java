@@ -289,6 +289,8 @@ public final class PersonalHomeActivity extends Activity {
         userName.setMaxLines(2);
         userName.setEllipsize(android.text.TextUtils.TruncateAt.END);
         identity.addView(userName);
+        greeting = text(greetingText(), 13, MUTED);
+        identity.addView(greeting);
         header.addView(identity, new LinearLayout.LayoutParams(0, -2, 1));
         networkStatus = text("", 13, MUTED);
         networkStatus.setGravity(Gravity.CENTER_VERTICAL | Gravity.CENTER);
@@ -335,12 +337,6 @@ public final class PersonalHomeActivity extends Activity {
         date.setGravity(Gravity.CENTER);
         clock.addView(time, new LinearLayout.LayoutParams(-1, dp(clockSize + (compact ? 10 : 24))));
         clock.addView(date);
-        TextView greetingView = text(greetingText(), tv ? 15 : 14, MUTED);
-        greetingView.setGravity(Gravity.CENTER);
-        greetingView.setPadding(0, 0, 0, dp(2));
-        greeting = greetingView;
-        page.addView(greeting);
-        page.addView(clock);
         time.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             int[] position = new int[2], origin = new int[2];
             time.getLocationInWindow(position);
@@ -352,7 +348,6 @@ public final class PersonalHomeActivity extends Activity {
         appHeading.setSingleLine(true);
         appHeading.setEllipsize(android.text.TextUtils.TruncateAt.END);
         appHeading.setPadding(dp(4), dp(8), 0, dp(12));
-        page.addView(appHeading);
         grid = new GridLayout(this);
         grid.setClipChildren(false);
         grid.setClipToPadding(false);
@@ -367,7 +362,13 @@ public final class PersonalHomeActivity extends Activity {
         appBody.addView(grid, new LinearLayout.LayoutParams(-1, -2));
         continueWatching = new ContinueWatchingView(this, label -> appHeading.setText(label));
         appBody.addView(continueWatching, new LinearLayout.LayoutParams(-1, -2));
-        scroll.addView(appBody, new ViewGroup.LayoutParams(-1, -2));
+        // Scrollable content: clock + heading + apps (all scroll together).
+        LinearLayout scrollContent = new LinearLayout(this);
+        scrollContent.setOrientation(LinearLayout.VERTICAL);
+        scrollContent.addView(clock);
+        scrollContent.addView(appHeading);
+        scrollContent.addView(appBody, new LinearLayout.LayoutParams(-1, -2));
+        scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
         page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         scroll.setOnScrollChangeListener((v, x, y, oldX, oldY) -> {
             View focused = getCurrentFocus();
