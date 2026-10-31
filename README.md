@@ -3,19 +3,21 @@
 **Personal Launcher by Sadique Sadiq** — a clean, fast home-screen launcher for Android TV / Google TV.
 
 - Package: `com.sadique.launcher`
-- Version: 4.6
-- Plain Java, AndroidX RecyclerView, `minSdk` 26. Internet permission is used for online screensaver photos, weather and city lookup.
+- Version: 4.7
+- Plain Java, classic Android Views, `minSdk` 26. Internet permission is used for online screensaver photos, weather and city lookup.
 - Day/night Home wallpaper, compact toolbar, configurable app grid, quick settings and local profile.
 
-## Midnight Cyan home
+## Home screen
 
-- TV: profile at the top left; a wider network status, Quick actions drawer and Settings at the top right. Search, Play Store and Screensaver are inside Quick actions; Inputs stay in Settings and voice uses the remote Assistant button.
-- A centered 12-hour clock with small AM/PM and date; the sun/moon glow stays behind the clock as the layout changes.
-- Apps appear directly below the clock. The left heading shows the focused app's name in large text.
-- There is one app drawer. Long-press an app → Move app, or use Launcher settings → Rearrange apps; saved order survives restarts and new apps append. Small 16:9 rounded cards show original app icons without wordmark banners; YouTube uses the red play mark and Netflix uses its N. Clean card backgrounds and proportional logos avoid stretched edge pixels; a subtle highlight and shadow give tiles a raised appearance. No labels underneath.
-- Focus uses a matching icon-colour glow/border. The clock and focused-title area stay visible while apps scroll.
-- Wallpaper rendering uses a separate opaque paint from clock/focus effects so redraws cannot fade it away. Portrait phones preserve a mountain hero instead of magnifying the scene to screen height. Dark/light selections refresh Home surfaces immediately.
-- Dark Midnight mode is the default, with a newly generated dark night aurora/mountain wallpaper and wider aurora framing and the mountain ridge below the clock. Dark/automatic/light modes and a custom wallpaper picker are available.
+- TV: profile at the top left with greeting underneath; weather, network status, Quick actions drawer and Settings at the top right. Search, Play Store and Screensaver are inside Quick actions; Inputs stay in Settings and voice uses the remote Assistant button.
+- Clock with date (digital or analog, 3 fonts, seconds, glow, 12/24-hour, left/center/right alignment, hide option). Apps appear directly below the clock; the clock scrolls away with content.
+- One app drawer. Long-press an app → Move app, or use Launcher settings → Rearrange apps; saved order survives restarts and new apps append. Small 16:9 rounded cards show original app icons without wordmark banners. Clean card backgrounds and proportional logos avoid stretched edge pixels; a subtle highlight and shadow give tiles a raised appearance. No labels underneath.
+- Focus uses a matching icon-colour glow/border with zoom, press dip and parallax wallpaper effects.
+- Tiles: size, spacing, corner radius, logo size, colour glow, focus border thickness, staggered slide-in entrance animation, NEW-app badge.
+- Themes: Midnight Cyan, Sunset Orange, Deep Purple, or a custom accent colour — themes tint the glass panels and setting icons.
+- Wallpaper: day/night auto, online photos, slideshow, crossfade, or a saved favourite.
+- Launcher-wide font: Default, Serif, Mono or Light.
+- Greeting text (time-based, can be hidden). Home weather card (Open-Meteo). Cinematic top/bottom shade and grid backdrop panel.
 - No favorites, duplicate dock/quick-access rows or Gemini button.
 - Phones keep a portrait/touch layout with adaptive columns. Profile photos are chosen locally through Android's picker.
 - Wi-Fi is green only with Android-validated internet access; missing internet is red. Ethernet/mobile data use their own indicators.
@@ -30,10 +32,18 @@ and the Home-window brightness override have been removed; brightness follows th
 Settings pages share one panel with Back navigation, restoring the previous row focus and scroll position, and stay open when a local option changes.
 The panel position is configured before showing it, without a slide/reposition animation.
 
-Launcher settings offers hide/unhide apps, columns, tile/focused-title sizes, clock size, dark mode,
-wallpaper picker/darkness, colour glow, profile, default Home and layout reset. Hiding never disables
-or uninstalls an app. All launcher dialogs share the same rounded, translucent dark-glass styling;
-there is no expensive live blur.
+## Launcher settings
+
+Settings are grouped into 6 categories, each with its own icon:
+
+- **Tiles** — columns, tile size/spacing/corners, logo size, focused-app title size, colour glow, focus border, app entrance animation
+- **Clock** — size, style (digital/analog), font, 12/24-hour, alignment, seconds, glow, hide clock, hide greeting
+- **Theme** — Midnight Cyan, Sunset Orange, Deep Purple, custom accent
+- **Wallpaper** — source (day/night auto, online, favourite), slideshow interval, crossfade, save favourite
+- **Apps** — hide/unhide, Netflix & YouTube banner rows (on/off, order, poster size, logos, auto-scroll), row spacing
+- **System** — screensaver & weather, profile name/photo, avatar shape, header background, launcher font, default Home, layout reset
+
+Hiding never disables or uninstalls an app. All launcher dialogs share the same rounded, translucent dark-glass styling with adjustable intensity and blur behind dialogs (API 31+).
 
 ## Continue watching
 
@@ -43,6 +53,10 @@ The row uses Android TV's shared Watch Next provider and asks for TV-listings ac
 It filters finished items and hidden apps, and opens the publishing app's resume link. Some TVs restrict
 provider access and some streaming apps never publish entries; private Netflix/other app histories cannot
 be read. Empty or unsupported devices show a clear message instead of invented resume items.
+
+## Netflix & YouTube rows
+
+Optional banner rows directly below the clock showing posters from the TV Watch Next feed — Netflix (`com.netflix.ninja`) and YouTube (`com.google.android.youtube.tv`). Off by default; enable in **Apps** settings. Rows stay hidden if the app published nothing.
 
 ## Online landscape screensaver
 
