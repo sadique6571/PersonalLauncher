@@ -574,7 +574,25 @@ public final class PersonalHomeActivity extends Activity {
         focusFirstApp();
     }
 
+    /** System navigation sounds: tick on arrows, click on OK. */
+    private void playNavSound(int keyCode) {
+        android.media.AudioManager audio = getSystemService(android.media.AudioManager.class);
+        if (audio == null) return;
+        int fx = -1;
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_DPAD_UP: fx = android.media.AudioManager.FX_FOCUS_NAVIGATION_UP; break;
+            case KeyEvent.KEYCODE_DPAD_DOWN: fx = android.media.AudioManager.FX_FOCUS_NAVIGATION_DOWN; break;
+            case KeyEvent.KEYCODE_DPAD_LEFT: fx = android.media.AudioManager.FX_FOCUS_NAVIGATION_LEFT; break;
+            case KeyEvent.KEYCODE_DPAD_RIGHT: fx = android.media.AudioManager.FX_FOCUS_NAVIGATION_RIGHT; break;
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+            case KeyEvent.KEYCODE_ENTER:
+            case KeyEvent.KEYCODE_NUMPAD_ENTER: fx = android.media.AudioManager.FX_KEY_CLICK; break;
+        }
+        if (fx != -1) audio.playSoundEffect(fx);
+    }
+
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN) playNavSound(event.getKeyCode());
         if (carriedApp != null && event.getAction() == KeyEvent.ACTION_DOWN) {
             String pkg = carriedApp.info.activityInfo.packageName;
             int from = moveOrder.indexOf(pkg);
@@ -646,9 +664,16 @@ public final class PersonalHomeActivity extends Activity {
             } else sky.focusAccent = 0;
             sky.invalidate();
         });
-        tile.setOnClickListener(v -> launch(new Intent(Intent.ACTION_MAIN)
-                .setClassName(app.info.activityInfo.packageName, app.info.activityInfo.name)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)));
+        tile.setOnClickListener(v -> {
+            Runnable open = () -> launch(new Intent(Intent.ACTION_MAIN)
+                    .setClassName(app.info.activityInfo.packageName, app.info.activityInfo.name)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED));
+            if (carriedApp != null) { open.run(); return; }
+            v.animate().scaleX(1.08f).scaleY(1.08f).alpha(.7f).setDuration(120).withEndAction(() -> {
+                v.setScaleX(1f); v.setScaleY(1f); v.setAlpha(1f);
+                open.run();
+            }).start();
+        });
         tile.setOnLongClickListener(v -> {
             new AlertDialog.Builder(this).setTitle(app.name).setItems(new String[]{"App info", "Hide from launcher", "Move app"}, (dialog, which) -> {
                 if (which == 0) launch(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + app.info.activityInfo.packageName)));
@@ -663,9 +688,12 @@ public final class PersonalHomeActivity extends Activity {
             return true;
         });
         GridLayout.LayoutParams position = new GridLayout.LayoutParams();
-        position.width = width - dp(16);
+        int spacing = Math.max(0, Math.min(2, prefs.getInt("tile_spacing", 1)));
+        int hm = new int[]{dp(4), dp(8), dp(14)}[spacing];
+        int vm = new int[]{dp(5), dp(10), dp(16)}[spacing];
+        position.width = width - hm * 2;
         position.height = Math.round(position.width * 9f / 16f);
-        position.setMargins(dp(8), dp(10), dp(8), dp(10));
+        position.setMargins(hm, vm, hm, vm);
         tileViews.put(app.info.activityInfo.packageName, tile);
         parent.addView(tile, position);
     }
@@ -859,7 +887,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void launcherSettings() {
-        String[] labels = {"Hide / unhide apps", "App columns", "Tile size", "Focused app title size", "Clock size", "Dark mode", "Wallpaper", "Wallpaper darkness", "App colour glow", "Screensaver & weather", "Continue watching", "Profile name & photo", "Choose default Home", "Reset layout & unhide apps", "Rearrange apps"};
+        String[] labels = {"Hide / unhide apps", "App columns", "Tile size", "Tile spacing", "Focused app title size", "Clock size", "Dark mode", "Wallpaper", "Wallpaper darkness", "App colour glow", "Screensaver & weather", "Continue watching", "Profile name & photo", "Choose default Home", "Reset layout & unhide apps", "Rearrange apps"};
         Runnable[] choices = {
             this::hiddenApps,
             () -> chooseSetting("App columns", new String[]{"Automatic", "2", "3", "4", "5", "6"}, which -> {
@@ -867,6 +895,9 @@ public final class PersonalHomeActivity extends Activity {
             }),
             () -> chooseSetting("Tile size", new String[]{"Compact", "Large"}, which -> {
                 prefs.edit().putBoolean("large_tiles", which == 1).putInt(tv ? "tv_columns" : "phone_columns", 0).apply(); refreshApps();
+            }),
+            () -> chooseSetting("Tile spacing", new String[]{"Compact", "Normal", "Wide"}, which -> {
+                prefs.edit().putInt("tile_spacing", which).apply(); refreshApps();
             }),
             () -> chooseSetting("Focused app title size", new String[]{"Small", "Normal", "Large", "Extra large"}, which -> {
                 int size = new int[]{24,32,40,48}[which]; prefs.edit().putInt("focus_title_size", size).apply(); appHeading.setTextSize(size);

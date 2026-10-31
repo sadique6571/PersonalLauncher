@@ -247,7 +247,12 @@ public final class LandscapeView extends FrameLayout {
                 if (!running || request != generation) return;
                 photoBusy = false;
                 if (image != null && online()) {
-                    photo.setImageBitmap(image); hasPhoto = true; displayedPhoto = loadedPhoto;
+                    // Fade through: old photo out, new photo in.
+                    photo.animate().alpha(0f).setDuration(250).withEndAction(() -> {
+                        photo.setImageBitmap(image);
+                        photo.animate().alpha(1f).setDuration(500).start();
+                    }).start();
+                    hasPhoto = true; displayedPhoto = loadedPhoto;
                     status.setText("Photos: Unsplash · Weather: Open-Meteo");
                 } else {
                     status.setText("Landscape rotation unavailable · retrying automatically");
