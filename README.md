@@ -15,7 +15,7 @@
 - Focus uses a matching icon-colour glow/border with zoom, press dip and parallax wallpaper effects.
 - Tiles: size, spacing, corner radius, logo size, colour glow, focus border thickness, staggered slide-in entrance animation, NEW-app badge.
 - Themes: Midnight Cyan, Sunset Orange, Deep Purple, or a custom accent colour — themes tint the glass panels and setting icons.
-- Wallpaper: mountain-lake built-in, day/night auto, online photos, slideshow, crossfade, or a saved favourite. Sun by day and moon by night (on/off), night aurora, stars, sunset tint, moonlight glow, smooth day/night transition (all on/off).
+- Wallpaper: mountain-lake built-in, day/night auto, online photos, slideshow, crossfade, or a saved favourite. Bottom shade, smooth day/night transition, header blur (on/off).
 - Bottom shade gradient behind tiles (on/off). Header frosted blur (on/off).
 - Launcher-wide font: Default, Serif, Mono or Light.
 - Greeting text (time-based, can be hidden). Home weather card (Open-Meteo). Cinematic top/bottom shade and grid backdrop panel.
@@ -38,11 +38,11 @@ The panel position is configured before showing it, without a slide/reposition a
 Settings are grouped into 6 categories, each with its own icon:
 
 - **Tiles** — columns, tile size/spacing/corners, logo size, focused-app title size, colour glow, focus border, app entrance animation
-- **Clock** — size, style (digital/analog), font, 12/24-hour, alignment, seconds, glow, hide clock, hide greeting
+- **Clock** — size, style (digital/analog), font, 12/24-hour, alignment, seconds, glow, shadow, hide clock, hide greeting
 - **Theme** — Midnight Cyan, Sunset Orange, Deep Purple, custom accent
-- **Wallpaper** — source (day/night auto, online, favourite), slideshow interval, crossfade, save favourite
+- **Wallpaper** — source (day/night auto, online, favourite), slideshow interval, bottom shade, smooth day/night, header blur, save favourite
 - **Apps** — hide/unhide, Netflix & YouTube banner rows (on/off, order, poster size, logos, auto-scroll), row spacing
-- **System** — screensaver & weather, profile name/photo, avatar shape, header background, launcher font, default Home, layout reset
+- **System** — screensaver & weather, profile name/photo, avatar shape, header background, launcher font, performance (Auto/Light/Balanced/Full), export/import settings, default Home, layout reset
 
 Hiding never disables or uninstalls an app. All launcher dialogs share the same rounded, translucent dark-glass styling with adjustable intensity and blur behind dialogs (API 31+).
 
@@ -78,6 +78,15 @@ own idle timeout defaults to Off and runs only while Home is in front, so it doe
 Online sources: `images.unsplash.com`, `api.open-meteo.com`, `geocoding-api.open-meteo.com`.
 
 The Haier Home-button and reboot flow still needs testing on the real TV. Keep Google Home enabled while testing.
+
+## Performance
+
+The launcher auto-detects device RAM and selects a performance tier:
+- **Light** (≤2 GB, e.g. Haier H40K800FX): static wallpaper, no crossfade/parallax/entrance, minimal effects
+- **Balanced** (2–4 GB): bounded effects and caches
+- **Full** (>4 GB): all effects
+
+Override via **Settings → System → Performance**. Weather is cached for 15 minutes with stale indication. Bitmaps are decoded to the exact display size. Memory is trimmed automatically under pressure.
 
 ## Build
 
