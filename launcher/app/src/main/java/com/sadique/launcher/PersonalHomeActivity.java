@@ -392,7 +392,6 @@ public final class PersonalHomeActivity extends Activity {
         time.setAutoSizeTextTypeWithDefaults(android.widget.TextView.AUTO_SIZE_TEXT_TYPE_NONE);
         // Horizontal padding prevents AM/PM clipping from the shadow layer.
         time.setPadding(dp(12), dp(2), dp(12), dp(10));
-        time.setClipToPadding(false);
         clockTextSize = clockSize;
         date = text("", tv ? 14 : 13, MUTED);
         if (prefs.getBoolean("clock_shadow", true)) {
@@ -474,7 +473,18 @@ public final class PersonalHomeActivity extends Activity {
             }
         };
         scroll.setOnScrollChangeListener(glowTracker);
-        drawerScroll.setOnScrollChangeListener(glowTracker);
+        // Synchronized scroll: when apps scroll, the clock scrolls up too and the
+        // header sticks to the top. (User request 2026-10-31.)
+        drawerScroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
+            int clockH = scroll.getHeight();
+            if (clockH > 0) {
+                int up = Math.min(scrollY, clockH);
+                scroll.setTranslationY(-up);
+                appHeading.setTranslationY(-up);
+                appBody.setTranslationY(-up);
+            }
+            glowTracker.onScrollChange(v, scrollX, scrollY, oldScrollX, oldScrollY);
+        });
         page.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             int width = page.getWidth() - page.getPaddingLeft() - page.getPaddingRight();
             if (width > 0 && width != pageWidth) {
