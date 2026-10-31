@@ -58,6 +58,8 @@ public final class PersonalHomeActivity extends Activity {
     private static final int CYAN = 0xff40d9ff, TEXT = 0xfff0f7ff, MUTED = 0xffa4bcd6;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    /** Dedicated app-loading worker: icon scans never block avatar/wallpaper/import, and a new scan cancels the old. */
+    private final ExecutorService appWorker = Executors.newSingleThreadExecutor();
     private SharedPreferences prefs;
     private LinearLayout page, header, actions;
     private GridLayout grid;
@@ -76,6 +78,10 @@ public final class PersonalHomeActivity extends Activity {
     private List<String> moveOrder;
     /** Live tiles by package, for progressive icon fill-in. Rebuilt with the grid. */
     private final java.util.Map<String, View> tileViews = new java.util.HashMap<>();
+    /** Package of the focused tile, restored after grid rebuilds. */
+    private String focusedPkg;
+    /** Last day/night state; when it flips, tile surfaces are refreshed to match. */
+    private boolean lastLight = false;
     private AlertDialog panel, profile;
     private AlertDialog searchDialog;
     private EditText searchInput;
@@ -95,9 +101,27 @@ public final class PersonalHomeActivity extends Activity {
         @Override public void run() {
             if (!resumed) return;
             updateClock();
+            boolean light = appearanceDaylight() >= .5f;
+            if (light != lastLight) {
+                lastLight = light;
+                refreshTileSurfaces();
+            }
             handler.postDelayed(this, 60_000 - System.currentTimeMillis() % 60_000);
         }
     };
+
+    /** Re-applies backgrounds so tiles match the current day/night theme without a rebuild. */
+    private void refreshTileSurfaces() {
+        for (java.util.Map.Entry<String, View> entry : tileViews.entrySet()) {
+            View tile = entry.getValue();
+            boolean focused = tile.isFocused();
+            tile.setBackground(surface(focused));
+            Object tag = tile.getTag();
+            int accent = tag instanceof Integer ? (Integer) tag : CYAN;
+            tile.setForeground(tileBorder(accent, focused));
+        }
+        if (sky != null) sky.invalidate();
+    }
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -112,6 +136,7 @@ public final class PersonalHomeActivity extends Activity {
         UiModeManager modes = getSystemService(UiModeManager.class);
         tv = modes != null && modes.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION;
         connectivity = getSystemService(ConnectivityManager.class);
+        lastLight = appearanceDaylight() >= .5f;
         buildHome();
         loadAvatar();
         loadWallpaper();
@@ -242,7 +267,7 @@ public final class PersonalHomeActivity extends Activity {
         actions = new LinearLayout(this);
         actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         actions.addView(networkStatus, new LinearLayout.LayoutParams(-2, dp(44)));
-        iconAction("Quick actions", R.drawable.ic_apps, this::showActionDrawer);
+        iconAction("Search", R.drawable.ic_search, this::searchApps);
         iconAction("Settings", R.drawable.ic_settings, this::showSettings);
         if (tv) {
             header.addView(actions, new LinearLayout.LayoutParams(-2, -2));
@@ -349,7 +374,7 @@ public final class PersonalHomeActivity extends Activity {
     private int appGeneration;
     private void loadApps() {
         int generation = ++appGeneration;
-        worker.execute(() -> {
+        appWorker.execute(() -> {
             List<ResolveInfo> found = new ArrayList<>();
             if (tv) found.addAll(getPackageManager().queryIntentActivities(
                     new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER), 0));
@@ -361,6 +386,7 @@ public final class PersonalHomeActivity extends Activity {
             if (cachedApps != null) for (App app : cachedApps) previous.put(app.info.activityInfo.packageName, app);
             // Phase 1: labels only — the grid renders immediately with letter placeholders.
             for (ResolveInfo info : found) {
+                if (generation != appGeneration) return;
                 String pkg = info.activityInfo.packageName;
                 if (pkg.equals(getPackageName()) || !packages.add(pkg)) continue;
                 try {
@@ -487,6 +513,10 @@ public final class PersonalHomeActivity extends Activity {
             appHeading.setText("No visible apps");
             Toast.makeText(this, "Unhide apps in Settings → Launcher settings", Toast.LENGTH_LONG).show();
         }
+        // Restore D-pad focus to the previously focused app when it is still visible.
+        View restore = focusedPkg == null ? null : tileViews.get(focusedPkg);
+        if (restore != null) restore.requestFocus();
+        else if (grid.getChildCount() > 0 && grid.findFocus() == null) focusFirstApp();
         if (searchRefresh != null) searchRefresh.run();
     }
 
@@ -599,6 +629,7 @@ public final class PersonalHomeActivity extends Activity {
         tile.setOnFocusChangeListener((v, focus) -> {
             tile.setBackground(surface(focus));
             if (!moving) tile.setForeground(tileBorder(app.accent, focus));
+            if (focus) focusedPkg = app.info.activityInfo.packageName;
             tile.setTranslationZ(focus && prefs.getBoolean("focus_glow", true) ? dp(10) : 0);
             if (android.os.Build.VERSION.SDK_INT >= 28) {
                 tile.setOutlineAmbientShadowColor(app.accent);
@@ -741,15 +772,6 @@ public final class PersonalHomeActivity extends Activity {
             return;
         }
         chooseSetting("Inputs", labels.toArray(new String[0]), which -> launch(targets.get(which)));
-    }
-
-    private void showActionDrawer() {
-        GlassSettings.options(this, "Quick actions", new String[]{"Search apps", "Play Store", "Screensaver"},
-                new String[]{"Search installed apps", "Find and install new apps", "Preview or set up automatic landscapes"}, which -> {
-                    if (which == 0) searchApps();
-                    else if (which == 1) openStore("");
-                    else screensaverSettings();
-                });
     }
 
     private List<App> orderedApps(List<App> apps) {
@@ -1110,7 +1132,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     @Override public void onBackPressed() {
-        focusFirstApp();
+        launch(new Intent(this, LandscapeActivity.class));
     }
 
     private void focusFirstApp() {
@@ -1129,6 +1151,7 @@ public final class PersonalHomeActivity extends Activity {
         handler.removeCallbacksAndMessages(null);
         if (continueWatching != null) continueWatching.stop();
         worker.shutdownNow();
+        appWorker.shutdownNow();
         super.onDestroy();
     }
 
@@ -1137,10 +1160,18 @@ public final class PersonalHomeActivity extends Activity {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
         // Never share the bitmap paint with translucent sun/moon or focus effects.
         private final Paint wallpaperPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
-        private final Bitmap backdrop = BitmapFactory.decodeResource(getResources(), R.drawable.personal_wallpaper);
+        /** Decoded off the main thread; onDraw draws the gradient alone until it arrives. */
+        private Bitmap backdrop;
         int minute, focusAccent;
         float clockY = -1, focusX, focusY, focusRadius;
-        SkyClock() { super(PersonalHomeActivity.this); setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO); }
+        SkyClock() {
+            super(PersonalHomeActivity.this);
+            setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+            worker.execute(() -> {
+                Bitmap bmp = BitmapFactory.decodeResource(getResources(), R.drawable.personal_wallpaper);
+                handler.post(() -> { backdrop = bmp; invalidate(); });
+            });
+        }
         @Override protected void onDraw(Canvas canvas) {
             paint.setColor(Color.WHITE);
             paint.setShader(null);

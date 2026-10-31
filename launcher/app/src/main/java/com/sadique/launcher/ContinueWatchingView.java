@@ -42,6 +42,8 @@ public final class ContinueWatchingView extends LinearLayout {
     private final TextView explanation;
     private final Button allow;
     private ExecutorService worker;
+    /** Poster artwork has its own queue so a slow download never blocks the provider query. */
+    private ExecutorService artworkWorker;
     private CancellationSignal query;
     private boolean running, observing;
     private int generation;
@@ -76,7 +78,7 @@ public final class ContinueWatchingView extends LinearLayout {
     }
     public void start() {
         if (running) { reload(); return; }
-        running = true; worker = Executors.newFixedThreadPool(2);
+        running = true; worker = Executors.newFixedThreadPool(2); artworkWorker = Executors.newFixedThreadPool(2);
         try { host.getContentResolver().registerContentObserver(TvContract.WatchNextPrograms.CONTENT_URI, true, observer); observing = true; }
         catch (RuntimeException unavailable) { observing = false; }
         reload();
@@ -86,6 +88,7 @@ public final class ContinueWatchingView extends LinearLayout {
         if (query != null) query.cancel();
         if (observing) { try { host.getContentResolver().unregisterContentObserver(observer); } catch (RuntimeException ignored) { } observing = false; }
         if (worker != null) worker.shutdownNow();
+        if (artworkWorker != null) artworkWorker.shutdownNow();
         handler.removeCallbacksAndMessages(null);
     }
     public void requestAccess() {
@@ -166,7 +169,8 @@ public final class ContinueWatchingView extends LinearLayout {
         try { poster.setImageDrawable(host.getPackageManager().getApplicationIcon(item.pkg)); }
         catch (PackageManager.NameNotFoundException ignored) { }
         int request = generation;
-        worker.execute(() -> {
+        artworkWorker.execute(() -> {
+            if (!running || request != generation) return;
             Bitmap bitmap = ResumeArtwork.load(host, item.thumbnail, item.poster);
             if (bitmap != null) handler.post(() -> {
                 if (running && request == generation) poster.setImageBitmap(bitmap);

@@ -190,6 +190,31 @@ public final class LandscapeView extends FrameLayout {
         date.setText(new SimpleDateFormat("EEEE, d MMMM yyyy", Locale.getDefault()).format(now.getTime()));
     }
 
+    /** Disk cache for the six fixed Unsplash photos: download once, reuse from disk. */
+    private byte[] cachedPhotoBytes(int candidate) throws java.io.IOException {
+        java.io.File dir = new java.io.File(getContext().getCacheDir(), "screensaver_photos");
+        dir.mkdirs();
+        java.io.File cached = new java.io.File(dir, "photo_" + candidate + ".jpg");
+        if (cached.exists()) {
+            try (java.io.FileInputStream in = new java.io.FileInputStream(cached);
+                 java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
+                byte[] bytes = out.toByteArray();
+                if (bytes.length > 0) return bytes;
+                cached.delete();
+            }
+        }
+        byte[] bytes = OnlineContent.get(LandscapeModel.photoUrl(candidate), 6 * 1024 * 1024);
+        try (java.io.FileOutputStream out = new java.io.FileOutputStream(cached)) {
+            out.write(bytes);
+        } catch (java.io.IOException saveFailed) {
+            cached.delete();
+        }
+        return bytes;
+    }
+
     private void requestPhoto() {
         if (!running || photoBusy || !online()) return;
         photoBusy = true;
@@ -204,7 +229,7 @@ public final class LandscapeView extends FrameLayout {
               int candidate = Math.floorMod(firstPhoto + attempt, 6);
               if (candidate == previousPhoto) continue;
               try {
-                byte[] bytes = OnlineContent.get(LandscapeModel.photoUrl(candidate), 6 * 1024 * 1024);
+                byte[] bytes = cachedPhotoBytes(candidate);
                 BitmapFactory.Options bounds = new BitmapFactory.Options();
                 bounds.inJustDecodeBounds = true;
                 BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);

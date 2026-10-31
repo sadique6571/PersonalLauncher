@@ -49,6 +49,14 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/personal-launcher.p12"
           keytool -list -keystore "$RUNNER_TEMP/personal-launcher.p12" -storepass:env LAUNCHER_KEYSTORE_PASSWORD -alias personal-launcher > /dev/null
 
+      - name: Run unit tests (release must not publish on red)
+        working-directory: launcher
+        run: gradle testReleaseUnitTest --console=plain
+
+      - name: Run lint (release must not publish on red)
+        working-directory: launcher
+        run: gradle lintRelease --console=plain
+
       - name: Build release APK
         working-directory: launcher
         env:
@@ -76,7 +84,7 @@ jobs:
 
       - name: Create GitHub release
         run: |
-          TAG="v4.6-build-${{ github.run_number }}"
-          gh release create "$TAG" PersonalLauncher.apk --title "Personal Launcher 4.6 (build ${{ github.run_number }})" --notes "Personal Launcher 4.6: saved app rearrangement, restored settings focus and scroll position, a new dark aurora wallpaper, compact action drawer with network text, and Android landscape screensaver setup. Uses the same persistent signing key as 4.3."
+          TAG="v4.7-build-${{ github.run_number }}"
+          gh release create "$TAG" PersonalLauncher.apk --title "Personal Launcher 4.7 (build ${{ github.run_number }})" --notes "Personal Launcher 4.7: saved app rearrangement, restored settings focus and scroll position, a new dark aurora wallpaper, compact action drawer with network text, and Android landscape screensaver setup. Uses the same persistent signing key as 4.3."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
