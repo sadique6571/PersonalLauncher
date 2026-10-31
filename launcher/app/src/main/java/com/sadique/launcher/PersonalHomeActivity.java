@@ -1248,6 +1248,9 @@ public final class PersonalHomeActivity extends Activity {
             () -> chooseSetting("Time format", new String[]{"12-hour", "24-hour"}, which -> {
                 prefs.edit().putBoolean("time_24h", which == 1).apply(); updateClock();
             }),
+            () -> chooseSetting("Clock alignment", new String[]{"Left", "Center", "Right"}, which -> {
+                prefs.edit().putInt("clock_align", which).apply(); buildHome();
+            }),
             () -> chooseSetting("Clock seconds", new String[]{"Off", "On"}, which -> {
                 prefs.edit().putBoolean("clock_seconds", which == 1).apply();
                 handler.removeCallbacks(secondTick);
@@ -1257,9 +1260,6 @@ public final class PersonalHomeActivity extends Activity {
             () -> chooseSetting("Clock glow", new String[]{"Off", "On"}, which -> {
                 prefs.edit().putBoolean("clock_glow", which == 1).apply();
                 sky.invalidate();
-            }),
-            () -> chooseSetting("Clock alignment", new String[]{"Left", "Center", "Right"}, which -> {
-                prefs.edit().putInt("clock_align", which).apply(); buildHome();
             }),
             () -> chooseSetting("Hide clock", new String[]{"Show", "Hide"}, which -> {
                 prefs.edit().putBoolean("hide_clock", which == 1).apply(); buildHome();
