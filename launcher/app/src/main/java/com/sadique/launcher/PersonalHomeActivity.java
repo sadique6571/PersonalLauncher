@@ -1314,8 +1314,8 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void wallpaperMenu() {
-        String[] labels = {"Wallpaper", "Wallpaper source", "Save as favorite", "Day / night wallpaper", "Wallpaper slideshow", "Wallpaper darkness", "Sun & moon", "Night aurora", "Night stars", "Bottom shade", "Sunset tint", "Moonlight", "Smooth day/night", "Header blur"};
-        String[] hints = {"Mountains or your own picture", "Built-in, online or favorite", "Save current wallpaper", "Different wallpaper day and night", "Change wallpaper over time", "Keep the landscape visible", "Sun by day, moon by night", "Aurora lights at night", "Stars with the moon", "Dark gradient behind tiles", "Warm tint at dusk/dawn", "Moon glow on wallpaper", "Animate day/night change", "Frosted header background"};
+        String[] labels = {"Wallpaper", "Wallpaper source", "Save as favorite", "Day / night wallpaper", "Wallpaper slideshow", "Wallpaper darkness", "Moon", "Night aurora", "Night stars", "Bottom shade", "Sunset tint", "Moonlight", "Smooth day/night", "Header blur"};
+        String[] hints = {"Mountains or your own picture", "Built-in, online or favorite", "Save current wallpaper", "Different wallpaper day and night", "Change wallpaper over time", "Keep the landscape visible", "Moon by night", "Aurora lights at night", "Stars with the moon", "Dark gradient behind tiles", "Warm tint at dusk/dawn", "Moon glow on wallpaper", "Animate day/night change", "Frosted header background"};
         int[] icons = {R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness};
         Runnable[] choices = {
             this::wallpaperSettings,
@@ -1337,7 +1337,7 @@ public final class PersonalHomeActivity extends Activity {
             () -> chooseSetting("Wallpaper darkness", new String[]{"Light", "Medium", "Dark"}, which -> {
                 prefs.edit().putInt("background_dim", which * 20).apply(); sky.invalidate();
             }),
-            () -> chooseSetting("Sun & moon", new String[]{"Off", "On"}, which -> {
+            () -> chooseSetting("Moon", new String[]{"Off", "On"}, which -> {
                 prefs.edit().putBoolean("sun_moon", which == 1).apply(); sky.invalidate();
             }),
             () -> chooseSetting("Night aurora", new String[]{"Off", "On"}, which -> {
@@ -1838,20 +1838,12 @@ public final class PersonalHomeActivity extends Activity {
                 }
                 int shade = HomeAppearance.shade(theme, minute, prefs.getInt("background_dim", 0));
                 canvas.drawColor((shade << 24) | 0x00051327);
-                // Sun by day, moon by night — drawn over any wallpaper like the demo.
-                if (prefs.getBoolean("sun_moon", true)) {
+                // Moon by night — drawn over any wallpaper like the demo.
+                if (prefs.getBoolean("sun_moon", true) && day <= 0.5f) {
                     float sunX = getWidth() * 0.5f;
                     float sunY = y; // Directly behind the clock, like the demo.
                     float r = dp(50);
-                    if (day > 0.5f) {
-                        // Sun: warm core with soft glow.
-                        paint.setShader(new RadialGradient(sunX, sunY, r * 2.5f,
-                                0x80ffdf80, Color.TRANSPARENT, Shader.TileMode.CLAMP));
-                        canvas.drawCircle(sunX, sunY, r * 2.5f, paint);
-                        paint.setShader(null);
-                        paint.setColor(0xfffff3c4);
-                        canvas.drawCircle(sunX, sunY, r, paint);
-                    } else {
+                    {
                         // Moon: pale disc with soft glow.
                         paint.setShader(new RadialGradient(sunX, sunY, r * 2f,
                                 0x6090b8d8, Color.TRANSPARENT, Shader.TileMode.CLAMP));
