@@ -1697,10 +1697,26 @@ public final class PersonalHomeActivity extends Activity {
         int mText = darkTextMid ? TEXT_DARK : TEXT;
         int mMuted = darkTextMid ? MUTED_DARK : MUTED;
         boolean shadow = prefs.getBoolean("clock_shadow", true);
-        if (userName != null) userName.setTextColor(text);
-        if (greeting != null) greeting.setTextColor(muted);
-        if (networkStatus != null) networkStatus.setTextColor(muted);
-        if (homeWeather != null) homeWeather.setTextColor(muted);
+        // Shadow color contrasts the text so labels stay readable on any wallpaper,
+        // even where the adaptive color alone is not enough.
+        int topShadow = darkTextTop ? 0x88ffffff : 0xcc000000;
+        int midShadow = darkTextMid ? 0x88ffffff : 0xcc000000;
+        if (userName != null) {
+            userName.setTextColor(text);
+            if (shadow) userName.setShadowLayer(dp(5), 0, dp(2), topShadow); else userName.setShadowLayer(0, 0, 0, 0);
+        }
+        if (greeting != null) {
+            greeting.setTextColor(muted);
+            if (shadow) greeting.setShadowLayer(dp(5), 0, dp(2), topShadow); else greeting.setShadowLayer(0, 0, 0, 0);
+        }
+        if (networkStatus != null) {
+            networkStatus.setTextColor(muted);
+            if (shadow) networkStatus.setShadowLayer(dp(5), 0, dp(2), topShadow); else networkStatus.setShadowLayer(0, 0, 0, 0);
+        }
+        if (homeWeather != null) {
+            homeWeather.setTextColor(muted);
+            if (shadow) homeWeather.setShadowLayer(dp(5), 0, dp(2), topShadow); else homeWeather.setShadowLayer(0, 0, 0, 0);
+        }
         if (time != null) {
             time.setTextColor(text);
             if (shadow) time.setShadowLayer(dp(8), 0, dp(3), darkTextTop ? 0x88ffffff : 0xcc000000);
@@ -1709,7 +1725,10 @@ public final class PersonalHomeActivity extends Activity {
             date.setTextColor(muted);
             if (shadow) date.setShadowLayer(dp(6), 0, dp(2), darkTextTop ? 0x88ffffff : 0xcc000000);
         }
-        if (appHeading != null) appHeading.setTextColor(mText);
+        if (appHeading != null) {
+            appHeading.setTextColor(mText);
+            if (shadow) appHeading.setShadowLayer(dp(5), 0, dp(2), midShadow); else appHeading.setShadowLayer(0, 0, 0, 0);
+        }
         if (continueWatching != null) continueWatching.setTextColors(mText, mMuted);
         if (netflixRow != null) netflixRow.setHeadingColor(mText);
         if (youtubeRow != null) youtubeRow.setHeadingColor(mText);
