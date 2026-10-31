@@ -168,7 +168,8 @@ final class GlassSettings {
         boolean navigation = hints != null || title.equals("Online landscape screensaver");
         for (int i = 0; i < names.length; i++) {
             final int index = i;
-            View option = row(host, names[i], hints == null ? null : hints[i], R.drawable.ic_settings, 0xff9ad6ed, () -> {});
+            String hint = (hints != null && i < hints.length) ? hints[i] : null;
+            View option = row(host, names[i], hint, R.drawable.ic_settings, 0xff9ad6ed, () -> {});
             option.setOnClickListener(v -> {
                 v.requestFocus();
                 selected.accept(index);

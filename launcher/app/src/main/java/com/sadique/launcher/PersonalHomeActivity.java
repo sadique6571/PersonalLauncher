@@ -1162,7 +1162,7 @@ public final class PersonalHomeActivity extends Activity {
             }).setNegativeButton(android.R.string.cancel, null).show(),
             this::rearrangeApps
         };
-        String[] hints = {"Choose which apps appear", "Number of cards per row", "Compact or large cards", "Name above the app grid", "12-hour clock with date", "Midnight, automatic or light", "Mountains or your own picture", "Keep the landscape visible", "Match the focused app", "Slideshow, weather & idle timer", "Resume titles after your apps", "Name and local profile picture", "Set this launcher as Home", "Restore the default layout", "Choose the order of app cards"};
+        String[] hints = {"Choose which apps appear", "Number of cards per row", "Compact or large cards", "Gap between cards", "Sharp, rounded or round", "App logo size in cards", "Name above the app grid", "Small, normal or large", "Digital or analog", "Light, serif or mono", "Show seconds", "Halo behind the clock", "Cyan, Orange, Purple or Custom", "Custom theme color", "Midnight, automatic or light", "Mountains or your own picture", "Built-in or online", "Different wallpaper day and night", "Change wallpaper over time", "Transparency of panels", "Keep the landscape visible", "Match the focused app", "Slideshow, weather & idle timer", "Resume titles after your apps", "Name and local profile picture", "Set this launcher as Home", "Restore the default layout", "Choose the order of app cards"};
         GlassSettings.options(this, "Launcher settings", labels, hints, which -> choices[which].run());
     }
 
