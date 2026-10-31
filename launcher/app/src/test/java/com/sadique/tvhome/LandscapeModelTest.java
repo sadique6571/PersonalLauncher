@@ -4,11 +4,11 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class LandscapeModelTest {
-    @Test public void photoRotationWrapsAndAlwaysUsesHttps() {
-        assertTrue(LandscapeModel.photoUrl(0).startsWith("https://images.unsplash.com/photo-"));
-        assertEquals(LandscapeModel.photoUrl(0), LandscapeModel.photoUrl(6));
+    @Test public void photoSeedsAreUniqueAndAlwaysUseHttps() {
+        assertTrue(LandscapeModel.photoUrl(0).startsWith("https://picsum.photos/seed/"));
         assertNotEquals(LandscapeModel.photoUrl(0), LandscapeModel.photoUrl(1));
-        assertEquals(LandscapeModel.photoUrl(5), LandscapeModel.photoUrl(-1));
+        assertNotEquals(LandscapeModel.photoUrl(0), LandscapeModel.photoUrl(6));
+        assertNotEquals(LandscapeModel.photoUrl(5), LandscapeModel.photoUrl(-1));
     }
     @Test public void okaraWeatherUsesTheChosenUnit() {
         String url = LandscapeModel.weatherUrl(LandscapeModel.LATITUDE, LandscapeModel.LONGITUDE, false);
