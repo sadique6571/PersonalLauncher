@@ -2251,7 +2251,12 @@ public final class PersonalHomeActivity extends Activity {
                     // Retire the old 6-photo disk cache: it is no longer populated.
                     java.io.File[] stale = new java.io.File(getCacheDir(), "screensaver_photos").listFiles();
                     if (stale != null) for (java.io.File f : stale) f.delete();
-                    byte[] bytes = OnlineContent.get(LandscapeModel.photoUrl(seed), 6 * 1024 * 1024);
+                    // Bing daily wallpaper: API returns JSON, parse to get image URL.
+                    String apiUrl = LandscapeModel.photoUrl(seed);
+                    byte[] jsonBytes = OnlineContent.get(apiUrl, 64 * 1024);
+                    String json = new String(jsonBytes, java.nio.charset.StandardCharsets.UTF_8);
+                    String imageUrl = LandscapeModel.bingImageUrl(json);
+                    byte[] bytes = OnlineContent.get(imageUrl, 6 * 1024 * 1024);
                     bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
                 } catch (Exception ignored) {}
                 Bitmap loaded = bmp;

@@ -5,10 +5,25 @@ final class LandscapeModel {
     static final String CITY = "Okara, Pakistan";
     static final double LATITUDE = 30.81, LONGITUDE = 73.45;
     static String photoUrl(int index) {
-        // picsum.photos serves a different real photo per unique seed. The index
-        // never repeats (LandscapeView.photoIndex starts at current minutes and
-        // increments per request), so the screensaver never repeats a photo.
-        return "https://picsum.photos/seed/pl" + index + "/1920/1080";
+        // Bing daily wallpaper: changes every day automatically.
+        // idx=0 is today, 1=yesterday... up to 7 days back. (User 2026-10-31.)
+        int idx = Math.floorMod(index, 8);
+        return "https://www.bing.com/HPImageArchive.aspx?format=js&idx=" + idx + "&n=1&mkt=en-US";
+    }
+
+    /** Extracts the full image URL from Bing's HPImageArchive JSON response. */
+    static String bingImageUrl(String json) throws org.json.JSONException {
+        org.json.JSONObject root = new org.json.JSONObject(json);
+        org.json.JSONArray images = root.getJSONArray("images");
+        if (images.length() == 0) throw new org.json.JSONException("No images");
+        String url = images.getJSONObject(0).getString("url");
+        // Bing returns relative URLs like /th?id=OHR..._1920x1080.jpg
+        if (url.startsWith("/")) url = "https://www.bing.com" + url;
+        // Request 1920x1080 if not already
+        if (!url.contains("1920x1080")) {
+            url = url.replaceAll("_\d+x\d+\.jpg", "_1920x1080.jpg");
+        }
+        return url;
     }
 
     static String weatherUrl(double lat, double lon, boolean fahrenheit) {
