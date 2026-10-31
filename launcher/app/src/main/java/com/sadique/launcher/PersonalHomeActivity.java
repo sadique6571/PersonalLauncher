@@ -1779,6 +1779,33 @@ public final class PersonalHomeActivity extends Activity {
                 }
                 int shade = HomeAppearance.shade(theme, minute, prefs.getInt("background_dim", 0));
                 canvas.drawColor((shade << 24) | 0x00051327);
+                // Sun by day, moon by night — drawn over the built-in wallpaper like the demo.
+                if (mountains) {
+                    float sunX = getWidth() * 0.5f;
+                    float sunY = getHeight() * 0.18f;
+                    float r = dp(50);
+                    if (day > 0.5f) {
+                        // Sun: warm core with soft glow.
+                        paint.setShader(new RadialGradient(sunX, sunY, r * 2.5f,
+                                0x80ffdf80, Color.TRANSPARENT, Shader.TileMode.CLAMP));
+                        canvas.drawCircle(sunX, sunY, r * 2.5f, paint);
+                        paint.setShader(null);
+                        paint.setColor(0xfffff3c4);
+                        canvas.drawCircle(sunX, sunY, r, paint);
+                    } else {
+                        // Moon: pale disc with soft glow.
+                        paint.setShader(new RadialGradient(sunX, sunY, r * 2f,
+                                0x6090b8d8, Color.TRANSPARENT, Shader.TileMode.CLAMP));
+                        canvas.drawCircle(sunX, sunY, r * 2f, paint);
+                        paint.setShader(null);
+                        paint.setColor(0xffe8f0f8);
+                        canvas.drawCircle(sunX, sunY, r * 0.8f, paint);
+                        // Moon crater shading.
+                        paint.setColor(0xffc8d8e8);
+                        canvas.drawCircle(sunX - r * 0.25f, sunY - r * 0.15f, r * 0.18f, paint);
+                        canvas.drawCircle(sunX + r * 0.2f, sunY + r * 0.25f, r * 0.12f, paint);
+                    }
+                }
                 if (mountains && getHeight() > getWidth()) {
                     // Blend the portrait hero into midnight below the lake, keeping the ridge visible.
                     int base = blend(0xff07172b, 0xff092b4a, day);
