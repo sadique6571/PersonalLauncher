@@ -371,6 +371,16 @@ public final class PersonalHomeActivity extends Activity {
         boolean compact = getResources().getConfiguration().screenHeightDp < 480;
         clock.setPadding(0, dp(compact ? 0 : tv ? 18 : 24), 0, dp(compact ? 8 : 16));
         int clockSize = prefs.getInt("clock_size", tv ? 52 : 44);
+        // One-time migration (2026-10-31): old sizes were too big, map to new scale.
+        int[] oldSizes = tv ? new int[]{66, 80, 96} : new int[]{56, 68, 80};
+        int[] newSizes = tv ? new int[]{42, 52, 62} : new int[]{36, 44, 52};
+        for (int i = 0; i < oldSizes.length; i++) {
+            if (clockSize == oldSizes[i]) {
+                clockSize = newSizes[i];
+                prefs.edit().putInt("clock_size", clockSize).apply();
+                break;
+            }
+        }
         if (compact) clockSize = Math.min(clockSize, 32);
         time = text("", clockSize, TEXT);
         time.setGravity(Gravity.CENTER);
