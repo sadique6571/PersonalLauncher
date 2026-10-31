@@ -1779,8 +1779,8 @@ public final class PersonalHomeActivity extends Activity {
                 }
                 int shade = HomeAppearance.shade(theme, minute, prefs.getInt("background_dim", 0));
                 canvas.drawColor((shade << 24) | 0x00051327);
-                // Sun by day, moon by night — drawn over the built-in wallpaper like the demo.
-                if (mountains) {
+                // Sun by day, moon by night — drawn over any wallpaper like the demo.
+                {
                     float sunX = getWidth() * 0.5f;
                     float sunY = getHeight() * 0.18f;
                     float r = dp(50);
