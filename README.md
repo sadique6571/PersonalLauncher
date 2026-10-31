@@ -3,7 +3,7 @@
 **Personal Launcher by Sadique Sadiq** — a clean, fast home-screen launcher for Android TV / Google TV.
 
 - Package: `com.sadique.launcher`
-- Version: 4.7
+- Version: 4.8
 - Plain Java, classic Android Views, `minSdk` 26. Internet permission is used for online screensaver photos, weather and city lookup.
 - Day/night Home wallpaper, compact toolbar, configurable app grid, quick settings and local profile.
 
