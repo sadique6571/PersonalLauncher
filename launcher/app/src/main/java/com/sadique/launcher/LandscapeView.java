@@ -84,8 +84,10 @@ public final class LandscapeView extends FrameLayout {
         center.addView(clock, new LinearLayout.LayoutParams(-1, dp(126)));
         date = label(20);
         center.addView(date);
-        LayoutParams centered = new LayoutParams(-1, -2, Gravity.CENTER);
-        centered.setMargins(dp(24), 0, dp(24), 0);
+        int ssPos = Math.max(0, Math.min(2, prefs.getInt("ss_clock_pos", 1)));
+        LayoutParams centered = new LayoutParams(-1, -2,
+                new int[]{Gravity.TOP | Gravity.CENTER_HORIZONTAL, Gravity.CENTER, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL}[ssPos]);
+        centered.setMargins(dp(24), ssPos == 0 ? dp(60) : 0, dp(24), ssPos == 2 ? dp(120) : 0);
         addView(center, centered);
         wifi = label(14);
         wifi.setPadding(dp(10), dp(8), dp(10), dp(8));

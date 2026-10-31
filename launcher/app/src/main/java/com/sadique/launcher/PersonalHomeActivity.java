@@ -61,8 +61,7 @@ public final class PersonalHomeActivity extends Activity {
     /** Dedicated app-loading worker: icon scans never block avatar/wallpaper/import, and a new scan cancels the old. */
     private final ExecutorService appWorker = Executors.newSingleThreadExecutor();
     private SharedPreferences prefs;
-    private LinearLayout page, header, actions;
-    private GridLayout grid;
+    private LinearLayout page, header, actions, clockLayout;    private GridLayout grid;
     private TextView userName, time, date, networkStatus, appHeading, greeting, homeWeather;
     private ImageView avatar;
     private Bitmap avatarBitmap;
@@ -293,8 +292,11 @@ public final class PersonalHomeActivity extends Activity {
         userName = text("", tv ? 24 : 20, TEXT);
         userName.setMaxLines(2);
         userName.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        applyAppFont(userName);
         identity.addView(userName);
         greeting = text(greetingText(), 13, MUTED);
+        applyAppFont(greeting);
+        if (prefs.getBoolean("hide_greeting", false)) greeting.setVisibility(View.GONE);
         identity.addView(greeting);
         header.addView(identity, new LinearLayout.LayoutParams(0, -2, 1));
         networkStatus = text("", 13, MUTED);
@@ -322,7 +324,8 @@ public final class PersonalHomeActivity extends Activity {
         } else {
             page.addView(actions, new LinearLayout.LayoutParams(-1, -2));
         }
-        LinearLayout clock = new LinearLayout(this);
+        clockLayout = new LinearLayout(this);
+        LinearLayout clock = clockLayout;
         clock.setOrientation(LinearLayout.VERTICAL);
         clock.setGravity(Gravity.CENTER);
         boolean compact = getResources().getConfiguration().screenHeightDp < 480;
@@ -370,7 +373,11 @@ public final class PersonalHomeActivity extends Activity {
         // Scrollable content: clock + heading + apps (all scroll together).
         LinearLayout scrollContent = new LinearLayout(this);
         scrollContent.setOrientation(LinearLayout.VERTICAL);
-        scrollContent.addView(clock);
+        if (prefs.getBoolean("hide_clock", false)) clock.setVisibility(View.GONE);
+        int align = prefs.getInt("clock_align", 1);
+        LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(-2, -2);
+        clockParams.gravity = new int[]{Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END}[align];
+        scrollContent.addView(clock, clockParams);
         // Netflix & YouTube banner rows right below the clock (order swappable in settings).
         netflixRow = new AppContentRow(this, "Netflix", new String[]{"com.netflix.ninja"}, label -> appHeading.setText(label));
         youtubeRow = new AppContentRow(this, "YouTube", new String[]{"com.google.android.youtube.tv", "com.google.android.youtube"}, label -> appHeading.setText(label));
@@ -704,6 +711,18 @@ public final class PersonalHomeActivity extends Activity {
         Set<String> hidden = prefs.getStringSet("hidden_apps", Collections.emptySet());
         for (App app : orderedApps(apps)) {
             if (!hidden.contains(app.info.activityInfo.packageName)) addAppTile(grid, app, width);
+        }
+        // Staggered entrance: tiles slide in one by one (DailyLedger feel).
+        if (prefs.getBoolean("app_entrance", true)) {
+            for (int i = 0; i < grid.getChildCount(); i++) {
+                View tile = grid.getChildAt(i);
+                tile.setTranslationX(-dp(60));
+                tile.setAlpha(0f);
+                tile.animate().translationX(0).alpha(1f)
+                        .setDuration(400).setStartDelay(i * 70)
+                        .setInterpolator(new android.view.animation.DecelerateInterpolator())
+                        .start();
+            }
         }
         if (grid.getChildCount() == 0) {
             appHeading.setText("No visible apps");
@@ -1161,15 +1180,22 @@ public final class PersonalHomeActivity extends Activity {
         }
     }
 
+    /** Applies the launcher-wide font to a TextView. */
+    private void applyAppFont(TextView view) {
+        String[] fonts = {"sans-serif", "serif", "monospace", "sans-serif-light"};
+        view.setTypeface(android.graphics.Typeface.create(
+                fonts[Math.max(0, Math.min(3, prefs.getInt("app_font", 0)))], android.graphics.Typeface.NORMAL));
+    }
+
     /** Submenu helper with per-row icons. */
     private void subMenu(String title, String[] labels, String[] hints, int[] icons, Runnable[] choices) {
         GlassSettings.options(this, title, labels, hints, icons, which -> choices[which].run());
     }
 
     private void tileSettings() {
-        String[] labels = {"App columns", "Tile size", "Tile spacing", "Tile corners", "Logo size", "Focused app title size", "App colour glow", "Focus border"};
-        String[] hints = {"Number of cards per row", "Compact or large cards", "Gap between cards", "Sharp, rounded or round", "App logo size in cards", "Name above the app grid", "Match the focused app", "Thin, normal or thick"};
-        int[] icons = {R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_settings, R.drawable.ic_brightness, R.drawable.ic_apps};
+        String[] labels = {"App columns", "Tile size", "Tile spacing", "Tile corners", "Logo size", "Focused app title size", "App colour glow", "Focus border", "App entrance"};
+        String[] hints = {"Number of cards per row", "Compact or large cards", "Gap between cards", "Sharp, rounded or round", "App logo size in cards", "Name above the app grid", "Match the focused app", "Thin, normal or thick", "Staggered slide-in"};
+        int[] icons = {R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_settings, R.drawable.ic_brightness, R.drawable.ic_apps, R.drawable.ic_apps};
         Runnable[] choices = {
             () -> chooseSetting("App columns", new String[]{"Automatic", "2", "3", "4", "5", "6"}, which -> {
                 prefs.edit().putInt(tv ? "tv_columns" : "phone_columns", which == 0 ? 0 : which + 1).apply(); refreshApps();
@@ -1198,14 +1224,17 @@ public final class PersonalHomeActivity extends Activity {
             () -> chooseSetting("Focus border", new String[]{"Thin", "Normal", "Thick"}, which -> {
                 prefs.edit().putInt("focus_border", which).apply(); refreshApps();
             }),
+            () -> chooseSetting("App entrance", new String[]{"Off", "On"}, which -> {
+                prefs.edit().putBoolean("app_entrance", which == 1).apply(); refreshApps();
+            }),
         };
         subMenu("Tiles", labels, hints, icons, choices);
     }
 
     private void clockSettings() {
-        String[] labels = {"Clock size", "Clock style", "Clock font", "Time format", "Clock seconds", "Clock glow"};
-        String[] hints = {"Small, normal or large", "Digital or analog", "Light, serif or mono", "12-hour or 24-hour", "Show seconds", "Halo behind the clock"};
-        int[] icons = {R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock};
+        String[] labels = {"Clock size", "Clock style", "Clock font", "Time format", "Clock alignment", "Clock seconds", "Clock glow", "Hide clock", "Hide greeting"};
+        String[] hints = {"Small, normal or large", "Digital or analog", "Light, serif or mono", "12-hour or 24-hour", "Left, center or right", "Show seconds", "Halo behind the clock", "Hide the clock", "Hide the greeting"};
+        int[] icons = {R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock};
         Runnable[] choices = {
             () -> chooseSetting("Clock size", new String[]{"Small", "Normal", "Large"}, which -> {
                 prefs.edit().putInt("clock_size", (tv ? new int[]{54,66,80} : new int[]{44,56,66})[which]).apply(); buildHome();
@@ -1228,6 +1257,15 @@ public final class PersonalHomeActivity extends Activity {
             () -> chooseSetting("Clock glow", new String[]{"Off", "On"}, which -> {
                 prefs.edit().putBoolean("clock_glow", which == 1).apply();
                 sky.invalidate();
+            }),
+            () -> chooseSetting("Clock alignment", new String[]{"Left", "Center", "Right"}, which -> {
+                prefs.edit().putInt("clock_align", which).apply(); buildHome();
+            }),
+            () -> chooseSetting("Hide clock", new String[]{"Show", "Hide"}, which -> {
+                prefs.edit().putBoolean("hide_clock", which == 1).apply(); buildHome();
+            }),
+            () -> chooseSetting("Hide greeting", new String[]{"Show", "Hide"}, which -> {
+                prefs.edit().putBoolean("hide_greeting", which == 1).apply(); buildHome();
             }),
         };
         subMenu("Clock", labels, hints, icons, choices);
@@ -1321,9 +1359,9 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void systemMenu() {
-        String[] labels = {"Screensaver & weather", "Profile name & photo", "Avatar shape", "Header background", "Choose default Home", "Reset layout & unhide apps"};
-        String[] hints = {"Slideshow, weather & idle timer", "Name and local profile picture", "Circle or rounded square", "Subtle panel behind header", "Set this launcher as Home", "Restore the default layout"};
-        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_person, R.drawable.ic_settings, R.drawable.ic_home_settings, R.drawable.ic_settings};
+        String[] labels = {"Screensaver & weather", "Profile name & photo", "Avatar shape", "Header background", "Launcher font", "Choose default Home", "Reset layout & unhide apps"};
+        String[] hints = {"Slideshow, weather & idle timer", "Name and local profile picture", "Circle or rounded square", "Subtle panel behind header", "Font for the launcher", "Set this launcher as Home", "Restore the default layout"};
+        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_person, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_home_settings, R.drawable.ic_settings};
         Runnable[] choices = {
             this::screensaverSettings,
             this::editProfile,
@@ -1334,6 +1372,9 @@ public final class PersonalHomeActivity extends Activity {
             () -> chooseSetting("Header background", new String[]{"Off", "On"}, which -> {
                 prefs.edit().putBoolean("header_bg", which == 1).apply();
                 applyHeaderBackground();
+            }),
+            () -> chooseSetting("Launcher font", new String[]{"Default", "Serif", "Mono", "Light"}, which -> {
+                prefs.edit().putInt("app_font", which).apply(); buildHome();
             }),
             () -> launch(new Intent(this, HomeSettingsActivity.class)),
             () -> new AlertDialog.Builder(this).setTitle("Reset layout and show all apps?").setPositiveButton("Reset", (dialog, which) -> {
@@ -1408,12 +1449,13 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void screensaverSettings() {
-        chooseSetting("Online landscape screensaver", new String[]{"Preview", "Weather city", "Temperature unit", "Photo change interval", "Start after idle", "Set automatic screensaver"}, which -> {
+        chooseSetting("Online landscape screensaver", new String[]{"Preview", "Weather city", "Temperature unit", "Photo change interval", "Clock position", "Start after idle", "Set automatic screensaver"}, which -> {
             if (which == 0) launch(new Intent(this, LandscapeActivity.class));
             else if (which == 1) WeatherSettings.show(this);
             else if (which == 2) chooseSetting("Temperature unit", new String[]{"Celsius", "Fahrenheit"}, value -> prefs.edit().putBoolean("weather_fahrenheit", value == 1).apply());
             else if (which == 3) chooseSetting("Photo change interval", new String[]{"30 seconds", "1 minute", "2 minutes", "5 minutes"}, value -> prefs.edit().putInt("photo_seconds", new int[]{30,60,120,300}[value]).apply());
-            else if (which == 4) chooseSetting("Start screensaver after idle", new String[]{"Off", "2 minutes", "5 minutes", "10 minutes", "15 minutes"}, value -> {
+            else if (which == 4) chooseSetting("Clock position", new String[]{"Top", "Center", "Bottom"}, value -> prefs.edit().putInt("ss_clock_pos", value).apply());
+            else if (which == 5) chooseSetting("Start screensaver after idle", new String[]{"Off", "2 minutes", "5 minutes", "10 minutes", "15 minutes"}, value -> {
                 prefs.edit().putInt("idle_screensaver_minutes", new int[]{0,2,5,10,15}[value]).apply(); armIdleScreensaver();
             });
             else launch(new Intent(this, ScreensaverSetupActivity.class));
