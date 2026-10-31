@@ -1314,9 +1314,9 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void wallpaperMenu() {
-        String[] labels = {"Wallpaper", "Wallpaper source", "Save as favorite", "Day / night wallpaper", "Wallpaper slideshow", "Wallpaper darkness", "Moon", "Night aurora", "Night stars", "Bottom shade", "Sunset tint", "Moonlight", "Smooth day/night", "Header blur"};
-        String[] hints = {"Mountains or your own picture", "Built-in, online or favorite", "Save current wallpaper", "Different wallpaper day and night", "Change wallpaper over time", "Keep the landscape visible", "Moon by night", "Aurora lights at night", "Stars with the moon", "Dark gradient behind tiles", "Warm tint at dusk/dawn", "Moon glow on wallpaper", "Animate day/night change", "Frosted header background"};
-        int[] icons = {R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness};
+        String[] labels = {"Wallpaper", "Wallpaper source", "Save as favorite", "Day / night wallpaper", "Wallpaper slideshow", "Wallpaper darkness", "Night aurora", "Night stars", "Bottom shade", "Sunset tint", "Moonlight", "Smooth day/night", "Header blur"};
+        String[] hints = {"Mountains or your own picture", "Built-in, online or favorite", "Save current wallpaper", "Different wallpaper day and night", "Change wallpaper over time", "Keep the landscape visible", "Aurora lights at night", "Stars at night", "Dark gradient behind tiles", "Warm tint at dusk/dawn", "Moon glow on wallpaper", "Animate day/night change", "Frosted header background"};
+        int[] icons = {R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness};
         Runnable[] choices = {
             this::wallpaperSettings,
             () -> chooseSetting("Wallpaper source", new String[]{"Built-in", "Online", "Favorite"}, which -> {
@@ -1336,9 +1336,6 @@ public final class PersonalHomeActivity extends Activity {
             }),
             () -> chooseSetting("Wallpaper darkness", new String[]{"Light", "Medium", "Dark"}, which -> {
                 prefs.edit().putInt("background_dim", which * 20).apply(); sky.invalidate();
-            }),
-            () -> chooseSetting("Moon", new String[]{"Off", "On"}, which -> {
-                prefs.edit().putBoolean("sun_moon", which == 1).apply(); sky.invalidate();
             }),
             () -> chooseSetting("Night aurora", new String[]{"Off", "On"}, which -> {
                 prefs.edit().putBoolean("night_aurora", which == 1).apply(); sky.invalidate();
@@ -1838,58 +1835,42 @@ public final class PersonalHomeActivity extends Activity {
                 }
                 int shade = HomeAppearance.shade(theme, minute, prefs.getInt("background_dim", 0));
                 canvas.drawColor((shade << 24) | 0x00051327);
-                // Moon by night — drawn over any wallpaper like the demo.
-                if (prefs.getBoolean("sun_moon", true) && day <= 0.5f) {
-                    float sunX = getWidth() * 0.5f;
-                    float sunY = y; // Directly behind the clock, like the demo.
-                    float r = dp(50);
-                    {
-                        // Moon: pale disc with soft glow.
-                        paint.setShader(new RadialGradient(sunX, sunY, r * 2f,
-                                0x6090b8d8, Color.TRANSPARENT, Shader.TileMode.CLAMP));
-                        canvas.drawCircle(sunX, sunY, r * 2f, paint);
-                        paint.setShader(null);
-                        paint.setColor(0xffe8f0f8);
-                        canvas.drawCircle(sunX, sunY, r * 0.8f, paint);
-                        // Moon crater shading.
-                        paint.setColor(0xffc8d8e8);
-                        canvas.drawCircle(sunX - r * 0.25f, sunY - r * 0.15f, r * 0.18f, paint);
-                        canvas.drawCircle(sunX + r * 0.2f, sunY + r * 0.25f, r * 0.12f, paint);
-                        // Stars: scattered white dots in the upper sky.
-                        if (prefs.getBoolean("night_stars", true)) {
-                            paint.setColor(0xd0ffffff);
-                            int w = getWidth(), h = getHeight();
-                            // Deterministic pseudo-random positions.
-                            for (int i = 0; i < 60; i++) {
-                                int px = (i * 7919) % w;
-                                int py = (i * 4799) % (int) (h * 0.45f);
-                                float sr = dp(1 + (i % 3) * 0.6f);
-                                canvas.drawCircle(px, py, sr, paint);
-                            }
+                // Night sky: stars and aurora (moon removed per user).
+                if (day <= 0.5f) {
+                    // Stars: scattered white dots in the upper sky.
+                    if (prefs.getBoolean("night_stars", true)) {
+                        paint.setColor(0xd0ffffff);
+                        int w = getWidth(), h = getHeight();
+                        // Deterministic pseudo-random positions.
+                        for (int i = 0; i < 60; i++) {
+                            int px = (i * 7919) % w;
+                            int py = (i * 4799) % (int) (h * 0.45f);
+                            float sr = dp(1 + (i % 3) * 0.6f);
+                            canvas.drawCircle(px, py, sr, paint);
                         }
-                        // Aurora: soft green/blue wavy bands.
-                        if (prefs.getBoolean("night_aurora", true)) {
-                            paint.setStyle(Paint.Style.STROKE);
-                            paint.setStrokeWidth(dp(28));
-                            paint.setStrokeCap(Paint.Cap.ROUND);
-                            int[] auroraColors = {0x4032ff9a, 0x3032c8ff, 0x4028ffb8};
-                            for (int b = 0; b < 3; b++) {
-                                paint.setColor(auroraColors[b]);
-                                android.graphics.Path path = new android.graphics.Path();
-                                float baseY = getHeight() * (0.12f + b * 0.07f);
-                                path.moveTo(-dp(50), baseY);
-                                for (float x = -dp(50); x <= getWidth() + dp(50); x += dp(40)) {
-                                    float waveY = baseY + (float) Math.sin((x + b * 300) / dp(180)) * dp(35);
-                                    path.lineTo(x, waveY);
-                                }
-                                // Fade the aurora with a vertical gradient.
-                                paint.setShader(new LinearGradient(0, baseY - dp(60), 0, baseY + dp(60),
-                                        auroraColors[b], Color.TRANSPARENT, Shader.TileMode.CLAMP));
-                                canvas.drawPath(path, paint);
-                                paint.setShader(null);
+                    }
+                    // Aurora: soft green/blue wavy bands.
+                    if (prefs.getBoolean("night_aurora", true)) {
+                        paint.setStyle(Paint.Style.STROKE);
+                        paint.setStrokeWidth(dp(28));
+                        paint.setStrokeCap(Paint.Cap.ROUND);
+                        int[] auroraColors = {0x4032ff9a, 0x3032c8ff, 0x4028ffb8};
+                        for (int b = 0; b < 3; b++) {
+                            paint.setColor(auroraColors[b]);
+                            android.graphics.Path path = new android.graphics.Path();
+                            float baseY = getHeight() * (0.12f + b * 0.07f);
+                            path.moveTo(-dp(50), baseY);
+                            for (float x = -dp(50); x <= getWidth() + dp(50); x += dp(40)) {
+                                float waveY = baseY + (float) Math.sin((x + b * 300) / dp(180)) * dp(35);
+                                path.lineTo(x, waveY);
                             }
-                            paint.setStyle(Paint.Style.FILL);
+                            // Fade the aurora with a vertical gradient.
+                            paint.setShader(new LinearGradient(0, baseY - dp(60), 0, baseY + dp(60),
+                                    auroraColors[b], Color.TRANSPARENT, Shader.TileMode.CLAMP));
+                            canvas.drawPath(path, paint);
+                            paint.setShader(null);
                         }
+                        paint.setStyle(Paint.Style.FILL);
                     }
                 }
                 if (mountains && getHeight() > getWidth()) {
