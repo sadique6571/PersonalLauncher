@@ -1314,9 +1314,9 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void wallpaperMenu() {
-        String[] labels = {"Wallpaper", "Wallpaper source", "Save as favorite", "Day / night wallpaper", "Wallpaper slideshow", "Wallpaper darkness", "Night aurora", "Night stars", "Bottom shade", "Sunset tint", "Moonlight", "Smooth day/night", "Header blur"};
-        String[] hints = {"Mountains or your own picture", "Built-in, online or favorite", "Save current wallpaper", "Different wallpaper day and night", "Change wallpaper over time", "Keep the landscape visible", "Aurora lights at night", "Stars at night", "Dark gradient behind tiles", "Warm tint at dusk/dawn", "Moon glow on wallpaper", "Animate day/night change", "Frosted header background"};
-        int[] icons = {R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness};
+        String[] labels = {"Wallpaper", "Wallpaper source", "Save as favorite", "Day / night wallpaper", "Wallpaper slideshow", "Wallpaper darkness", "Bottom shade", "Smooth day/night", "Header blur"};
+        String[] hints = {"Mountains or your own picture", "Built-in, online or favorite", "Save current wallpaper", "Different wallpaper day and night", "Change wallpaper over time", "Keep the landscape visible", "Dark gradient behind tiles", "Animate day/night change", "Frosted header background"};
+        int[] icons = {R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness};
         Runnable[] choices = {
             this::wallpaperSettings,
             () -> chooseSetting("Wallpaper source", new String[]{"Built-in", "Online", "Favorite"}, which -> {
@@ -1337,21 +1337,13 @@ public final class PersonalHomeActivity extends Activity {
             () -> chooseSetting("Wallpaper darkness", new String[]{"Light", "Medium", "Dark"}, which -> {
                 prefs.edit().putInt("background_dim", which * 20).apply(); sky.invalidate();
             }),
-            () -> chooseSetting("Night aurora", new String[]{"Off", "On"}, which -> {
-                prefs.edit().putBoolean("night_aurora", which == 1).apply(); sky.invalidate();
-            }),
-            () -> chooseSetting("Night stars", new String[]{"Off", "On"}, which -> {
-                prefs.edit().putBoolean("night_stars", which == 1).apply(); sky.invalidate();
-            }),
+            
+            
             () -> chooseSetting("Bottom shade", new String[]{"Off", "On"}, which -> {
                 prefs.edit().putBoolean("bottom_shade", which == 1).apply(); sky.invalidate();
             }),
-            () -> chooseSetting("Sunset tint", new String[]{"Off", "On"}, which -> {
-                prefs.edit().putBoolean("sunset_tint", which == 1).apply(); sky.invalidate();
-            }),
-            () -> chooseSetting("Moonlight", new String[]{"Off", "On"}, which -> {
-                prefs.edit().putBoolean("moonlight", which == 1).apply(); sky.invalidate();
-            }),
+            
+            
             () -> chooseSetting("Smooth day/night", new String[]{"Off", "On"}, which -> {
                 prefs.edit().putBoolean("daynight_smooth", which == 1).apply(); sky.invalidate();
             }),
@@ -1835,44 +1827,7 @@ public final class PersonalHomeActivity extends Activity {
                 }
                 int shade = HomeAppearance.shade(theme, minute, prefs.getInt("background_dim", 0));
                 canvas.drawColor((shade << 24) | 0x00051327);
-                // Night sky: stars and aurora (moon removed per user).
-                if (day <= 0.5f) {
-                    // Stars: scattered white dots in the upper sky.
-                    if (prefs.getBoolean("night_stars", true)) {
-                        paint.setColor(0xd0ffffff);
-                        int w = getWidth(), h = getHeight();
-                        // Deterministic pseudo-random positions.
-                        for (int i = 0; i < 60; i++) {
-                            int px = (i * 7919) % w;
-                            int py = (i * 4799) % (int) (h * 0.45f);
-                            float sr = dp(1 + (i % 3) * 0.6f);
-                            canvas.drawCircle(px, py, sr, paint);
-                        }
-                    }
-                    // Aurora: soft green/blue wavy bands.
-                    if (prefs.getBoolean("night_aurora", true)) {
-                        paint.setStyle(Paint.Style.STROKE);
-                        paint.setStrokeWidth(dp(28));
-                        paint.setStrokeCap(Paint.Cap.ROUND);
-                        int[] auroraColors = {0x4032ff9a, 0x3032c8ff, 0x4028ffb8};
-                        for (int b = 0; b < 3; b++) {
-                            paint.setColor(auroraColors[b]);
-                            android.graphics.Path path = new android.graphics.Path();
-                            float baseY = getHeight() * (0.12f + b * 0.07f);
-                            path.moveTo(-dp(50), baseY);
-                            for (float x = -dp(50); x <= getWidth() + dp(50); x += dp(40)) {
-                                float waveY = baseY + (float) Math.sin((x + b * 300) / dp(180)) * dp(35);
-                                path.lineTo(x, waveY);
-                            }
-                            // Fade the aurora with a vertical gradient.
-                            paint.setShader(new LinearGradient(0, baseY - dp(60), 0, baseY + dp(60),
-                                    auroraColors[b], Color.TRANSPARENT, Shader.TileMode.CLAMP));
-                            canvas.drawPath(path, paint);
-                            paint.setShader(null);
-                        }
-                        paint.setStyle(Paint.Style.FILL);
-                    }
-                }
+
                 if (mountains && getHeight() > getWidth()) {
                     // Blend the portrait hero into midnight below the lake, keeping the ridge visible.
                     int base = blend(0xff07172b, 0xff092b4a, day);
@@ -1888,20 +1843,8 @@ public final class PersonalHomeActivity extends Activity {
                     canvas.drawRect(0, getHeight() * 0.55f, getWidth(), getHeight(), paint);
                     paint.setShader(null);
                 }
-                // Sunset tint: warm orange wash near sunrise/sunset.
-                if (prefs.getBoolean("sunset_tint", true) && day > 0.15f && day < 0.85f) {
-                    float warmth = 1f - Math.abs(day - 0.5f) * 2f; // Peak at dawn/dusk.
-                    paint.setColor(((int) (warmth * 60) << 24) | 0x00ff8844);
-                    canvas.drawRect(0, 0, getWidth(), getHeight(), paint);
-                }
-                // Moonlight: soft blue glow from the moon across the wallpaper.
-                if (prefs.getBoolean("moonlight", true) && day <= 0.5f) {
-                    float nightStrength = 1f - day * 2f;
-                    paint.setShader(new RadialGradient(getWidth() * 0.5f, y, getHeight() * 0.7f,
-                            ((int) (nightStrength * 40) << 24) | 0x004488cc, Color.TRANSPARENT, Shader.TileMode.CLAMP));
-                    canvas.drawRect(0, 0, getWidth(), getHeight(), paint);
-                    paint.setShader(null);
-                }
+
+
             }
             if (focusAccent != 0 && focusRadius > 0) {
                 int glow = (focusAccent & 0x00ffffff) | 0x80000000;
