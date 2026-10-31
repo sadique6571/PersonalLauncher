@@ -518,9 +518,37 @@ public final class PersonalHomeActivity extends Activity {
         youtubeRow.setVisibility(prefs.getBoolean("row_youtube", false) ? android.view.View.VISIBLE : android.view.View.GONE);
     }
 
-    /** Small weather pill in the header, refreshed on resume and every 15 minutes. */
+    /** Weather cache validity: 15 minutes. */
+    private static final long WEATHER_CACHE_MS = 15 * 60_000L;
+
+    /**
+     * Small weather pill in the header. Shows cached weather immediately;
+     * refreshes only when stale, or on city/unit change.
+     */
     private void refreshHomeWeather() {
         if (homeWeather == null) return;
+        // Show cached value immediately.
+        String cached = prefs.getString("weather_cached", null);
+        long cachedAt = prefs.getLong("weather_cached_at", 0);
+        String cacheKey = weatherCacheKey();
+        boolean cacheValid = cached != null
+                && System.currentTimeMillis() - cachedAt < WEATHER_CACHE_MS
+                && cacheKey.equals(prefs.getString("weather_cache_key", ""));
+        if (cacheValid) {
+            homeWeather.setText(cached);
+            homeWeather.setVisibility(View.VISIBLE);
+            // Schedule next refresh for when the cache expires.
+            handler.removeCallbacks(weatherRefresh);
+            long delay = WEATHER_CACHE_MS - (System.currentTimeMillis() - cachedAt);
+            handler.postDelayed(weatherRefresh, Math.max(delay, 60_000L));
+            return;
+        }
+        // Show stale cache while fetching (with reduced opacity to indicate staleness).
+        if (cached != null) {
+            homeWeather.setText(cached);
+            homeWeather.setAlpha(0.6f);
+            homeWeather.setVisibility(View.VISIBLE);
+        }
         worker.execute(() -> {
             String value;
             try {
@@ -535,15 +563,31 @@ public final class PersonalHomeActivity extends Activity {
             handler.post(() -> {
                 if (isDestroyed() || homeWeather == null) return;
                 if (text != null) {
+                    // Cache the fresh value.
+                    prefs.edit()
+                            .putString("weather_cached", text)
+                            .putLong("weather_cached_at", System.currentTimeMillis())
+                            .putString("weather_cache_key", weatherCacheKey())
+                            .apply();
                     homeWeather.setText(text);
+                    homeWeather.setAlpha(1f);
                     homeWeather.setVisibility(View.VISIBLE);
-                } else {
+                } else if (cached == null) {
+                    // No cache and fetch failed: hide.
                     homeWeather.setVisibility(View.GONE);
                 }
+                // If fetch failed but we have stale cache, keep showing it (dimmed).
                 handler.removeCallbacks(weatherRefresh);
-                handler.postDelayed(weatherRefresh, 15 * 60_000L);
+                handler.postDelayed(weatherRefresh, WEATHER_CACHE_MS);
             });
         });
+    }
+
+    /** Cache key: changes when city or units change, invalidating the cache. */
+    private String weatherCacheKey() {
+        return prefs.getString("weather_lat", "") + ","
+                + prefs.getString("weather_lon", "") + ","
+                + prefs.getBoolean("weather_fahrenheit", false);
     }
 
     private final Runnable weatherRefresh = this::refreshHomeWeather;
