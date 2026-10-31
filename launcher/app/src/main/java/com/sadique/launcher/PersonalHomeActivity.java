@@ -63,7 +63,7 @@ public final class PersonalHomeActivity extends Activity {
     private SharedPreferences prefs;
     private LinearLayout page, header, actions;
     private GridLayout grid;
-    private TextView userName, time, date, networkStatus, appHeading, greeting, homeWeather, appCount;
+    private TextView userName, time, date, networkStatus, appHeading, greeting, homeWeather;
     private ImageView avatar;
     private Bitmap avatarBitmap;
     private Bitmap customWallpaper;
@@ -277,6 +277,7 @@ public final class PersonalHomeActivity extends Activity {
         root.requestApplyInsets();
         header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
+        applyHeaderBackground();
         avatar = new ImageView(this);
         avatar.setContentDescription("Edit profile photo");
         avatar.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -295,8 +296,6 @@ public final class PersonalHomeActivity extends Activity {
         identity.addView(userName);
         greeting = text(greetingText(), 13, MUTED);
         identity.addView(greeting);
-        appCount = text("", 12, MUTED);
-        identity.addView(appCount);
         header.addView(identity, new LinearLayout.LayoutParams(0, -2, 1));
         networkStatus = text("", 13, MUTED);
         networkStatus.setGravity(Gravity.CENTER_VERTICAL | Gravity.CENTER);
@@ -421,10 +420,20 @@ public final class PersonalHomeActivity extends Activity {
     private void updateClock() {
         Calendar now = Calendar.getInstance();
         boolean seconds = prefs.getBoolean("clock_seconds", false);
-        String value = PersonalHomeModel.time(now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE));
-        if (seconds) {
-            value = String.format(Locale.getDefault(), "%02d:%02d:%02d",
-                    now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE), now.get(Calendar.SECOND));
+        boolean is24 = prefs.getBoolean("time_24h", false);
+        String value;
+        if (is24) {
+            value = String.format(Locale.getDefault(), "%02d:%02d",
+                    now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE));
+            if (seconds) value += String.format(Locale.getDefault(), ":%02d", now.get(Calendar.SECOND));
+        } else {
+            value = PersonalHomeModel.time(now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE));
+            if (seconds) {
+                value = String.format(Locale.getDefault(), "%02d:%02d:%02d %s",
+                        now.get(Calendar.HOUR) == 0 ? 12 : now.get(Calendar.HOUR),
+                        now.get(Calendar.MINUTE), now.get(Calendar.SECOND),
+                        now.get(Calendar.AM_PM) == Calendar.AM ? "AM" : "PM");
+            }
         }
         android.text.SpannableString clockText = new android.text.SpannableString(value);
         clockText.setSpan(new android.text.style.RelativeSizeSpan(.42f), value.length() - 2,
@@ -574,6 +583,22 @@ public final class PersonalHomeActivity extends Activity {
                 }
             }
             Collections.sort(apps, (a, b) -> a.name.compareToIgnoreCase(b.name));
+            // Track new apps for the NEW badge.
+            Set<String> known = new HashSet<>(prefs.getStringSet("known_apps", Collections.emptySet()));
+            Set<String> current = new HashSet<>();
+            for (App app : apps) current.add(app.info.activityInfo.packageName);
+            Set<String> fresh = new HashSet<>(current);
+            fresh.removeAll(known);
+            if (!fresh.isEmpty()) {
+                Set<String> updated = new HashSet<>(known);
+                updated.addAll(current);
+                prefs.edit().putStringSet("known_apps", updated).apply();
+            }
+            Set<String> newApps = new HashSet<>(prefs.getStringSet("new_apps", Collections.emptySet()));
+            newApps.addAll(fresh);
+            // Remove uninstalled.
+            newApps.retainAll(current);
+            prefs.edit().putStringSet("new_apps", newApps).apply();
             handler.post(() -> {
                 if (!isDestroyed() && generation == appGeneration && !sameApps(cachedApps, apps)) renderApps(apps);
             });
@@ -670,7 +695,6 @@ public final class PersonalHomeActivity extends Activity {
     private void renderApps(List<App> apps) {
         cachedApps = apps;
         appHeading.setText("Your apps");
-        if (appCount != null) appCount.setText(apps.size() + " apps");
         grid.removeAllViews();
         tileViews.clear();
         int columns = PersonalHomeModel.columns((int) (pageWidth / getResources().getDisplayMetrics().density),
@@ -825,6 +849,17 @@ public final class PersonalHomeActivity extends Activity {
         icon.setScaleType(ImageView.ScaleType.FIT_XY);
         icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         tile.addView(icon, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        // NEW badge for freshly installed apps.
+        String pkg = app.info.activityInfo.packageName;
+        Set<String> newApps = prefs.getStringSet("new_apps", Collections.emptySet());
+        if (newApps.contains(pkg)) {
+            TextView badge = text("NEW", 10, 0xffffffff);
+            badge.setBackgroundColor(0xffe53935);
+            badge.setPadding(dp(6), dp(2), dp(6), dp(2));
+            android.widget.FrameLayout.LayoutParams badgeParams = new android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
+            badgeParams.setMargins(0, dp(6), dp(6), 0);
+            tile.addView(badge, badgeParams);
+        }
         tile.setOnFocusChangeListener((v, focus) -> {
             tile.setBackground(surface(focus));
             if (!moving) tile.setForeground(tileBorder(app.accent, focus));
@@ -858,9 +893,14 @@ public final class PersonalHomeActivity extends Activity {
             sky.invalidate();
         });
         tile.setOnClickListener(v -> {
-            Runnable open = () -> launch(new Intent(Intent.ACTION_MAIN)
-                    .setClassName(app.info.activityInfo.packageName, app.info.activityInfo.name)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED));
+            Runnable open = () -> {
+                // Clear the NEW badge once launched.
+                Set<String> updated = new HashSet<>(prefs.getStringSet("new_apps", Collections.emptySet()));
+                if (updated.remove(pkg)) prefs.edit().putStringSet("new_apps", updated).apply();
+                launch(new Intent(Intent.ACTION_MAIN)
+                        .setClassName(app.info.activityInfo.packageName, app.info.activityInfo.name)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED));
+            };
             if (carriedApp != null) { open.run(); return; }
             v.animate().scaleX(1.08f).scaleY(1.08f).alpha(.7f).setDuration(120).withEndAction(() -> {
                 v.setScaleX(1.05f); v.setScaleY(1.05f); v.setAlpha(1f);
@@ -1106,6 +1146,21 @@ public final class PersonalHomeActivity extends Activity {
         });
     }
 
+    /** Subtle background behind the header (toggle in settings). */
+    private void applyHeaderBackground() {
+        if (header == null) return;
+        if (prefs.getBoolean("header_bg", false)) {
+            GradientDrawable bg = new GradientDrawable();
+            bg.setColor(0x40000000);
+            bg.setCornerRadius(dp(18));
+            header.setBackground(bg);
+            header.setPadding(dp(12), dp(8), dp(12), dp(8));
+        } else {
+            header.setBackground(null);
+            header.setPadding(0, 0, 0, 0);
+        }
+    }
+
     /** Submenu helper with per-row icons. */
     private void subMenu(String title, String[] labels, String[] hints, int[] icons, Runnable[] choices) {
         GlassSettings.options(this, title, labels, hints, icons, which -> choices[which].run());
@@ -1148,9 +1203,9 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void clockSettings() {
-        String[] labels = {"Clock size", "Clock style", "Clock font", "Clock seconds", "Clock glow"};
-        String[] hints = {"Small, normal or large", "Digital or analog", "Light, serif or mono", "Show seconds", "Halo behind the clock"};
-        int[] icons = {R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock};
+        String[] labels = {"Clock size", "Clock style", "Clock font", "Time format", "Clock seconds", "Clock glow"};
+        String[] hints = {"Small, normal or large", "Digital or analog", "Light, serif or mono", "12-hour or 24-hour", "Show seconds", "Halo behind the clock"};
+        int[] icons = {R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock};
         Runnable[] choices = {
             () -> chooseSetting("Clock size", new String[]{"Small", "Normal", "Large"}, which -> {
                 prefs.edit().putInt("clock_size", (tv ? new int[]{54,66,80} : new int[]{44,56,66})[which]).apply(); buildHome();
@@ -1160,6 +1215,9 @@ public final class PersonalHomeActivity extends Activity {
             }),
             () -> chooseSetting("Clock font", new String[]{"Light", "Serif", "Mono"}, which -> {
                 prefs.edit().putInt("clock_font", which).apply(); buildHome();
+            }),
+            () -> chooseSetting("Time format", new String[]{"12-hour", "24-hour"}, which -> {
+                prefs.edit().putBoolean("time_24h", which == 1).apply(); updateClock();
             }),
             () -> chooseSetting("Clock seconds", new String[]{"Off", "On"}, which -> {
                 prefs.edit().putBoolean("clock_seconds", which == 1).apply();
@@ -1198,17 +1256,18 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void wallpaperMenu() {
-        String[] labels = {"Wallpaper", "Wallpaper source", "Day / night wallpaper", "Wallpaper slideshow", "Wallpaper darkness"};
-        String[] hints = {"Mountains or your own picture", "Built-in or online", "Different wallpaper day and night", "Change wallpaper over time", "Keep the landscape visible"};
-        int[] icons = {R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_brightness};
+        String[] labels = {"Wallpaper", "Wallpaper source", "Save as favorite", "Day / night wallpaper", "Wallpaper slideshow", "Wallpaper darkness"};
+        String[] hints = {"Mountains or your own picture", "Built-in, online or favorite", "Save current wallpaper", "Different wallpaper day and night", "Change wallpaper over time", "Keep the landscape visible"};
+        int[] icons = {R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_brightness};
         Runnable[] choices = {
             this::wallpaperSettings,
-            () -> chooseSetting("Wallpaper source", new String[]{"Built-in", "Online"}, which -> {
+            () -> chooseSetting("Wallpaper source", new String[]{"Built-in", "Online", "Favorite"}, which -> {
                 prefs.edit().putInt("wallpaper_source", which).apply();
                 updateOnlineWallpaper();
                 armSlideshow();
                 sky.invalidate();
             }),
+            () -> { sky.saveFavorite(); sky.reloadFavorite(); },
             () -> chooseSetting("Day / night wallpaper", new String[]{"Off", "On"}, which -> {
                 prefs.edit().putBoolean("wallpaper_daynight", which == 1).apply();
                 updateOnlineWallpaper();
@@ -1225,9 +1284,9 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void appMenu() {
-        String[] labels = {"Hide / unhide apps", "Rearrange apps", "Continue watching", "Netflix row", "YouTube row", "Banner order", "Banner poster size", "Banner auto-scroll"};
-        String[] hints = {"Choose which apps appear", "Choose the order of app cards", "Resume titles after your apps", "Netflix banners below the clock", "YouTube banners below the clock", "Netflix or YouTube first", "Small, normal or large posters", "Rows scroll by themselves"};
-        int[] icons = {R.drawable.ic_apps, R.drawable.ic_swap_vert, R.drawable.ic_livetv, R.drawable.ic_livetv, R.drawable.ic_livetv, R.drawable.ic_swap_vert, R.drawable.ic_picture, R.drawable.ic_livetv};
+        String[] labels = {"Hide / unhide apps", "Rearrange apps", "Continue watching", "Netflix row", "YouTube row", "Banner order", "Banner poster size", "Banner auto-scroll", "Row spacing"};
+        String[] hints = {"Choose which apps appear", "Choose the order of app cards", "Resume titles after your apps", "Netflix banners below the clock", "YouTube banners below the clock", "Netflix or YouTube first", "Small, normal or large posters", "Rows scroll by themselves", "Gap between banner rows"};
+        int[] icons = {R.drawable.ic_apps, R.drawable.ic_swap_vert, R.drawable.ic_livetv, R.drawable.ic_livetv, R.drawable.ic_livetv, R.drawable.ic_swap_vert, R.drawable.ic_picture, R.drawable.ic_livetv, R.drawable.ic_livetv};
         Runnable[] choices = {
             this::hiddenApps,
             this::rearrangeApps,
@@ -1254,20 +1313,27 @@ public final class PersonalHomeActivity extends Activity {
                 prefs.edit().putBoolean("banner_autoscroll", which == 1).apply();
                 updateContentRows();
             }),
+            () -> chooseSetting("Row spacing", new String[]{"Compact", "Normal", "Wide"}, which -> {
+                prefs.edit().putInt("row_spacing", which).apply(); buildHome();
+            }),
         };
         subMenu("Apps", labels, hints, icons, choices);
     }
 
     private void systemMenu() {
-        String[] labels = {"Screensaver & weather", "Profile name & photo", "Avatar shape", "Choose default Home", "Reset layout & unhide apps"};
-        String[] hints = {"Slideshow, weather & idle timer", "Name and local profile picture", "Circle or rounded square", "Set this launcher as Home", "Restore the default layout"};
-        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_person, R.drawable.ic_home_settings, R.drawable.ic_settings};
+        String[] labels = {"Screensaver & weather", "Profile name & photo", "Avatar shape", "Header background", "Choose default Home", "Reset layout & unhide apps"};
+        String[] hints = {"Slideshow, weather & idle timer", "Name and local profile picture", "Circle or rounded square", "Subtle panel behind header", "Set this launcher as Home", "Restore the default layout"};
+        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_person, R.drawable.ic_settings, R.drawable.ic_home_settings, R.drawable.ic_settings};
         Runnable[] choices = {
             this::screensaverSettings,
             this::editProfile,
             () -> chooseSetting("Avatar shape", new String[]{"Circle", "Rounded square"}, which -> {
                 prefs.edit().putInt("avatar_shape", which).apply();
                 avatar.setBackground(avatarSurface(false));
+            }),
+            () -> chooseSetting("Header background", new String[]{"Off", "On"}, which -> {
+                prefs.edit().putBoolean("header_bg", which == 1).apply();
+                applyHeaderBackground();
             }),
             () -> launch(new Intent(this, HomeSettingsActivity.class)),
             () -> new AlertDialog.Builder(this).setTitle("Reset layout and show all apps?").setPositiveButton("Reset", (dialog, which) -> {
@@ -1560,12 +1626,48 @@ public final class PersonalHomeActivity extends Activity {
         private Bitmap onlineWallpaper, onlineNext;
         private float crossfade = 1f;
         private int onlineIndex = -1;
+        /** Favorite wallpaper (saved by user). */
+        private Bitmap favoriteWallpaper;
         SkyClock() {
             super(PersonalHomeActivity.this);
             setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
             worker.execute(() -> {
                 Bitmap bmp = BitmapFactory.decodeResource(getResources(), R.drawable.personal_wallpaper);
-                handler.post(() -> { backdrop = bmp; invalidate(); });
+                Bitmap fav = null;
+                try {
+                    java.io.File f = new java.io.File(getFilesDir(), "favorite_wallpaper.jpg");
+                    if (f.exists()) fav = BitmapFactory.decodeFile(f.getAbsolutePath());
+                } catch (Exception ignored) {}
+                Bitmap bg = bmp, fg = fav;
+                handler.post(() -> { backdrop = bg; favoriteWallpaper = fg; invalidate(); });
+            });
+        }
+
+        void reloadFavorite() {
+            worker.execute(() -> {
+                Bitmap fav = null;
+                try {
+                    java.io.File f = new java.io.File(getFilesDir(), "favorite_wallpaper.jpg");
+                    if (f.exists()) fav = BitmapFactory.decodeFile(f.getAbsolutePath());
+                } catch (Exception ignored) {}
+                Bitmap loaded = fav;
+                handler.post(() -> { favoriteWallpaper = loaded; invalidate(); });
+            });
+        }
+
+        /** Saves the current wallpaper as the favorite. */
+        void saveFavorite() {
+            worker.execute(() -> {
+                try {
+                    Bitmap current = onlineWallpaper != null ? onlineWallpaper : backdrop;
+                    if (current == null) return;
+                    java.io.File out = new java.io.File(getFilesDir(), "favorite_wallpaper.jpg");
+                    try (java.io.FileOutputStream fos = new java.io.FileOutputStream(out)) {
+                        current.compress(Bitmap.CompressFormat.JPEG, 90, fos);
+                    }
+                    handler.post(() -> android.widget.Toast.makeText(PersonalHomeActivity.this,
+                            "Saved as favorite", android.widget.Toast.LENGTH_SHORT).show());
+                } catch (Exception ignored) {}
             });
         }
 
@@ -1614,10 +1716,13 @@ public final class PersonalHomeActivity extends Activity {
             paint.setShader(new LinearGradient(0, 0, 0, getHeight(), top, bottom, Shader.TileMode.CLAMP));
             canvas.drawRect(0, 0, getWidth(), getHeight(), paint); paint.setShader(null);
             String mode = prefs.getString("wallpaper_mode", "mountains");
-            boolean onlineSource = prefs.getInt("wallpaper_source", 0) == 1;
+            int source = prefs.getInt("wallpaper_source", 0);
+            boolean onlineSource = source == 1;
             Bitmap picture = mode.equals("custom") && customWallpaper != null ? customWallpaper : backdrop;
             // Online wallpaper overrides when enabled and a photo is loaded.
             if (onlineSource && onlineWallpaper != null) picture = onlineWallpaper;
+            // Favorite wallpaper.
+            if (source == 2 && favoriteWallpaper != null) picture = favoriteWallpaper;
             float y = clockY >= 0 ? clockY : dp(150);
             if (!mode.equals("solid") && picture != null) {
                 boolean mountains = picture == backdrop;

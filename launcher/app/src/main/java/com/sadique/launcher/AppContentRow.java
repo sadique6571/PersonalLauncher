@@ -45,13 +45,25 @@ public final class AppContentRow extends LinearLayout {
         this.focusTitle = focusTitle;
         prefs = host.getSharedPreferences("personal_home", 0);
         setOrientation(VERTICAL);
-        setPadding(0, dp(18), 0, dp(8));
+        int rowGap = new int[]{8, 18, 28}[Math.max(0, Math.min(2, prefs.getInt("row_spacing", 1)))];
+        setPadding(0, dp(rowGap), 0, dp(8));
+        // Title row with app logo.
+        LinearLayout titleRow = new LinearLayout(host);
+        titleRow.setOrientation(HORIZONTAL);
+        titleRow.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView logo = new ImageView(host);
+        try {
+            String iconPkg = packages[0];
+            logo.setImageDrawable(host.getPackageManager().getApplicationIcon(iconPkg));
+        } catch (Exception ignored) {}
+        titleRow.addView(logo, new LayoutParams(dp(28), dp(28)));
         heading = new TextView(host);
         heading.setText(title);
         heading.setTextSize(20);
         heading.setTextColor(0xfff0f7ff);
-        heading.setPadding(dp(4), 0, 0, dp(10));
-        addView(heading);
+        heading.setPadding(dp(10), 0, 0, dp(10));
+        titleRow.addView(heading, new LayoutParams(-2, -2));
+        addView(titleRow);
         scroller = new HorizontalScrollView(host);
         scroller.setHorizontalScrollBarEnabled(false);
         scroller.setClipChildren(false);
