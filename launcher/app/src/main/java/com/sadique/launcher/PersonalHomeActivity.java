@@ -1294,9 +1294,9 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void wallpaperMenu() {
-        String[] labels = {"Wallpaper", "Wallpaper source", "Save as favorite", "Day / night wallpaper", "Wallpaper slideshow", "Wallpaper darkness"};
-        String[] hints = {"Mountains or your own picture", "Built-in, online or favorite", "Save current wallpaper", "Different wallpaper day and night", "Change wallpaper over time", "Keep the landscape visible"};
-        int[] icons = {R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_brightness};
+        String[] labels = {"Wallpaper", "Wallpaper source", "Save as favorite", "Day / night wallpaper", "Wallpaper slideshow", "Wallpaper darkness", "Sun & moon"};
+        String[] hints = {"Mountains or your own picture", "Built-in, online or favorite", "Save current wallpaper", "Different wallpaper day and night", "Change wallpaper over time", "Keep the landscape visible", "Sun by day, moon by night"};
+        int[] icons = {R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_brightness, R.drawable.ic_brightness};
         Runnable[] choices = {
             this::wallpaperSettings,
             () -> chooseSetting("Wallpaper source", new String[]{"Built-in", "Online", "Favorite"}, which -> {
@@ -1316,6 +1316,9 @@ public final class PersonalHomeActivity extends Activity {
             }),
             () -> chooseSetting("Wallpaper darkness", new String[]{"Light", "Medium", "Dark"}, which -> {
                 prefs.edit().putInt("background_dim", which * 20).apply(); sky.invalidate();
+            }),
+            () -> chooseSetting("Sun & moon", new String[]{"Off", "On"}, which -> {
+                prefs.edit().putBoolean("sun_moon", which == 1).apply(); sky.invalidate();
             }),
         };
         subMenu("Wallpaper", labels, hints, icons, choices);
@@ -1780,7 +1783,7 @@ public final class PersonalHomeActivity extends Activity {
                 int shade = HomeAppearance.shade(theme, minute, prefs.getInt("background_dim", 0));
                 canvas.drawColor((shade << 24) | 0x00051327);
                 // Sun by day, moon by night — drawn over any wallpaper like the demo.
-                {
+                if (prefs.getBoolean("sun_moon", true)) {
                     float sunX = getWidth() * 0.5f;
                     float sunY = getHeight() * 0.18f;
                     float r = dp(50);
