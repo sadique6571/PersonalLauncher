@@ -2158,22 +2158,25 @@ public final class PersonalHomeActivity extends Activity {
         private float smoothDay = -1f;
 
         /** Loads the cached online wallpaper from disk (if any) so a rebuild never
-         *  flashes the default wallpaper while the fresh one downloads. */
+         *  flashes the default wallpaper while the fresh one downloads.
+         *  Does NOT touch onlineIndex (stays -1) so updateOnlineWallpaper() still
+         *  fetches fresh; does NOT call adaptTextColors() (views may not be ready —
+         *  the fresh load's crossfade handles it). */
         void loadCachedOnlineWallpaper() {
             worker.execute(() -> {
                 try {
                     java.io.File f = new java.io.File(getCacheDir(), "online-wallpaper.jpg");
                     if (!f.exists()) return;
                     final Bitmap bmp = BitmapFactory.decodeFile(f.getPath());
-                    if (bmp == null) return;
+                    if (bmp == null || bmp.isRecycled()) return;
                     handler.post(() -> {
-                        if (sky != this || isDestroyed()) { bmp.recycle(); return; }
-                        if (onlineWallpaper != null) onlineWallpaper.recycle();
-                        onlineWallpaper = bmp;
-                        onlineIndex = 0;
-                        crossfade = 1f;
-                        invalidate();
-                        adaptTextColors();
+                        try {
+                            if (sky != this || isDestroyed()) { bmp.recycle(); return; }
+                            if (onlineWallpaper != null && !onlineWallpaper.isRecycled()) onlineWallpaper.recycle();
+                            onlineWallpaper = bmp;
+                            crossfade = 1f;
+                            invalidate();
+                        } catch (Exception ignored) {}
                     });
                 } catch (Exception ignored) {}
             });
@@ -2301,14 +2304,16 @@ public final class PersonalHomeActivity extends Activity {
                     adaptTextColors();
                     // Cache to disk so a rebuild never flashes the default wallpaper.
                     final Bitmap cached = onlineWallpaper;
-                    worker.execute(() -> {
-                        try {
-                            java.io.File f = new java.io.File(getCacheDir(), "online-wallpaper.jpg");
-                            try (java.io.FileOutputStream out = new java.io.FileOutputStream(f)) {
-                                cached.compress(Bitmap.CompressFormat.JPEG, 85, out);
-                            }
-                        } catch (Exception ignored) {}
-                    });
+                    if (cached != null && !cached.isRecycled()) {
+                        worker.execute(() -> {
+                            try {
+                                java.io.File f = new java.io.File(getCacheDir(), "online-wallpaper.jpg");
+                                try (java.io.FileOutputStream out = new java.io.FileOutputStream(f)) {
+                                    cached.compress(Bitmap.CompressFormat.JPEG, 85, out);
+                                }
+                            } catch (Exception ignored) {}
+                        });
+                    }
                 } else {
                     handler.postDelayed(this, 50);
                 }
