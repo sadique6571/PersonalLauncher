@@ -474,19 +474,7 @@ public final class PersonalHomeActivity extends Activity {
             }
         };
         scroll.setOnScrollChangeListener(glowTracker);
-        // Synchronized scroll: when apps scroll, the clock scrolls up too and the
-        // header sticks to the top. (User request 2026-10-31.)
-        drawerScroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
-            // Move clock+header+apps up together; clock scrolls away, header stops at top.
-            int clockH = scroll.getHeight();
-            if (clockH > 0) {
-                int up = Math.min(scrollY, clockH);
-                scroll.setTranslationY(-up);
-                appHeading.setTranslationY(-up);
-                appBody.setTranslationY(-up);
-            }
-            glowTracker.onScrollChange(v, scrollX, scrollY, oldScrollX, oldScrollY);
-        });
+        drawerScroll.setOnScrollChangeListener(glowTracker);
         page.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             int width = page.getWidth() - page.getPaddingLeft() - page.getPaddingRight();
             if (width > 0 && width != pageWidth) {
