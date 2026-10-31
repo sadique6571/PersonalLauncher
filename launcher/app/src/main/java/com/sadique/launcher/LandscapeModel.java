@@ -21,7 +21,7 @@ final class LandscapeModel {
         if (url.startsWith("/")) url = "https://www.bing.com" + url;
         // Request 1920x1080 if not already
         if (!url.contains("1920x1080")) {
-            url = url.replaceAll("_\d+x\d+\.jpg", "_1920x1080.jpg");
+            url = url.replaceAll("_\\d+x\\d+\\.jpg", "_1920x1080.jpg");
         }
         return url;
     }
