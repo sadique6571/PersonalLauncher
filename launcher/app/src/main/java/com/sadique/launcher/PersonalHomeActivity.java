@@ -390,7 +390,9 @@ public final class PersonalHomeActivity extends Activity {
         // No auto-size: it mismeasures the trailing AM/PM RelativeSizeSpan and clips it
         // (worse with seconds, when the string is longest). fitClockText() sizes precisely.
         time.setAutoSizeTextTypeWithDefaults(android.widget.TextView.AUTO_SIZE_TEXT_TYPE_NONE);
-        time.setPadding(0, dp(2), 0, dp(10));
+        // Horizontal padding prevents AM/PM clipping from the shadow layer.
+        time.setPadding(dp(12), dp(2), dp(12), dp(10));
+        time.setClipToPadding(false);
         clockTextSize = clockSize;
         date = text("", tv ? 14 : 13, MUTED);
         if (prefs.getBoolean("clock_shadow", true)) {
