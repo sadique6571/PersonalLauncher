@@ -120,7 +120,13 @@ final class IconCache {
         android.content.res.Resources resources = app.getResources();
         float logoScale = new float[]{.8f, 1f, 1.2f}[Math.max(0, Math.min(2,
                 app.getSharedPreferences("personal_home", Context.MODE_PRIVATE).getInt("logo_size", 1)))];
+        // Bound the work: stop after ~6s to respect receiver time limits.
+        // Remaining icons compose on-demand when Home opens.
+        long deadline = System.currentTimeMillis() + 6000;
         for (ResolveInfo info : found) {
+            // Respect interruption (executor shutdown).
+            if (Thread.currentThread().isInterrupted()) break;
+            if (System.currentTimeMillis() > deadline) break;
             String pkg = info.activityInfo.packageName;
             if (pkg.equals(app.getPackageName()) || !packages.add(pkg)) continue;
             long version = version(pm, pkg);

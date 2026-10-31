@@ -14,12 +14,23 @@ public final class BootReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context, Intent intent) {
         if (!Intent.ACTION_BOOT_COMPLETED.equals(intent == null ? null : intent.getAction())) return;
         final PendingResult result = goAsync();
-        Executors.newSingleThreadExecutor().execute(() -> {
+        // Use a scheduled executor so we can enforce a time bound.
+        // Respect BroadcastReceiver time limits: goAsync() gives us ~10s.
+        java.util.concurrent.ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
+        exec.execute(() -> {
             try {
                 IconCache.warm(context);
             } finally {
-                result.finish();
+                try {
+                    result.finish();
+                } finally {
+                    exec.shutdown(); // Don't leak the thread.
+                }
             }
         });
+        // Safety: force shutdown after 8s to respect receiver time limits.
+        exec.schedule(() -> {
+            if (!exec.isShutdown()) exec.shutdownNow();
+        }, 8, java.util.concurrent.TimeUnit.SECONDS);
     }
 }
