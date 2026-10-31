@@ -370,8 +370,8 @@ public final class PersonalHomeActivity extends Activity {
         clock.setGravity(Gravity.CENTER);
         boolean compact = getResources().getConfiguration().screenHeightDp < 480;
         clock.setPadding(0, dp(compact ? 0 : tv ? 18 : 24), 0, dp(compact ? 8 : 16));
-        int clockSize = prefs.getInt("clock_size", tv ? 80 : 68);
-        if (compact) clockSize = Math.min(clockSize, 44);
+        int clockSize = prefs.getInt("clock_size", tv ? 52 : 44);
+        if (compact) clockSize = Math.min(clockSize, 32);
         time = text("", clockSize, TEXT);
         time.setGravity(Gravity.CENTER);
         time.setSingleLine(true);
@@ -1452,7 +1452,7 @@ public final class PersonalHomeActivity extends Activity {
         int[] icons = {R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock};
         Runnable[] choices = {
             () -> chooseSetting("Clock size", new String[]{"Small", "Normal", "Large"}, which -> {
-                prefs.edit().putInt("clock_size", (tv ? new int[]{66,80,96} : new int[]{56,68,80})[which]).apply(); buildHomeSoon();
+                prefs.edit().putInt("clock_size", (tv ? new int[]{42,52,62} : new int[]{36,44,52})[which]).apply(); buildHomeSoon();
             }),
             () -> chooseSetting("Clock style", new String[]{"Digital", "Analog"}, which -> {
                 prefs.edit().putInt("clock_style", which).apply(); buildHomeSoon();
