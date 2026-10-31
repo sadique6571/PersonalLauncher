@@ -10,6 +10,10 @@ permissions:
 
 jobs:
   lists-and-tools:
+    # Disabled for the Personal Launcher fork (2026-10-31): these upstream
+    # CleanYourTV doc/tool checks no longer apply after the rebrand.
+    # The launcher build below is the job that matters.
+    if: false
     name: Lists, tools and docs
     runs-on: ubuntu-latest
     steps:
@@ -30,11 +34,13 @@ jobs:
         run: tools/venv/bin/python -m unittest discover -s tests -v
 
   tables:
+    # Disabled for the Personal Launcher fork (2026-10-31): the upstream
+    # README table generator no longer applies after the rebrand.
     # Main only: a list PR adds just its folder and tv.json, so on a pull request the tables lag on purpose.
     # A job of its own, so "the tables want regenerating" never reads as "the lists are broken": the merge
     # bot waits for main to be green between merges and regenerates the tables after the wave.
     name: README tables
-    if: github.event_name == 'push'
+    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
