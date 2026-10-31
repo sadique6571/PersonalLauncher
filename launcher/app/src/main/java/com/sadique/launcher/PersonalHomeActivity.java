@@ -26,6 +26,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -70,6 +71,11 @@ public final class PersonalHomeActivity extends Activity {
     private boolean networkRegistered, resumed, tv;
     private int pageWidth;
     private List<App> cachedApps;
+    /** Move mode: the app being carried, and the visible package order while it moves. Null when off. */
+    private App carriedApp;
+    private List<String> moveOrder;
+    /** Live tiles by package, for progressive icon fill-in. Rebuilt with the grid. */
+    private final java.util.Map<String, View> tileViews = new java.util.HashMap<>();
     private AlertDialog panel, profile;
     private AlertDialog searchDialog;
     private EditText searchInput;
@@ -223,7 +229,7 @@ public final class PersonalHomeActivity extends Activity {
         identity.addView(userName);
         header.addView(identity, new LinearLayout.LayoutParams(0, -2, 1));
         networkStatus = text("", 13, MUTED);
-        networkStatus.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
+        networkStatus.setGravity(Gravity.CENTER_VERTICAL | Gravity.CENTER);
         networkStatus.setCompoundDrawablePadding(dp(5));
         networkStatus.setFocusable(true);
         networkStatus.setOnFocusChangeListener((v, focus) -> {
@@ -235,7 +241,7 @@ public final class PersonalHomeActivity extends Activity {
         page.addView(header);
         actions = new LinearLayout(this);
         actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-        actions.addView(networkStatus, new LinearLayout.LayoutParams(dp(tv ? 190 : 180), dp(44)));
+        actions.addView(networkStatus, new LinearLayout.LayoutParams(-2, dp(44)));
         iconAction("Quick actions", R.drawable.ic_apps, this::showActionDrawer);
         iconAction("Settings", R.drawable.ic_settings, this::showSettings);
         if (tv) {
@@ -264,7 +270,6 @@ public final class PersonalHomeActivity extends Activity {
             int[] position = new int[2], origin = new int[2];
             time.getLocationInWindow(position);
             root.getLocationInWindow(origin);
-            sky.clockX = position[0] - origin[0] + time.getWidth() / 2f;
             sky.clockY = position[1] - origin[1] + time.getHeight() / 2f;
             sky.invalidate();
         });
@@ -354,22 +359,18 @@ public final class PersonalHomeActivity extends Activity {
             List<App> apps = new ArrayList<>();
             java.util.Map<String, App> previous = new java.util.HashMap<>();
             if (cachedApps != null) for (App app : cachedApps) previous.put(app.info.activityInfo.packageName, app);
+            // Phase 1: labels only — the grid renders immediately with letter placeholders.
             for (ResolveInfo info : found) {
                 String pkg = info.activityInfo.packageName;
                 if (pkg.equals(getPackageName()) || !packages.add(pkg)) continue;
                 try {
                     String label = info.loadLabel(getPackageManager()).toString();
                     App old = previous.get(pkg);
-                    AppArtwork artwork;
-                    if (old != null && old.name.equals(label)
+                    if (old != null && old.iconReady && old.name.equals(label)
                             && java.util.Objects.equals(old.info.activityInfo.applicationInfo.sourceDir, info.activityInfo.applicationInfo.sourceDir)) {
-                        apps.add(new App(label, info, old.icon, old.accent));
+                        apps.add(new App(label, info, old.icon, old.accent, true));
                     } else {
-                        android.graphics.drawable.Drawable logo = info.loadIcon(getPackageManager());
-                        if (pkg.equals("com.google.android.youtube.tv") || pkg.equals("com.google.android.youtube")) logo = getDrawable(R.drawable.logo_youtube);
-                        if (pkg.equals("com.netflix.ninja") || pkg.equals("com.netflix.mediaclient")) logo = getDrawable(R.drawable.logo_netflix);
-                        artwork = AppArtwork.create(getResources(), logo);
-                        apps.add(new App(label, info, artwork.image, artwork.accent));
+                        apps.add(new App(label, info, letterIcon(label), CYAN, false));
                     }
                 } catch (RuntimeException removedDuringQuery) {
                     // A package can be replaced or removed between queryIntentActivities and loading its resources.
@@ -379,16 +380,83 @@ public final class PersonalHomeActivity extends Activity {
             handler.post(() -> {
                 if (!isDestroyed() && generation == appGeneration && !sameApps(cachedApps, apps)) renderApps(apps);
             });
+            // Phase 2: icons one by one — disk cache first, then compose and store.
+            IconCache cache = new IconCache(this);
+            android.content.pm.PackageManager pm = getPackageManager();
+            for (App app : apps) {
+                if (generation != appGeneration) return;
+                if (app.iconReady) continue;
+                String pkg = app.info.activityInfo.packageName;
+                try {
+                    long version = IconCache.version(pm, pkg);
+                    Bitmap card = cache.load(pkg, version);
+                    int accent;
+                    if (card != null) {
+                        accent = cache.accent(pkg, version, CYAN);
+                    } else {
+                        android.graphics.drawable.Drawable logo = app.info.loadIcon(pm);
+                        if (pkg.equals("com.google.android.youtube.tv") || pkg.equals("com.google.android.youtube")) logo = getDrawable(R.drawable.logo_youtube);
+                        if (pkg.equals("com.netflix.ninja") || pkg.equals("com.netflix.mediaclient")) logo = getDrawable(R.drawable.logo_netflix);
+                        AppArtwork artwork = AppArtwork.create(getResources(), logo);
+                        card = ((android.graphics.drawable.BitmapDrawable) artwork.image).getBitmap();
+                        accent = artwork.accent;
+                        cache.save(pkg, version, card, accent);
+                    }
+                    Bitmap finished = card;
+                    int finishedAccent = accent;
+                    handler.post(() -> {
+                        if (!isDestroyed() && generation == appGeneration)
+                            updateTileIcon(pkg, new android.graphics.drawable.BitmapDrawable(getResources(), finished), finishedAccent);
+                    });
+                } catch (RuntimeException removedDuringQuery) {
+                    // The package vanished mid-load; the next loadApps pass drops it.
+                }
+            }
         });
+    }
+
+    /** Cheap letter placeholder so the grid is useful before icons finish. Runs on the worker thread. */
+    private android.graphics.drawable.Drawable letterIcon(String name) {
+        Bitmap bitmap = Bitmap.createBitmap(160, 90, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.drawColor(0xff0d2036);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(0x6640d9ff);
+        paint.setTextSize(44);
+        paint.setTextAlign(Paint.Align.CENTER);
+        String letter = name.isEmpty() ? "?" : name.substring(0, 1).toUpperCase(Locale.ROOT);
+        canvas.drawText(letter, 80, 60, paint);
+        return new android.graphics.drawable.BitmapDrawable(getResources(), bitmap);
+    }
+
+    /** Swaps a finished icon into the live tile and the cached App. Runs on the UI thread. */
+    private void updateTileIcon(String pkg, android.graphics.drawable.Drawable icon, int accent) {
+        if (cachedApps != null) {
+            for (App app : cachedApps) {
+                if (app.info.activityInfo.packageName.equals(pkg)) {
+                    app.icon = icon; app.accent = accent; app.iconReady = true;
+                    break;
+                }
+            }
+        }
+        if (carriedApp != null) return;
+        View tile = tileViews.get(pkg);
+        if (tile instanceof android.widget.FrameLayout) {
+            View iconView = ((android.widget.FrameLayout) tile).getChildAt(0);
+            if (iconView instanceof ImageView) ((ImageView) iconView).setImageDrawable(icon);
+            tile.setForeground(tileBorder(accent, tile.isFocused()));
+            tile.setTag(accent);
+        }
     }
 
     private static final class App {
         final String name;
         final ResolveInfo info;
-        final android.graphics.drawable.Drawable icon;
-        final int accent;
-        App(String name, ResolveInfo info, android.graphics.drawable.Drawable icon, int accent) {
-            this.name = name; this.info = info; this.icon = icon; this.accent = accent;
+        android.graphics.drawable.Drawable icon;
+        int accent;
+        boolean iconReady;
+        App(String name, ResolveInfo info, android.graphics.drawable.Drawable icon, int accent, boolean iconReady) {
+            this.name = name; this.info = info; this.icon = icon; this.accent = accent; this.iconReady = iconReady;
         }
     }
 
@@ -406,6 +474,7 @@ public final class PersonalHomeActivity extends Activity {
         cachedApps = apps;
         appHeading.setText("Your apps");
         grid.removeAllViews();
+        tileViews.clear();
         int columns = PersonalHomeModel.columns((int) (pageWidth / getResources().getDisplayMetrics().density),
                 prefs.getInt(tv ? "tv_columns" : "phone_columns", 0), prefs.getBoolean("large_tiles", false));
         grid.setColumnCount(columns);
@@ -421,7 +490,91 @@ public final class PersonalHomeActivity extends Activity {
         if (searchRefresh != null) searchRefresh.run();
     }
 
+    /** Direct move mode: long-press > Move, then arrows carry the tile, OK drops it, Back cancels. */
+    private void startMoveMode(App app) {
+        if (cachedApps == null) return;
+        List<App> visible = orderedApps(cachedApps);
+        Set<String> hidden = prefs.getStringSet("hidden_apps", Collections.emptySet());
+        visible.removeIf(a -> hidden.contains(a.info.activityInfo.packageName));
+        moveOrder = new ArrayList<>();
+        for (App a : visible) moveOrder.add(a.info.activityInfo.packageName);
+        carriedApp = app;
+        renderMoveGrid();
+        Toast.makeText(this, "Arrows move · OK places · Back cancels", Toast.LENGTH_LONG).show();
+    }
+
+    private void renderMoveGrid() {
+        java.util.Map<String, App> byPackage = new java.util.LinkedHashMap<>();
+        for (App app : cachedApps) byPackage.put(app.info.activityInfo.packageName, app);
+        appHeading.setText("Move " + carriedApp.name);
+        grid.removeAllViews();
+        tileViews.clear();
+        int columns = PersonalHomeModel.columns((int) (pageWidth / getResources().getDisplayMetrics().density),
+                prefs.getInt(tv ? "tv_columns" : "phone_columns", 0), prefs.getBoolean("large_tiles", false));
+        grid.setColumnCount(columns);
+        int width = pageWidth / columns;
+        String movingPkg = carriedApp.info.activityInfo.packageName;
+        for (String pkg : moveOrder) {
+            App app = byPackage.get(pkg);
+            if (app != null) addAppTile(grid, app, width, pkg.equals(movingPkg));
+        }
+        View moving = grid.getChildAt(moveOrder.indexOf(movingPkg));
+        if (moving != null) moving.requestFocus();
+    }
+
+    private void commitMove() {
+        // Hidden apps keep their slots; visible ones take the new order.
+        Set<String> visibleSet = new HashSet<>(moveOrder);
+        java.util.Iterator<String> moved = moveOrder.iterator();
+        List<String> result = new ArrayList<>();
+        for (App app : orderedApps(cachedApps)) {
+            String pkg = app.info.activityInfo.packageName;
+            result.add(visibleSet.contains(pkg) ? moved.next() : pkg);
+        }
+        prefs.edit().putString("app_order", new org.json.JSONArray(result).toString()).apply();
+        carriedApp = null; moveOrder = null;
+        renderApps(cachedApps);
+        focusFirstApp();
+        Toast.makeText(this, "App order saved", Toast.LENGTH_SHORT).show();
+    }
+
+    private void cancelMove() {
+        carriedApp = null; moveOrder = null;
+        renderApps(cachedApps);
+        focusFirstApp();
+    }
+
+    @Override public boolean dispatchKeyEvent(KeyEvent event) {
+        if (carriedApp != null && event.getAction() == KeyEvent.ACTION_DOWN) {
+            String pkg = carriedApp.info.activityInfo.packageName;
+            int from = moveOrder.indexOf(pkg);
+            int cols = Math.max(1, grid.getColumnCount());
+            int code = event.getKeyCode();
+            if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER
+                    || code == KeyEvent.KEYCODE_NUMPAD_ENTER) {
+                commitMove(); return true;
+            }
+            if (code == KeyEvent.KEYCODE_BACK) { cancelMove(); return true; }
+            int to = -1;
+            if (code == KeyEvent.KEYCODE_DPAD_LEFT) { if (from % cols != 0) to = from - 1; }
+            else if (code == KeyEvent.KEYCODE_DPAD_RIGHT) { if (from % cols != cols - 1 && from + 1 < moveOrder.size()) to = from + 1; }
+            else if (code == KeyEvent.KEYCODE_DPAD_UP) { if (from - cols >= 0) to = from - cols; }
+            else if (code == KeyEvent.KEYCODE_DPAD_DOWN) { if (from + cols < moveOrder.size()) to = from + cols; }
+            else return super.dispatchKeyEvent(event);
+            if (to >= 0) {
+                Collections.swap(moveOrder, from, to);
+                renderMoveGrid();
+            }
+            return true;
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
     private void addAppTile(GridLayout parent, App app, int width) {
+        addAppTile(parent, app, width, false);
+    }
+
+    private void addAppTile(GridLayout parent, App app, int width, boolean moving) {
         android.widget.FrameLayout tile = new android.widget.FrameLayout(this);
         tile.setBackground(surface(false));
         tile.setClipToOutline(true);
@@ -431,6 +584,12 @@ public final class PersonalHomeActivity extends Activity {
         tile.setContentDescription(app.name);
         tile.setTag(app.accent);
         tile.setForeground(tileBorder(app.accent, false));
+        if (moving) {
+            tile.setScaleX(1.07f);
+            tile.setScaleY(1.07f);
+            tile.setElevation(dp(10));
+            tile.setForeground(tileBorder(CYAN, true));
+        }
         ImageView icon = new ImageView(this);
         icon.setImageDrawable(app.icon);
         // Artwork is composed at the card's 16:9 ratio; no second inset or crop here.
@@ -439,7 +598,7 @@ public final class PersonalHomeActivity extends Activity {
         tile.addView(icon, new android.widget.FrameLayout.LayoutParams(-1, -1));
         tile.setOnFocusChangeListener((v, focus) -> {
             tile.setBackground(surface(focus));
-            tile.setForeground(tileBorder(app.accent, focus));
+            if (!moving) tile.setForeground(tileBorder(app.accent, focus));
             tile.setTranslationZ(focus && prefs.getBoolean("focus_glow", true) ? dp(10) : 0);
             if (android.os.Build.VERSION.SDK_INT >= 28) {
                 tile.setOutlineAmbientShadowColor(app.accent);
@@ -462,7 +621,7 @@ public final class PersonalHomeActivity extends Activity {
         tile.setOnLongClickListener(v -> {
             new AlertDialog.Builder(this).setTitle(app.name).setItems(new String[]{"App info", "Hide from launcher", "Move app"}, (dialog, which) -> {
                 if (which == 0) launch(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + app.info.activityInfo.packageName)));
-                else if (which == 2) moveApp(app);
+                else if (which == 2) startMoveMode(app);
                 else {
                     Set<String> hidden = new HashSet<>(prefs.getStringSet("hidden_apps", Collections.emptySet()));
                     hidden.add(app.info.activityInfo.packageName);
@@ -476,6 +635,7 @@ public final class PersonalHomeActivity extends Activity {
         position.width = width - dp(16);
         position.height = Math.round(position.width * 9f / 16f);
         position.setMargins(dp(8), dp(10), dp(8), dp(10));
+        tileViews.put(app.info.activityInfo.packageName, tile);
         parent.addView(tile, position);
     }
 
@@ -639,6 +799,16 @@ public final class PersonalHomeActivity extends Activity {
         LinearLayout rows = new LinearLayout(this); rows.setOrientation(LinearLayout.VERTICAL);
         panel = GlassSettings.panel(this, "Settings", rows);
         addPanelRow(rows, "Launcher settings", "Layout, wallpaper & apps", R.drawable.ic_settings, CYAN, this::launcherSettings);
+        TextView quickLabel = GlassSettings.label(this, "Quick actions", 12, 0xff9bb6cb);
+        quickLabel.setPadding(dp(4), dp(10), 0, dp(4));
+        rows.addView(quickLabel);
+        LinearLayout strip = new LinearLayout(this);
+        strip.setOrientation(LinearLayout.HORIZONTAL);
+        strip.setGravity(Gravity.CENTER_VERTICAL);
+        addQuickCard(strip, "Search apps", R.drawable.ic_search, CYAN, this::searchApps);
+        addQuickCard(strip, "Play Store", R.drawable.ic_apps, 0xff59e493, () -> openStore(""));
+        addQuickCard(strip, "Screensaver", R.drawable.ic_picture, 0xff67baff, this::screensaverSettings);
+        rows.addView(strip, new LinearLayout.LayoutParams(-1, -2));
         boolean online = networkStatus.getCurrentTextColor() == 0xff59e493;
         addPanelRow(rows, "Wi-Fi", online ? "Internet connected" : "No internet / disconnected", R.drawable.ic_wifi,
                 networkStatus.getCurrentTextColor(), () -> openSetting(Settings.ACTION_WIFI_SETTINGS));
@@ -652,6 +822,14 @@ public final class PersonalHomeActivity extends Activity {
         if (tv) addPanelRow(rows, "Input", "HDMI / Live TV", R.drawable.ic_input, 0xffbdd5e5, this::showInputs);
         addPanelRow(rows, "TV system settings", "Display, sound & device", R.drawable.ic_settings, 0xffbdd5e5, () -> openSetting(Settings.ACTION_SETTINGS));
         panel.setOnDismissListener(d -> release.run()); panel.show();
+    }
+
+    private void addQuickCard(LinearLayout strip, String title, int icon, int tint, Runnable action) {
+        android.view.View card = GlassSettings.wideCard(this, title, icon, tint, () -> { if (panel != null) panel.dismiss(); action.run(); });
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, -2, 1);
+        int margin = dp(4);
+        params.setMargins(margin, 0, margin, 0);
+        strip.addView(card, params);
     }
 
     private void addPanelRow(LinearLayout rows, String label, String hint, int icon, int color, Runnable action) {
@@ -928,6 +1106,7 @@ public final class PersonalHomeActivity extends Activity {
         if (intent == null) return;
         if (MainActivity.ACTION_VIEW_INPUTS.equals(intent.getAction())) handler.post(() -> showInputs());
         else if (MainActivity.ACTION_LAUNCHER_SETTINGS.equals(intent.getAction())) handler.post(() -> launcherSettings());
+        else if (MainActivity.ACTION_SHOW_SETTINGS.equals(intent.getAction())) handler.post(this::showSettings);
     }
 
     @Override public void onBackPressed() {
@@ -960,7 +1139,7 @@ public final class PersonalHomeActivity extends Activity {
         private final Paint wallpaperPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
         private final Bitmap backdrop = BitmapFactory.decodeResource(getResources(), R.drawable.personal_wallpaper);
         int minute, focusAccent;
-        float clockX = -1, clockY = -1, focusX, focusY, focusRadius;
+        float clockY = -1, focusX, focusY, focusRadius;
         SkyClock() { super(PersonalHomeActivity.this); setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO); }
         @Override protected void onDraw(Canvas canvas) {
             paint.setColor(Color.WHITE);
@@ -972,7 +1151,7 @@ public final class PersonalHomeActivity extends Activity {
             canvas.drawRect(0, 0, getWidth(), getHeight(), paint); paint.setShader(null);
             String mode = prefs.getString("wallpaper_mode", "mountains");
             Bitmap picture = mode.equals("custom") && customWallpaper != null ? customWallpaper : backdrop;
-            float x = clockX >= 0 ? clockX : getWidth() / 2f, y = clockY >= 0 ? clockY : dp(150);
+            float y = clockY >= 0 ? clockY : dp(150);
             if (!mode.equals("solid") && picture != null) {
                 boolean mountains = picture == backdrop;
                 float[] frame = HomeAppearance.frame(getWidth(), getHeight(), picture.getWidth(), picture.getHeight(), y, mountains);
@@ -992,18 +1171,6 @@ public final class PersonalHomeActivity extends Activity {
                 int glow = (focusAccent & 0x00ffffff) | 0x80000000;
                 paint.setShader(new RadialGradient(focusX, focusY, focusRadius, glow, Color.TRANSPARENT, Shader.TileMode.CLAMP));
                 canvas.drawCircle(focusX, focusY, focusRadius, paint); paint.setShader(null);
-            }
-            float radius = dp(tv ? 36 : 30);
-            boolean sun = minute >= 360 && minute < 1080;
-            paint.setShader(new RadialGradient(x, y, radius * 2f, sun ? 0x18ffd78a : 0x184ac8ff, Color.TRANSPARENT, Shader.TileMode.CLAMP));
-            canvas.drawCircle(x, y, radius * 2f, paint); paint.setShader(null);
-            paint.setColor(sun ? 0x20ffd68a : 0x38dcefff);
-            if (sun) canvas.drawCircle(x, y, radius, paint);
-            else {
-                android.graphics.Path moon = new android.graphics.Path(), cut = new android.graphics.Path();
-                moon.addCircle(x, y, radius, android.graphics.Path.Direction.CW);
-                cut.addCircle(x + radius * .45f, y - radius * .2f, radius * .86f, android.graphics.Path.Direction.CW);
-                moon.op(cut, android.graphics.Path.Op.DIFFERENCE); canvas.drawPath(moon, paint);
             }
         }
     }

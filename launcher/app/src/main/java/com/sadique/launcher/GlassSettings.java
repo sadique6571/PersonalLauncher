@@ -49,6 +49,22 @@ final class GlassSettings {
         position.setMargins(0, dp(host, 3), 0, dp(host, 3)); row.setLayoutParams(position);
         return row;
     }
+    /** A wider tappable card (icon above label) for the Quick actions strip inside Settings. */
+    static View wideCard(Activity host, String title, int icon, int tint, Runnable action) {
+        LinearLayout card = new LinearLayout(host); card.setOrientation(LinearLayout.VERTICAL);
+        card.setGravity(Gravity.CENTER);
+        card.setPadding(dp(host, 8), dp(host, 14), dp(host, 8), dp(host, 14));
+        card.setMinimumHeight(dp(host, 104)); card.setFocusable(true); card.setFocusableInTouchMode(true); card.setClickable(true);
+        card.setBackground(background(host, false));
+        card.setOnFocusChangeListener((v, focus) -> card.setBackground(background(host, focus)));
+        ImageView symbol = new ImageView(host); symbol.setImageResource(icon); symbol.setColorFilter(tint);
+        card.addView(symbol, new LinearLayout.LayoutParams(dp(host, 34), dp(host, 34)));
+        TextView heading = label(host, title, 13, Color.WHITE); heading.setGravity(Gravity.CENTER);
+        heading.setPadding(0, dp(host, 8), 0, 0);
+        card.addView(heading, new LinearLayout.LayoutParams(-1, -2));
+        card.setOnClickListener(v -> { v.requestFocus(); action.run(); });
+        return card;
+    }
     private static final java.util.WeakHashMap<Activity, java.lang.ref.WeakReference<Panel>> PANELS = new java.util.WeakHashMap<>();
     private static final class Panel {
         final AlertDialog dialog;
