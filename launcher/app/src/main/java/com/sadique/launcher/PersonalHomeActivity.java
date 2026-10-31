@@ -2243,15 +2243,19 @@ public final class PersonalHomeActivity extends Activity {
             });
         }
 
-        /** Loads an online wallpaper photo (0-5) from the screensaver cache with crossfade. */
+        /** Loads a fresh online wallpaper photo with crossfade (picsum seed never repeats). */
         void loadOnlinePhoto(int index) {
             if (index == onlineIndex && onlineWallpaper != null) return;
             onlineIndex = index;
+            final int seed = (int) (System.currentTimeMillis() / 60_000) + slideshowIndex;
             worker.execute(() -> {
                 Bitmap bmp = null;
                 try {
-                    java.io.File f = new java.io.File(getCacheDir(), "screensaver_photos/photo_" + index + ".jpg");
-                    if (f.exists()) bmp = BitmapFactory.decodeFile(f.getAbsolutePath());
+                    // Retire the old 6-photo disk cache: it is no longer populated.
+                    java.io.File[] stale = new java.io.File(getCacheDir(), "screensaver_photos").listFiles();
+                    if (stale != null) for (java.io.File f : stale) f.delete();
+                    byte[] bytes = OnlineContent.get(LandscapeModel.photoUrl(seed), 6 * 1024 * 1024);
+                    bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
                 } catch (Exception ignored) {}
                 Bitmap loaded = bmp;
                 handler.post(() -> {

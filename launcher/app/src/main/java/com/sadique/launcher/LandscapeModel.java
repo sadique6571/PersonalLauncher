@@ -4,15 +4,11 @@ package com.sadique.launcher;
 final class LandscapeModel {
     static final String CITY = "Okara, Pakistan";
     static final double LATITUDE = 30.81, LONGITUDE = 73.45;
-    private static final String[] PHOTOS = {
-        "photo-1470770841072-f978cf4d019e", "photo-1501785888041-af3ef285b470",
-        "photo-1464822759023-fed622ff2c3b", "photo-1472396961693-142e6e269027",
-        "photo-1441974231531-c6227db76b6e", "photo-1447752875215-b2761acb3c5d"
-    };
-
     static String photoUrl(int index) {
-        return "https://images.unsplash.com/" + PHOTOS[Math.floorMod(index, PHOTOS.length)]
-                + "?auto=format&fit=crop&w=1920&h=1080&q=80";
+        // picsum.photos serves a different real photo per unique seed. The index
+        // never repeats (LandscapeView.photoIndex starts at current minutes and
+        // increments per request), so the screensaver never repeats a photo.
+        return "https://picsum.photos/seed/pl" + index + "/1920/1080";
     }
 
     static String weatherUrl(double lat, double lon, boolean fahrenheit) {
