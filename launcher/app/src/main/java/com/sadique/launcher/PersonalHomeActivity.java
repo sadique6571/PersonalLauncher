@@ -2236,7 +2236,9 @@ public final class PersonalHomeActivity extends Activity {
         void loadOnlinePhoto(int index) {
             if (index == onlineIndex && onlineWallpaper != null) return;
             onlineIndex = index;
-            final int seed = (int) (System.currentTimeMillis() / 60_000) + slideshowIndex;
+            // Bing daily: use the index directly (0=today). No time-based seed —
+            // the launcher must always show today's wallpaper. (User 2026-10-31.)
+            final int bingIdx = index;
             worker.execute(() -> {
                 Bitmap bmp = null;
                 try {
@@ -2244,7 +2246,7 @@ public final class PersonalHomeActivity extends Activity {
                     java.io.File[] stale = new java.io.File(getCacheDir(), "screensaver_photos").listFiles();
                     if (stale != null) for (java.io.File f : stale) f.delete();
                     // Bing daily wallpaper: API returns JSON, parse to get image URL.
-                    String apiUrl = LandscapeModel.photoUrl(seed);
+                    String apiUrl = LandscapeModel.photoUrl(bingIdx);
                     byte[] jsonBytes = OnlineContent.get(apiUrl, 64 * 1024);
                     String json = new String(jsonBytes, java.nio.charset.StandardCharsets.UTF_8);
                     String imageUrl = LandscapeModel.bingImageUrl(json);
