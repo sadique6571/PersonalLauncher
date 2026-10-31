@@ -1019,6 +1019,39 @@ public final class PersonalHomeActivity extends Activity {
         }
     }
 
+    /** YouTube search: tries the YouTube TV app first, falls back to browser. */
+    private void youtubeSearch(String query) {
+        String encoded = Uri.encode(query);
+        // Try YouTube TV app.
+        Intent appSearch = new Intent(Intent.ACTION_SEARCH)
+                .setPackage("com.google.android.youtube.tv")
+                .putExtra("query", query)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (tryLaunch(appSearch)) return;
+        // Try regular YouTube app.
+        Intent mobileSearch = new Intent(Intent.ACTION_SEARCH)
+                .setPackage("com.google.android.youtube")
+                .putExtra("query", query)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (tryLaunch(mobileSearch)) return;
+        // Fall back to browser.
+        launch(new Intent(Intent.ACTION_VIEW,
+                Uri.parse("https://www.youtube.com/results?search_query=" + encoded))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+    }
+
+    /** Returns true if any installed (non-hidden) app matches the query. */
+    private boolean appMatches(String query) {
+        if (cachedApps == null) return true; // Apps not loaded yet; show search.
+        String q = query.trim().toLowerCase(Locale.ROOT);
+        Set<String> hidden = prefs.getStringSet("hidden_apps", Collections.emptySet());
+        for (App app : cachedApps) {
+            if (hidden.contains(app.info.activityInfo.packageName)) continue;
+            if ((app.name + " " + app.info.activityInfo.packageName).toLowerCase(Locale.ROOT).contains(q)) return true;
+        }
+        return false;
+    }
+
     private void openStore(String query) {
         if (query.isEmpty()) {
             Intent store = getPackageManager().getLaunchIntentForPackage("com.android.vending");
@@ -1564,8 +1597,15 @@ public final class PersonalHomeActivity extends Activity {
             if (result == RESULT_OK && data != null) {
                 ArrayList<String> words = data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);
                 if (words != null && !words.isEmpty()) {
-                    if (searchDialog == null) searchApps();
-                    if (searchInput != null) { searchInput.setText(words.get(0)); searchInput.setSelection(searchInput.length()); }
+                    String query = words.get(0);
+                    // Google Home behavior: if an installed app matches, show it;
+                    // otherwise fall back to YouTube search.
+                    if (appMatches(query)) {
+                        if (searchDialog == null) searchApps();
+                        if (searchInput != null) { searchInput.setText(query); searchInput.setSelection(searchInput.length()); }
+                    } else {
+                        youtubeSearch(query);
+                    }
                 }
             }
             return;
