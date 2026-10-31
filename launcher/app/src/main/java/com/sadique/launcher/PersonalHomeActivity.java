@@ -63,7 +63,7 @@ public final class PersonalHomeActivity extends Activity {
     private SharedPreferences prefs;
     private LinearLayout page, header, actions;
     private GridLayout grid;
-    private TextView userName, time, date, networkStatus, appHeading, greeting, homeWeather;
+    private TextView userName, time, date, networkStatus, appHeading, greeting, homeWeather, appCount;
     private ImageView avatar;
     private Bitmap avatarBitmap;
     private Bitmap customWallpaper;
@@ -190,7 +190,8 @@ public final class PersonalHomeActivity extends Activity {
 
     private GradientDrawable avatarSurface(boolean focused) {
         GradientDrawable shape = surface(focused);
-        shape.setShape(GradientDrawable.OVAL);
+        if (prefs.getInt("avatar_shape", 0) == 0) shape.setShape(GradientDrawable.OVAL);
+        else shape.setCornerRadius(dp(16));
         return shape;
     }
 
@@ -294,6 +295,8 @@ public final class PersonalHomeActivity extends Activity {
         identity.addView(userName);
         greeting = text(greetingText(), 13, MUTED);
         identity.addView(greeting);
+        appCount = text("", 12, MUTED);
+        identity.addView(appCount);
         header.addView(identity, new LinearLayout.LayoutParams(0, -2, 1));
         networkStatus = text("", 13, MUTED);
         networkStatus.setGravity(Gravity.CENTER_VERTICAL | Gravity.CENTER);
@@ -369,11 +372,12 @@ public final class PersonalHomeActivity extends Activity {
         LinearLayout scrollContent = new LinearLayout(this);
         scrollContent.setOrientation(LinearLayout.VERTICAL);
         scrollContent.addView(clock);
-        // Netflix & YouTube banner rows right below the clock (optional, on/off in settings).
+        // Netflix & YouTube banner rows right below the clock (order swappable in settings).
         netflixRow = new AppContentRow(this, "Netflix", new String[]{"com.netflix.ninja"}, label -> appHeading.setText(label));
         youtubeRow = new AppContentRow(this, "YouTube", new String[]{"com.google.android.youtube.tv", "com.google.android.youtube"}, label -> appHeading.setText(label));
-        scrollContent.addView(netflixRow, new LinearLayout.LayoutParams(-1, -2));
-        scrollContent.addView(youtubeRow, new LinearLayout.LayoutParams(-1, -2));
+        boolean youtubeFirst = prefs.getInt("banner_order", 0) == 1;
+        scrollContent.addView(youtubeFirst ? youtubeRow : netflixRow, new LinearLayout.LayoutParams(-1, -2));
+        scrollContent.addView(youtubeFirst ? netflixRow : youtubeRow, new LinearLayout.LayoutParams(-1, -2));
         scrollContent.addView(appHeading);
         scrollContent.addView(appBody, new LinearLayout.LayoutParams(-1, -2));
         scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
@@ -666,6 +670,7 @@ public final class PersonalHomeActivity extends Activity {
     private void renderApps(List<App> apps) {
         cachedApps = apps;
         appHeading.setText("Your apps");
+        if (appCount != null) appCount.setText(apps.size() + " apps");
         grid.removeAllViews();
         tileViews.clear();
         int columns = PersonalHomeModel.columns((int) (pageWidth / getResources().getDisplayMetrics().density),
@@ -1107,9 +1112,9 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void tileSettings() {
-        String[] labels = {"App columns", "Tile size", "Tile spacing", "Tile corners", "Logo size", "Focused app title size", "App colour glow"};
-        String[] hints = {"Number of cards per row", "Compact or large cards", "Gap between cards", "Sharp, rounded or round", "App logo size in cards", "Name above the app grid", "Match the focused app"};
-        int[] icons = {R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_settings, R.drawable.ic_brightness};
+        String[] labels = {"App columns", "Tile size", "Tile spacing", "Tile corners", "Logo size", "Focused app title size", "App colour glow", "Focus border"};
+        String[] hints = {"Number of cards per row", "Compact or large cards", "Gap between cards", "Sharp, rounded or round", "App logo size in cards", "Name above the app grid", "Match the focused app", "Thin, normal or thick"};
+        int[] icons = {R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_settings, R.drawable.ic_brightness, R.drawable.ic_apps};
         Runnable[] choices = {
             () -> chooseSetting("App columns", new String[]{"Automatic", "2", "3", "4", "5", "6"}, which -> {
                 prefs.edit().putInt(tv ? "tv_columns" : "phone_columns", which == 0 ? 0 : which + 1).apply(); refreshApps();
@@ -1134,6 +1139,9 @@ public final class PersonalHomeActivity extends Activity {
             }),
             () -> chooseSetting("App colour glow", new String[]{"On", "Off"}, which -> {
                 prefs.edit().putBoolean("focus_glow", which == 0).apply(); sky.focusAccent = 0; sky.invalidate();
+            }),
+            () -> chooseSetting("Focus border", new String[]{"Thin", "Normal", "Thick"}, which -> {
+                prefs.edit().putInt("focus_border", which).apply(); refreshApps();
             }),
         };
         subMenu("Tiles", labels, hints, icons, choices);
@@ -1217,9 +1225,9 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void appMenu() {
-        String[] labels = {"Hide / unhide apps", "Rearrange apps", "Continue watching", "Netflix row", "YouTube row"};
-        String[] hints = {"Choose which apps appear", "Choose the order of app cards", "Resume titles after your apps", "Netflix banners below the clock", "YouTube banners below the clock"};
-        int[] icons = {R.drawable.ic_apps, R.drawable.ic_swap_vert, R.drawable.ic_livetv, R.drawable.ic_livetv, R.drawable.ic_livetv};
+        String[] labels = {"Hide / unhide apps", "Rearrange apps", "Continue watching", "Netflix row", "YouTube row", "Banner order", "Banner poster size", "Banner auto-scroll"};
+        String[] hints = {"Choose which apps appear", "Choose the order of app cards", "Resume titles after your apps", "Netflix banners below the clock", "YouTube banners below the clock", "Netflix or YouTube first", "Small, normal or large posters", "Rows scroll by themselves"};
+        int[] icons = {R.drawable.ic_apps, R.drawable.ic_swap_vert, R.drawable.ic_livetv, R.drawable.ic_livetv, R.drawable.ic_livetv, R.drawable.ic_swap_vert, R.drawable.ic_picture, R.drawable.ic_livetv};
         Runnable[] choices = {
             this::hiddenApps,
             this::rearrangeApps,
@@ -1235,17 +1243,32 @@ public final class PersonalHomeActivity extends Activity {
                 prefs.edit().putBoolean("row_youtube", which == 1).apply();
                 updateContentRows();
             }),
+            () -> chooseSetting("Banner order", new String[]{"Netflix first", "YouTube first"}, which -> {
+                prefs.edit().putInt("banner_order", which).apply(); buildHome();
+            }),
+            () -> chooseSetting("Banner poster size", new String[]{"Small", "Normal", "Large"}, which -> {
+                prefs.edit().putInt("banner_poster_size", which).apply();
+                updateContentRows();
+            }),
+            () -> chooseSetting("Banner auto-scroll", new String[]{"Off", "On"}, which -> {
+                prefs.edit().putBoolean("banner_autoscroll", which == 1).apply();
+                updateContentRows();
+            }),
         };
         subMenu("Apps", labels, hints, icons, choices);
     }
 
     private void systemMenu() {
-        String[] labels = {"Screensaver & weather", "Profile name & photo", "Choose default Home", "Reset layout & unhide apps"};
-        String[] hints = {"Slideshow, weather & idle timer", "Name and local profile picture", "Set this launcher as Home", "Restore the default layout"};
-        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_home_settings, R.drawable.ic_settings};
+        String[] labels = {"Screensaver & weather", "Profile name & photo", "Avatar shape", "Choose default Home", "Reset layout & unhide apps"};
+        String[] hints = {"Slideshow, weather & idle timer", "Name and local profile picture", "Circle or rounded square", "Set this launcher as Home", "Restore the default layout"};
+        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_person, R.drawable.ic_home_settings, R.drawable.ic_settings};
         Runnable[] choices = {
             this::screensaverSettings,
             this::editProfile,
+            () -> chooseSetting("Avatar shape", new String[]{"Circle", "Rounded square"}, which -> {
+                prefs.edit().putInt("avatar_shape", which).apply();
+                avatar.setBackground(avatarSurface(false));
+            }),
             () -> launch(new Intent(this, HomeSettingsActivity.class)),
             () -> new AlertDialog.Builder(this).setTitle("Reset layout and show all apps?").setPositiveButton("Reset", (dialog, which) -> {
                 prefs.edit().remove("app_order").remove("hidden_apps").remove("tv_columns").remove("phone_columns").remove("large_tiles")
@@ -1672,7 +1695,8 @@ public final class PersonalHomeActivity extends Activity {
     private android.graphics.drawable.Drawable tileBorder(int accent, boolean focused) {
         GradientDrawable border = new GradientDrawable();
         border.setColor(Color.TRANSPARENT); border.setCornerRadius(tileRadius());
-        border.setStroke(dp(focused ? 3 : 1), focused ? accent : 0x4028435e);
+        int thickness = focused ? new int[]{2, 3, 5}[Math.max(0, Math.min(2, prefs.getInt("focus_border", 1)))] : 1;
+        border.setStroke(dp(thickness), focused ? accent : 0x4028435e);
         GradientDrawable bevel = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{0x20ffffff, 0x00ffffff, 0x28000000});
         bevel.setCornerRadius(tileRadius());

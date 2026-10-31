@@ -30,6 +30,7 @@ public final class AppContentRow extends LinearLayout {
     private final Consumer<String> focusTitle;
     private final LinearLayout cards;
     private final TextView heading;
+    private final HorizontalScrollView scroller;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private ExecutorService worker;
     private ExecutorService artworkWorker;
@@ -51,7 +52,7 @@ public final class AppContentRow extends LinearLayout {
         heading.setTextColor(0xfff0f7ff);
         heading.setPadding(dp(4), 0, 0, dp(10));
         addView(heading);
-        HorizontalScrollView scroller = new HorizontalScrollView(host);
+        scroller = new HorizontalScrollView(host);
         scroller.setHorizontalScrollBarEnabled(false);
         scroller.setClipChildren(false);
         scroller.setClipToPadding(false);
@@ -75,10 +76,26 @@ public final class AppContentRow extends LinearLayout {
     void stop() {
         running = false;
         generation++;
+        handler.removeCallbacks(autoScroll);
         if (query != null) query.cancel();
         if (worker != null) worker.shutdownNow();
         if (artworkWorker != null) artworkWorker.shutdownNow();
     }
+
+    /** Gentle auto-scroll for banner rows (toggle in settings). */
+    private final Runnable autoScroll = new Runnable() {
+        @Override public void run() {
+            handler.removeCallbacks(this);
+            if (!running || !prefs.getBoolean("banner_autoscroll", false)) return;
+            int max = cards.getWidth() - scroller.getWidth();
+            if (max > 0) {
+                int next = scroller.getScrollX() + dp(160);
+                if (next >= max) next = 0;
+                scroller.smoothScrollTo(next, 0);
+            }
+            handler.postDelayed(this, 4000);
+        }
+    };
 
     void reload() {
         if (!running) return;
@@ -108,6 +125,10 @@ public final class AppContentRow extends LinearLayout {
                 if (!running || request != generation) return;
                 for (Item item : entries) addCard(item);
                 setVisibility(entries.isEmpty() ? GONE : VISIBLE);
+                handler.removeCallbacks(autoScroll);
+                if (prefs.getBoolean("banner_autoscroll", false) && !entries.isEmpty()) {
+                    handler.postDelayed(autoScroll, 4000);
+                }
             });
         });
     }
@@ -120,7 +141,8 @@ public final class AppContentRow extends LinearLayout {
         card.setClickable(true);
         ImageView poster = new ImageView(host);
         poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        int w = dp(160), h = dp(90);
+        int sizePref = Math.max(0, Math.min(2, prefs.getInt("banner_poster_size", 1)));
+        int w = dp(new int[]{120, 160, 200}[sizePref]), h = dp(new int[]{68, 90, 112}[sizePref]);
         card.addView(poster, new LayoutParams(w, h));
         TextView label = new TextView(host);
         label.setText(item.title);
