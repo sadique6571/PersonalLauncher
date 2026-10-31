@@ -598,17 +598,9 @@ public final class PersonalHomeActivity extends Activity {
     private int slideshowIndex = 0;
     private void updateOnlineWallpaper() {
         if (sky == null || prefs.getInt("wallpaper_source", 0) != 1) return;
-        boolean daynight = prefs.getBoolean("wallpaper_daynight", false);
-        int index;
-        if (daynight) {
-            int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
-            boolean isDay = hour >= 6 && hour < 18;
-            // Day uses photos 0-2, night uses 3-5; slideshow advances within the set.
-            index = (isDay ? 0 : 3) + (slideshowIndex % 3);
-        } else {
-            index = slideshowIndex % 6;
-        }
-        sky.loadOnlinePhoto(index);
+        // Bing daily: always today's wallpaper (idx=0). No slideshow cycling —
+        // it changes automatically every day. (User 2026-10-31.)
+        sky.loadOnlinePhoto(0);
     }
 
     private final Runnable slideshowStep = new Runnable() {
