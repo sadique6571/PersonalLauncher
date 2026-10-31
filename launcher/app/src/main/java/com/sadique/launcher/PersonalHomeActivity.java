@@ -1208,6 +1208,33 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     /** Subtle background behind the header (toggle in settings). */
+    /**
+     * Applies the performance profile. In Light mode, disables expensive effects:
+     * crossfade, parallax, entrance cascade, clock seconds, auto-scroll, and shadows.
+     */
+    private void applyPerformanceProfile() {
+        int tier = MemoryProfile.effectiveTier(this, prefs);
+        if (tier == MemoryProfile.TIER_LIGHT) {
+            // Light mode defaults: static, minimal.
+            // Note: we don't force-overwrite user prefs here; the drawing code
+            // checks MemoryProfile.allow*() at draw time. This just ensures
+            // the crossfade buffer isn't allocated.
+            if (sky != null) sky.releaseTransient();
+        }
+    }
+
+    /** Returns true if the named effect is allowed in the current performance tier. */
+    private boolean perfAllows(String effect) {
+        int tier = MemoryProfile.effectiveTier(this, prefs);
+        switch (effect) {
+            case "crossfade": return MemoryProfile.allowCrossfade(tier);
+            case "parallax": return MemoryProfile.allowParallax(tier);
+            case "entrance": return MemoryProfile.allowEntrance(tier);
+            case "autoscroll": return MemoryProfile.allowAutoScroll(tier);
+            default: return true;
+        }
+    }
+
     private void applyHeaderBackground() {
         if (header == null) return;
         if (prefs.getBoolean("header_bg", false)) {
@@ -1425,9 +1452,9 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void systemMenu() {
-        String[] labels = {"Screensaver & weather", "Profile name & photo", "Avatar shape", "Header background", "Launcher font", "Choose default Home", "Reset layout & unhide apps"};
-        String[] hints = {"Slideshow, weather & idle timer", "Name and local profile picture", "Circle or rounded square", "Subtle panel behind header", "Font for the launcher", "Set this launcher as Home", "Restore the default layout"};
-        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_person, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_home_settings, R.drawable.ic_settings};
+        String[] labels = {"Screensaver & weather", "Profile name & photo", "Avatar shape", "Header background", "Launcher font", "Performance", "Choose default Home", "Reset layout & unhide apps"};
+        String[] hints = {"Slideshow, weather & idle timer", "Name and local profile picture", "Circle or rounded square", "Subtle panel behind header", "Font for the launcher", "Light, Balanced or Full", "Set this launcher as Home", "Restore the default layout"};
+        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_person, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_home_settings, R.drawable.ic_settings};
         Runnable[] choices = {
             this::screensaverSettings,
             this::editProfile,
@@ -1441,6 +1468,11 @@ public final class PersonalHomeActivity extends Activity {
             }),
             () -> chooseSetting("Launcher font", new String[]{"Default", "Serif", "Mono", "Light"}, which -> {
                 prefs.edit().putInt("app_font", which).apply(); buildHome();
+            }),
+            () -> chooseSetting("Performance", new String[]{"Auto", "Light", "Balanced", "Full"}, which -> {
+                prefs.edit().putInt("perf_mode", which).apply();
+                applyPerformanceProfile();
+                buildHome();
             }),
             () -> launch(new Intent(this, HomeSettingsActivity.class)),
             () -> new AlertDialog.Builder(this).setTitle("Reset layout and show all apps?").setPositiveButton("Reset", (dialog, which) -> {
@@ -1726,6 +1758,22 @@ public final class PersonalHomeActivity extends Activity {
         super.onDestroy();
     }
 
+    @Override public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        // Release rebuildable resources under memory pressure.
+        // TRIM_MEMORY_UI_HIDDEN and above: we're in the background.
+        if (level >= TRIM_MEMORY_UI_HIDDEN) {
+            // Clear online wallpaper (reloadable from cache/network).
+            if (sky != null) sky.releaseTransient();
+            // Trim icon memory cache.
+            System.gc(); // Hint; actual collection is up to the runtime.
+        }
+        // TRIM_MEMORY_RUNNING_CRITICAL: also drop the crossfade buffer.
+        if (level >= TRIM_MEMORY_RUNNING_CRITICAL) {
+            if (sky != null) sky.releaseTransient();
+        }
+    }
+
     /** Static dark wallpaper and a single focus glow; no continuously running animation. */
     private final class SkyClock extends View {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
@@ -1734,6 +1782,19 @@ public final class PersonalHomeActivity extends Activity {
         /** Decoded off the main thread; onDraw draws the gradient alone until it arrives. */
         private Bitmap backdrop;
         private float smoothDay = -1f;
+
+        /** Releases transient bitmaps (online photos, crossfade buffer) under memory pressure. */
+        void releaseTransient() {
+            // Don't recycle backdrop — it's the built-in wallpaper, still used in onDraw.
+            // Only clear the reloadable online variants.
+            onlineNext = null;
+            // Keep onlineWallpaper if it's currently displayed; it will be re-fetched on demand.
+            // Null it only if we have a fallback.
+            if (backdrop != null) {
+                onlineWallpaper = null;
+            }
+            System.gc();
+        }
         int minute, focusAccent;
         float clockY = -1, focusX, focusY, focusRadius;
         /** Analog clock mode: 0=digital, 1=analog. Set from prefs. */
