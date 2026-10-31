@@ -396,17 +396,13 @@ public final class PersonalHomeActivity extends Activity {
         if (resumed) continueWatching.start();
     }
 
-    /** Time-based greeting, e.g. "Subah Bakhair, Sadique". */
+    /** Time-based greeting, e.g. "Subah Bakhair". */
     private String greetingText() {
         int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
-        String greeting;
-        if (hour >= 5 && hour < 12) greeting = "Subah Bakhair";
-        else if (hour >= 12 && hour < 17) greeting = "Dopahar Bakhair";
-        else if (hour >= 17 && hour < 22) greeting = "Shaam Bakhair";
-        else greeting = "Shab Bakhair";
-        String name = prefs.getString("profile_name", "Sadique Sadiq");
-        String first = name.contains(" ") ? name.substring(0, name.indexOf(' ')) : name;
-        return greeting + ", " + first;
+        if (hour >= 5 && hour < 12) return "Subah Bakhair";
+        if (hour >= 12 && hour < 17) return "Dopahar Bakhair";
+        if (hour >= 17 && hour < 22) return "Shaam Bakhair";
+        return "Shab Bakhair";
     }
 
     private void updateClock() {
@@ -1071,9 +1067,32 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void launcherSettings() {
-        String[] labels = {"Hide / unhide apps", "App columns", "Tile size", "Tile spacing", "Tile corners", "Logo size", "Focused app title size", "Clock size", "Clock style", "Clock font", "Clock seconds", "Clock glow", "Theme", "Accent color", "Dark mode", "Wallpaper", "Wallpaper source", "Day / night wallpaper", "Wallpaper slideshow", "Glass intensity", "Wallpaper darkness", "App colour glow", "Screensaver & weather", "Continue watching", "Profile name & photo", "Choose default Home", "Reset layout & unhide apps", "Rearrange apps"};
+        String[] cats = {"Tiles", "Clock", "Theme", "Wallpaper", "Apps", "System"};
+        String[] catHints = {"App cards layout", "Time display", "Colors & appearance", "Background", "Your apps", "Launcher system"};
+        int[] catIcons = {R.drawable.ic_apps, R.drawable.ic_clock, R.drawable.ic_palette,
+                R.drawable.ic_picture, R.drawable.ic_apps, R.drawable.ic_settings};
+        GlassSettings.options(this, "Launcher settings", cats, catHints, catIcons, which -> {
+            switch (which) {
+                case 0: tileSettings(); break;
+                case 1: clockSettings(); break;
+                case 2: themeSettings(); break;
+                case 3: wallpaperMenu(); break;
+                case 4: appMenu(); break;
+                default: systemMenu(); break;
+            }
+        });
+    }
+
+    /** Submenu helper with per-row icons. */
+    private void subMenu(String title, String[] labels, String[] hints, int[] icons, Runnable[] choices) {
+        GlassSettings.options(this, title, labels, hints, icons, which -> choices[which].run());
+    }
+
+    private void tileSettings() {
+        String[] labels = {"App columns", "Tile size", "Tile spacing", "Tile corners", "Logo size", "Focused app title size", "App colour glow"};
+        String[] hints = {"Number of cards per row", "Compact or large cards", "Gap between cards", "Sharp, rounded or round", "App logo size in cards", "Name above the app grid", "Match the focused app"};
+        int[] icons = {R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_settings, R.drawable.ic_brightness};
         Runnable[] choices = {
-            this::hiddenApps,
             () -> chooseSetting("App columns", new String[]{"Automatic", "2", "3", "4", "5", "6"}, which -> {
                 prefs.edit().putInt(tv ? "tv_columns" : "phone_columns", which == 0 ? 0 : which + 1).apply(); refreshApps();
             }),
@@ -1095,6 +1114,18 @@ public final class PersonalHomeActivity extends Activity {
             () -> chooseSetting("Focused app title size", new String[]{"Small", "Normal", "Large", "Extra large"}, which -> {
                 int size = new int[]{24,32,40,48}[which]; prefs.edit().putInt("focus_title_size", size).apply(); appHeading.setTextSize(size);
             }),
+            () -> chooseSetting("App colour glow", new String[]{"On", "Off"}, which -> {
+                prefs.edit().putBoolean("focus_glow", which == 0).apply(); sky.focusAccent = 0; sky.invalidate();
+            }),
+        };
+        subMenu("Tiles", labels, hints, icons, choices);
+    }
+
+    private void clockSettings() {
+        String[] labels = {"Clock size", "Clock style", "Clock font", "Clock seconds", "Clock glow"};
+        String[] hints = {"Small, normal or large", "Digital or analog", "Light, serif or mono", "Show seconds", "Halo behind the clock"};
+        int[] icons = {R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock};
+        Runnable[] choices = {
             () -> chooseSetting("Clock size", new String[]{"Small", "Normal", "Large"}, which -> {
                 prefs.edit().putInt("clock_size", (tv ? new int[]{54,66,80} : new int[]{44,56,66})[which]).apply(); buildHome();
             }),
@@ -1114,6 +1145,15 @@ public final class PersonalHomeActivity extends Activity {
                 prefs.edit().putBoolean("clock_glow", which == 1).apply();
                 sky.invalidate();
             }),
+        };
+        subMenu("Clock", labels, hints, icons, choices);
+    }
+
+    private void themeSettings() {
+        String[] labels = {"Theme", "Accent color", "Dark mode", "Glass intensity"};
+        String[] hints = {"Cyan, Orange, Purple or Custom", "Custom theme color", "Midnight, automatic or light", "Transparency of panels"};
+        int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness};
+        Runnable[] choices = {
             () -> chooseSetting("Theme", new String[]{"Midnight Cyan", "Sunset Orange", "Deep Purple", "Custom"}, which -> {
                 prefs.edit().putInt("theme_name", which).apply();
                 if (which == 3) chooseAccentColor();
@@ -1123,6 +1163,19 @@ public final class PersonalHomeActivity extends Activity {
             () -> chooseSetting("Dark mode", new String[]{"Dark (Midnight Cyan)", "Automatic day / night", "Light"}, which -> {
                 prefs.edit().putString("theme_mode", new String[]{"dark","auto","light"}[which]).apply(); applyAppearance();
             }),
+            () -> chooseSetting("Glass intensity", new String[]{"Airy", "Normal", "Solid"}, which -> {
+                prefs.edit().putInt("glass_alpha", new int[]{30, 70, 100}[which]).apply();
+                buildHome();
+            }),
+        };
+        subMenu("Theme", labels, hints, icons, choices);
+    }
+
+    private void wallpaperMenu() {
+        String[] labels = {"Wallpaper", "Wallpaper source", "Day / night wallpaper", "Wallpaper slideshow", "Wallpaper darkness"};
+        String[] hints = {"Mountains or your own picture", "Built-in or online", "Different wallpaper day and night", "Change wallpaper over time", "Keep the landscape visible"};
+        int[] icons = {R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_brightness};
+        Runnable[] choices = {
             this::wallpaperSettings,
             () -> chooseSetting("Wallpaper source", new String[]{"Built-in", "Online"}, which -> {
                 prefs.edit().putInt("wallpaper_source", which).apply();
@@ -1138,21 +1191,34 @@ public final class PersonalHomeActivity extends Activity {
                 prefs.edit().putInt("wallpaper_slideshow", new int[]{0, 15, 30, 60}[which]).apply();
                 armSlideshow();
             }),
-            () -> chooseSetting("Glass intensity", new String[]{"Airy", "Normal", "Solid"}, which -> {
-                prefs.edit().putInt("glass_alpha", new int[]{30, 70, 100}[which]).apply();
-                buildHome();
-            }),
             () -> chooseSetting("Wallpaper darkness", new String[]{"Light", "Medium", "Dark"}, which -> {
                 prefs.edit().putInt("background_dim", which * 20).apply(); sky.invalidate();
             }),
-            () -> chooseSetting("App colour glow", new String[]{"On", "Off"}, which -> {
-                prefs.edit().putBoolean("focus_glow", which == 0).apply(); sky.focusAccent = 0; sky.invalidate();
-            }),
-            this::screensaverSettings,
+        };
+        subMenu("Wallpaper", labels, hints, icons, choices);
+    }
+
+    private void appMenu() {
+        String[] labels = {"Hide / unhide apps", "Rearrange apps", "Continue watching"};
+        String[] hints = {"Choose which apps appear", "Choose the order of app cards", "Resume titles after your apps"};
+        int[] icons = {R.drawable.ic_apps, R.drawable.ic_swap_vert, R.drawable.ic_livetv};
+        Runnable[] choices = {
+            this::hiddenApps,
+            this::rearrangeApps,
             () -> chooseSetting("Continue watching", new String[]{"Show below apps", "Hide row", "Allow TV Watch Next access"}, which -> {
                 if (which == 2) continueWatching.requestAccess();
                 else { prefs.edit().putBoolean("continue_watching", which == 0).apply(); continueWatching.reload(); }
             }),
+        };
+        subMenu("Apps", labels, hints, icons, choices);
+    }
+
+    private void systemMenu() {
+        String[] labels = {"Screensaver & weather", "Profile name & photo", "Choose default Home", "Reset layout & unhide apps"};
+        String[] hints = {"Slideshow, weather & idle timer", "Name and local profile picture", "Set this launcher as Home", "Restore the default layout"};
+        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_home_settings, R.drawable.ic_settings};
+        Runnable[] choices = {
+            this::screensaverSettings,
             this::editProfile,
             () -> launch(new Intent(this, HomeSettingsActivity.class)),
             () -> new AlertDialog.Builder(this).setTitle("Reset layout and show all apps?").setPositiveButton("Reset", (dialog, which) -> {
@@ -1160,10 +1226,8 @@ public final class PersonalHomeActivity extends Activity {
                         .remove("focus_title_size").remove("clock_size").remove("background_dim").remove("theme_mode")
                         .remove("wallpaper_mode").remove("focus_glow").remove("continue_watching").apply(); buildHome();
             }).setNegativeButton(android.R.string.cancel, null).show(),
-            this::rearrangeApps
         };
-        String[] hints = {"Choose which apps appear", "Number of cards per row", "Compact or large cards", "Gap between cards", "Sharp, rounded or round", "App logo size in cards", "Name above the app grid", "Small, normal or large", "Digital or analog", "Light, serif or mono", "Show seconds", "Halo behind the clock", "Cyan, Orange, Purple or Custom", "Custom theme color", "Midnight, automatic or light", "Mountains or your own picture", "Built-in or online", "Different wallpaper day and night", "Change wallpaper over time", "Transparency of panels", "Keep the landscape visible", "Match the focused app", "Slideshow, weather & idle timer", "Resume titles after your apps", "Name and local profile picture", "Set this launcher as Home", "Restore the default layout", "Choose the order of app cards"};
-        GlassSettings.options(this, "Launcher settings", labels, hints, which -> choices[which].run());
+        subMenu("System", labels, hints, icons, choices);
     }
 
     private void wallpaperSettings() {

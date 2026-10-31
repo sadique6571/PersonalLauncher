@@ -15,6 +15,17 @@ import android.widget.TextView;
 /** Shared remote-friendly glass cards for settings and every launcher option page. */
 final class GlassSettings {
     static int dp(Activity host, float n) { return Math.round(n * host.getResources().getDisplayMetrics().density); }
+    /** Theme accent color, mirrored from the launcher's theme picker. */
+    static int themeAccent(android.content.Context ctx) {
+        android.content.SharedPreferences prefs = ctx.getSharedPreferences("personal_home", 0);
+        switch (prefs.getInt("theme_name", 0)) {
+            case 1: return 0xffff9a5c; // Sunset Orange
+            case 2: return 0xffb388ff; // Deep Purple
+            case 3: return prefs.getInt("custom_accent", 0xff40d9ff);
+            default: return 0xff40d9ff; // Midnight Cyan
+        }
+    }
+
     static GradientDrawable background(Activity host, boolean focused) {
         java.util.Calendar now = java.util.Calendar.getInstance();
         android.content.SharedPreferences prefs = host.getSharedPreferences("personal_home", 0);
@@ -25,7 +36,7 @@ final class GlassSettings {
                 light ? new int[]{focused ? 0xf04c7b99 : 0xed3b607d, focused ? 0xf0375d7b : 0xed28475f}
                         : new int[]{focused ? 0xe51a374b : 0xc5132539, focused ? 0xed0b2337 : 0xd009182a});
         shape.setCornerRadius(dp(host, 10));
-        shape.setStroke(dp(host, focused ? 2 : 1), focused ? 0xff27d5ff : 0x55415a72);
+        shape.setStroke(dp(host, focused ? 2 : 1), focused ? themeAccent(host) : 0x55415a72);
         // Glass intensity: 0=airy, 100=solid.
         int intensity = Math.max(0, Math.min(100, prefs.getInt("glass_alpha", 70)));
         shape.setAlpha(100 + intensity * 155 / 100);
@@ -163,13 +174,18 @@ final class GlassSettings {
         previous.restore();
     }
     static void options(Activity host, String title, String[] names, String[] hints, java.util.function.IntConsumer selected) {
+        options(host, title, names, hints, null, selected);
+    }
+
+    static void options(Activity host, String title, String[] names, String[] hints, int[] icons, java.util.function.IntConsumer selected) {
         LinearLayout rows = new LinearLayout(host); rows.setOrientation(LinearLayout.VERTICAL);
         AlertDialog dialog = panel(host, title, rows);
         boolean navigation = hints != null || title.equals("Online landscape screensaver");
         for (int i = 0; i < names.length; i++) {
             final int index = i;
             String hint = (hints != null && i < hints.length) ? hints[i] : null;
-            View option = row(host, names[i], hint, R.drawable.ic_settings, 0xff9ad6ed, () -> {});
+            int icon = (icons != null && i < icons.length) ? icons[i] : R.drawable.ic_settings;
+            View option = row(host, names[i], hint, icon, themeAccent(host), () -> {});
             option.setOnClickListener(v -> {
                 v.requestFocus();
                 selected.accept(index);
