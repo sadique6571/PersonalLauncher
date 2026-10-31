@@ -1496,9 +1496,9 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void systemMenu() {
-        String[] labels = {"Screensaver & weather", "Profile name & photo", "Avatar shape", "Header background", "Launcher font", "Performance", "Choose default Home", "Reset layout & unhide apps"};
-        String[] hints = {"Slideshow, weather & idle timer", "Name and local profile picture", "Circle or rounded square", "Subtle panel behind header", "Font for the launcher", "Light, Balanced or Full", "Set this launcher as Home", "Restore the default layout"};
-        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_person, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_home_settings, R.drawable.ic_settings};
+        String[] labels = {"Screensaver & weather", "Profile name & photo", "Avatar shape", "Header background", "Launcher font", "Performance", "Export settings", "Import settings", "Choose default Home", "Reset layout & unhide apps"};
+        String[] hints = {"Slideshow, weather & idle timer", "Name and local profile picture", "Circle or rounded square", "Subtle panel behind header", "Font for the launcher", "Light, Balanced or Full", "Save to a file", "Restore from a file", "Set this launcher as Home", "Restore the default layout"};
+        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_person, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_home_settings, R.drawable.ic_settings};
         Runnable[] choices = {
             this::screensaverSettings,
             this::editProfile,
@@ -1518,6 +1518,8 @@ public final class PersonalHomeActivity extends Activity {
                 applyPerformanceProfile();
                 buildHome();
             }),
+            this::exportSettings,
+            this::importSettings,
             () -> launch(new Intent(this, HomeSettingsActivity.class)),
             () -> new AlertDialog.Builder(this).setTitle("Reset layout and show all apps?").setPositiveButton("Reset", (dialog, which) -> {
                 prefs.edit().remove("app_order").remove("hidden_apps").remove("tv_columns").remove("phone_columns").remove("large_tiles")
@@ -1667,8 +1669,121 @@ public final class PersonalHomeActivity extends Activity {
         });
     }
 
+    /** Export settings to JSON via document picker. Excludes secrets. */
+    private void exportSettings() {
+        try {
+            org.json.JSONObject json = new org.json.JSONObject();
+            json.put("version", 1);
+            json.put("app", "com.sadique.launcher");
+            // Export safe prefs only (no secrets, no cache).
+            java.util.Map<String, ?> all = prefs.getAll();
+            org.json.JSONObject data = new org.json.JSONObject();
+            for (java.util.Map.Entry<String, ?> e : all.entrySet()) {
+                String k = e.getKey();
+                // Skip secrets, caches, and transient state.
+                if (k.contains("key") || k.contains("secret") || k.contains("token")
+                        || k.contains("password") || k.startsWith("weather_cached")
+                        || k.equals("known_apps") || k.equals("new_apps")) continue;
+                Object v = e.getValue();
+                if (v instanceof String || v instanceof Integer || v instanceof Boolean
+                        || v instanceof Long || v instanceof Float) {
+                    data.put(k, v);
+                } else if (v instanceof java.util.Set) {
+                    org.json.JSONArray arr = new org.json.JSONArray();
+                    for (Object item : (java.util.Set<?>) v) arr.put(item.toString());
+                    data.put(k, arr);
+                }
+            }
+            json.put("settings", data);
+            String content = json.toString(2);
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT)
+                    .addCategory(Intent.CATEGORY_OPENABLE)
+                    .setType("application/json")
+                    .putExtra(Intent.EXTRA_TITLE, "launcher-settings.json");
+            // Store content for onActivityResult.
+            pendingExport = content;
+            startActivityForResult(intent, 10);
+        } catch (Exception e) {
+            android.widget.Toast.makeText(this, "Export failed", android.widget.Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private String pendingExport;
+
+    /** Import settings from JSON via document picker. Validates format version. */
+    private void importSettings() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT)
+                    .addCategory(Intent.CATEGORY_OPENABLE)
+                    .setType("application/json");
+            startActivityForResult(intent, 11);
+        } catch (Exception e) {
+            android.widget.Toast.makeText(this, "Import failed", android.widget.Toast.LENGTH_SHORT).show();
+        }
+    }
+
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == 10 && result == RESULT_OK && data != null && data.getData() != null) {
+            // Export: write JSON to the picked document.
+            String content = pendingExport;
+            pendingExport = null;
+            if (content != null) {
+                worker.execute(() -> {
+                    try (java.io.OutputStream out = getContentResolver().openOutputStream(data.getData())) {
+                        out.write(content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        handler.post(() -> android.widget.Toast.makeText(this,
+                                "Settings exported", android.widget.Toast.LENGTH_SHORT).show());
+                    } catch (Exception e) {
+                        handler.post(() -> android.widget.Toast.makeText(this,
+                                "Export failed", android.widget.Toast.LENGTH_SHORT).show());
+                    }
+                });
+            }
+            return;
+        }
+        if (request == 11 && result == RESULT_OK && data != null && data.getData() != null) {
+            // Import: read and validate JSON, apply settings.
+            worker.execute(() -> {
+                try (java.io.InputStream in = getContentResolver().openInputStream(data.getData())) {
+                    java.util.Scanner scanner = new java.util.Scanner(in).useDelimiter("\\A");
+                    String content = scanner.hasNext() ? scanner.next() : "";
+                    org.json.JSONObject json = new org.json.JSONObject(content);
+                    int version = json.optInt("version", 0);
+                    if (version != 1) throw new Exception("Unsupported version: " + version);
+                    if (!"com.sadique.launcher".equals(json.optString("app"))) {
+                        throw new Exception("Not a Personal Launcher export");
+                    }
+                    org.json.JSONObject settings = json.getJSONObject("settings");
+                    SharedPreferences.Editor ed = prefs.edit();
+                    java.util.Iterator<String> keys = settings.keys();
+                    while (keys.hasNext()) {
+                        String k = keys.next();
+                        Object v = settings.get(k);
+                        if (v instanceof String) ed.putString(k, (String) v);
+                        else if (v instanceof Integer) ed.putInt(k, (Integer) v);
+                        else if (v instanceof Boolean) ed.putBoolean(k, (Boolean) v);
+                        else if (v instanceof Long) ed.putLong(k, (Long) v);
+                        else if (v instanceof org.json.JSONArray) {
+                            java.util.Set<String> set = new java.util.HashSet<>();
+                            org.json.JSONArray arr = (org.json.JSONArray) v;
+                            for (int i = 0; i < arr.length(); i++) set.add(arr.getString(i));
+                            ed.putStringSet(k, set);
+                        }
+                    }
+                    ed.apply();
+                    handler.post(() -> {
+                        android.widget.Toast.makeText(this,
+                                "Settings imported — restarting Home", android.widget.Toast.LENGTH_SHORT).show();
+                        buildHome();
+                    });
+                } catch (Exception e) {
+                    handler.post(() -> android.widget.Toast.makeText(this,
+                            "Import failed: " + e.getMessage(), android.widget.Toast.LENGTH_LONG).show());
+                }
+            });
+            return;
+        }
         if (request == 9) {
             if (result == RESULT_OK && data != null) {
                 ArrayList<String> words = data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);
