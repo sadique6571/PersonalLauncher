@@ -10,12 +10,13 @@
 ## Home screen
 
 - TV: profile at the top left with greeting underneath; weather, network status, Quick actions drawer and Settings at the top right. Search, Play Store and Screensaver are inside Quick actions; Inputs stay in Settings and voice uses the remote Assistant button.
-- Clock with date (digital or analog, 3 fonts, seconds, glow, 12/24-hour, left/center/right alignment, hide option). Apps appear directly below the clock; the clock scrolls away with content.
+- Clock with date (digital or analog, 3 fonts, seconds, glow, shadow, 12/24-hour, left/center/right alignment, hide option). Large bold style like the demo. Apps appear directly below the clock; the clock scrolls away with content.
 - One app drawer. Long-press an app → Move app, or use Launcher settings → Rearrange apps; saved order survives restarts and new apps append. Small 16:9 rounded cards show original app icons without wordmark banners. Clean card backgrounds and proportional logos avoid stretched edge pixels; a subtle highlight and shadow give tiles a raised appearance. No labels underneath.
 - Focus uses a matching icon-colour glow/border with zoom, press dip and parallax wallpaper effects.
 - Tiles: size, spacing, corner radius, logo size, colour glow, focus border thickness, staggered slide-in entrance animation, NEW-app badge.
 - Themes: Midnight Cyan, Sunset Orange, Deep Purple, or a custom accent colour — themes tint the glass panels and setting icons.
-- Wallpaper: day/night auto, online photos, slideshow, crossfade, or a saved favourite.
+- Wallpaper: mountain-lake built-in, day/night auto, online photos, slideshow, crossfade, or a saved favourite. Sun by day and moon by night (on/off), night aurora, stars, sunset tint, moonlight glow, smooth day/night transition (all on/off).
+- Bottom shade gradient behind tiles (on/off). Header frosted blur (on/off).
 - Launcher-wide font: Default, Serif, Mono or Light.
 - Greeting text (time-based, can be hidden). Home weather card (Open-Meteo). Cinematic top/bottom shade and grid backdrop panel.
 - No favorites, duplicate dock/quick-access rows or Gemini button.
