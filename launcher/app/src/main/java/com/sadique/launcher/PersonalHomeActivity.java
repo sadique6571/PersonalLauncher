@@ -369,7 +369,7 @@ public final class PersonalHomeActivity extends Activity {
         clock.setOrientation(LinearLayout.VERTICAL);
         clock.setGravity(Gravity.CENTER);
         boolean compact = getResources().getConfiguration().screenHeightDp < 480;
-        clock.setPadding(0, dp(compact ? 0 : tv ? 18 : 24), 0, dp(compact ? 8 : 16));
+        clock.setPadding(0, dp(compact ? 0 : tv ? 10 : 16), 0, dp(compact ? 8 : 12));
         int clockSize = prefs.getInt("clock_size", tv ? 52 : 44);
         // One-time migration (2026-10-31): old sizes were too big, map to new scale.
         int[] oldSizes = tv ? new int[]{66, 80, 96} : new int[]{56, 68, 80};
@@ -402,6 +402,8 @@ public final class PersonalHomeActivity extends Activity {
         // Horizontal padding prevents AM/PM clipping from the shadow layer.
         time.setPadding(dp(12), dp(2), dp(12), dp(10));
         clockTextSize = clockSize;
+        // Analog face radius follows the clock size (diameter ~= digital height).
+        if (sky != null) sky.clockRadius = dp(clockSize * 0.85f);
         date = text("", tv ? 14 : 13, MUTED);
         if (prefs.getBoolean("clock_shadow", true)) {
             date.setShadowLayer(dp(6), 0, dp(2), 0xcc000000);
@@ -503,8 +505,12 @@ public final class PersonalHomeActivity extends Activity {
         updateClock();
         updateNetwork();
         adaptTextColors();
-        // buildHome() replaces the SkyClock instance, which drops the in-memory online
-        // wallpaper — re-fetch it so a settings change never resets the wallpaper to default.
+        // buildHome() replaces the SkyClock instance, which drops in-memory wallpapers.
+        // Re-fetch online + reload custom from disk so a settings change never
+        // resets the wallpaper to default. (User 2026-10-31.)
+        if ("custom".equals(prefs.getString("wallpaper_mode", "mountains")) && customWallpaper == null) {
+            loadWallpaper();
+        }
         updateOnlineWallpaper();
         WindowManager.LayoutParams brightness = getWindow().getAttributes();
         brightness.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
@@ -2170,6 +2176,8 @@ public final class PersonalHomeActivity extends Activity {
         }
         int minute, focusAccent;
         float clockY = -1, focusX, focusY, focusRadius;
+        /** Analog face radius in px, set from clock_size pref. */
+        float clockRadius = -1;
         /** Analog clock mode: 0=digital, 1=analog. Set from prefs. */
         int clockStyle;
         /** Online wallpaper with crossfade. */
@@ -2352,7 +2360,7 @@ public final class PersonalHomeActivity extends Activity {
             // Analog clock face.
             if (clockStyle == 1) {
                 float cx = getWidth() / 2f;
-                float radius = Math.min(getWidth(), getHeight()) / 7f;
+                float radius = clockRadius > 0 ? clockRadius : Math.min(getWidth(), getHeight()) / 7f;
                 paint.setShader(null);
                 paint.setStyle(Paint.Style.FILL);
                 paint.setColor(0x99000000);
