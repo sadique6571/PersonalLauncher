@@ -68,6 +68,7 @@ public final class PersonalHomeActivity extends Activity {
     private Bitmap avatarBitmap;
     private Bitmap customWallpaper;
     private ContinueWatchingView continueWatching;
+    private AppContentRow netflixRow, youtubeRow;
     private SkyClock sky;
     private ConnectivityManager connectivity;
     private boolean networkRegistered, resumed, tv;
@@ -235,6 +236,8 @@ public final class PersonalHomeActivity extends Activity {
 
     private void buildHome() {
         if (continueWatching != null) continueWatching.stop();
+        if (netflixRow != null) netflixRow.stop();
+        if (youtubeRow != null) youtubeRow.stop();
         pageWidth = 0;
         android.widget.FrameLayout root = new android.widget.FrameLayout(this);
         root.setBackgroundColor(0xff031126);
@@ -366,6 +369,11 @@ public final class PersonalHomeActivity extends Activity {
         LinearLayout scrollContent = new LinearLayout(this);
         scrollContent.setOrientation(LinearLayout.VERTICAL);
         scrollContent.addView(clock);
+        // Netflix & YouTube banner rows right below the clock (optional, on/off in settings).
+        netflixRow = new AppContentRow(this, "Netflix", new String[]{"com.netflix.ninja"}, label -> appHeading.setText(label));
+        youtubeRow = new AppContentRow(this, "YouTube", new String[]{"com.google.android.youtube.tv", "com.google.android.youtube"}, label -> appHeading.setText(label));
+        scrollContent.addView(netflixRow, new LinearLayout.LayoutParams(-1, -2));
+        scrollContent.addView(youtubeRow, new LinearLayout.LayoutParams(-1, -2));
         scrollContent.addView(appHeading);
         scrollContent.addView(appBody, new LinearLayout.LayoutParams(-1, -2));
         scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
@@ -472,6 +480,15 @@ public final class PersonalHomeActivity extends Activity {
             handler.postDelayed(slideshowStep, minutes * 60_000L);
         }
     }
+    /** Starts/stops the Netflix/YouTube rows based on their on/off prefs. */
+    private void updateContentRows() {
+        if (netflixRow == null || youtubeRow == null) return;
+        if (prefs.getBoolean("row_netflix", false)) netflixRow.start(); else netflixRow.stop();
+        if (prefs.getBoolean("row_youtube", false)) youtubeRow.start(); else youtubeRow.stop();
+        netflixRow.setVisibility(prefs.getBoolean("row_netflix", false) ? android.view.View.VISIBLE : android.view.View.GONE);
+        youtubeRow.setVisibility(prefs.getBoolean("row_youtube", false) ? android.view.View.VISIBLE : android.view.View.GONE);
+    }
+
     /** Small weather pill in the header, refreshed on resume and every 15 minutes. */
     private void refreshHomeWeather() {
         if (homeWeather == null) return;
@@ -1200,15 +1217,23 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void appMenu() {
-        String[] labels = {"Hide / unhide apps", "Rearrange apps", "Continue watching"};
-        String[] hints = {"Choose which apps appear", "Choose the order of app cards", "Resume titles after your apps"};
-        int[] icons = {R.drawable.ic_apps, R.drawable.ic_swap_vert, R.drawable.ic_livetv};
+        String[] labels = {"Hide / unhide apps", "Rearrange apps", "Continue watching", "Netflix row", "YouTube row"};
+        String[] hints = {"Choose which apps appear", "Choose the order of app cards", "Resume titles after your apps", "Netflix banners below the clock", "YouTube banners below the clock"};
+        int[] icons = {R.drawable.ic_apps, R.drawable.ic_swap_vert, R.drawable.ic_livetv, R.drawable.ic_livetv, R.drawable.ic_livetv};
         Runnable[] choices = {
             this::hiddenApps,
             this::rearrangeApps,
             () -> chooseSetting("Continue watching", new String[]{"Show below apps", "Hide row", "Allow TV Watch Next access"}, which -> {
                 if (which == 2) continueWatching.requestAccess();
                 else { prefs.edit().putBoolean("continue_watching", which == 0).apply(); continueWatching.reload(); }
+            }),
+            () -> chooseSetting("Netflix row", new String[]{"Off", "On"}, which -> {
+                prefs.edit().putBoolean("row_netflix", which == 1).apply();
+                updateContentRows();
+            }),
+            () -> chooseSetting("YouTube row", new String[]{"Off", "On"}, which -> {
+                prefs.edit().putBoolean("row_youtube", which == 1).apply();
+                updateContentRows();
             }),
         };
         subMenu("Apps", labels, hints, icons, choices);
@@ -1425,6 +1450,7 @@ public final class PersonalHomeActivity extends Activity {
         tick.run();
         updateNetwork();
         continueWatching.start();
+        updateContentRows();
         refreshHomeWeather();
         updateOnlineWallpaper();
         armSlideshow();
@@ -1440,6 +1466,8 @@ public final class PersonalHomeActivity extends Activity {
     @Override protected void onPause() {
         resumed = false;
         if (continueWatching != null) continueWatching.stop();
+        if (netflixRow != null) netflixRow.stop();
+        if (youtubeRow != null) youtubeRow.stop();
         handler.removeCallbacks(idleScreensaver);
         handler.removeCallbacks(tick);
         handler.removeCallbacks(secondTick);
@@ -1487,6 +1515,8 @@ public final class PersonalHomeActivity extends Activity {
         if (searchDialog != null) searchDialog.dismiss();
         handler.removeCallbacksAndMessages(null);
         if (continueWatching != null) continueWatching.stop();
+        if (netflixRow != null) netflixRow.stop();
+        if (youtubeRow != null) youtubeRow.stop();
         worker.shutdownNow();
         appWorker.shutdownNow();
         super.onDestroy();
