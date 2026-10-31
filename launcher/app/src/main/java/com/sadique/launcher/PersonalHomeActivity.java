@@ -588,6 +588,8 @@ public final class PersonalHomeActivity extends Activity {
         if (prefs.getBoolean("row_youtube", false)) youtubeRow.start(); else youtubeRow.stop();
         netflixRow.setVisibility(prefs.getBoolean("row_netflix", false) ? android.view.View.VISIBLE : android.view.View.GONE);
         youtubeRow.setVisibility(prefs.getBoolean("row_youtube", false) ? android.view.View.VISIBLE : android.view.View.GONE);
+        // Toggling banners also flips Continue Watching visibility (it hides while banners are on).
+        if (continueWatching != null) continueWatching.reload();
     }
 
     /** Weather cache validity: 15 minutes. */
@@ -1851,25 +1853,30 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     /**
-     * Offers to make Personal Launcher the default Home, once. The app previously
-     * never asked — the only path was a buried System menu entry — so installs kept
-     * the stock launcher as default and the Home button never reached us.
+     * Offers to make Personal Launcher the default Home. The old logic set a permanent
+     * "asked once" flag, so after an update/reinstall that reset the default-home setting
+     * the prompt never came back. Now the offer reappears whenever we are not the default
+     * (with a short snooze after "Later" so it doesn't nag every launch).
      */
     private void maybeOfferDefaultHome() {
-        if (isDestroyed() || isFinishing() || prefs.getBoolean("home_offer_done", false)) return;
+        if (isDestroyed() || isFinishing()) return;
         boolean alreadyDefault = false;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             android.app.role.RoleManager rm = getSystemService(android.app.role.RoleManager.class);
             if (rm != null && rm.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME))
                 alreadyDefault = rm.isRoleHeld(android.app.role.RoleManager.ROLE_HOME);
         }
-        prefs.edit().putBoolean("home_offer_done", true).apply();
         if (alreadyDefault || !HomeSettingsActivity.available(this)) return;
+        // One-time migration: drop the old permanent flag so installs that lost the
+        // default-home status on update get the offer again.
+        if (prefs.contains("home_offer_done")) prefs.edit().remove("home_offer_done").apply();
+        if (System.currentTimeMillis() < prefs.getLong("home_offer_snooze", 0)) return;
         new AlertDialog.Builder(this)
             .setTitle("Use as Home screen?")
             .setMessage("Set Personal Launcher as your default launcher so the Home button opens it.")
             .setPositiveButton("Set as default", (d, w) -> launch(new Intent(this, HomeSettingsActivity.class)))
-            .setNegativeButton("Later", null)
+            .setNegativeButton("Later", (d, w) -> prefs.edit().putLong("home_offer_snooze",
+                    System.currentTimeMillis() + 3L * 24 * 60 * 60 * 1000).apply())
             .show();
     }
 

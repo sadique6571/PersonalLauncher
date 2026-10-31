@@ -118,7 +118,11 @@ public final class ContinueWatchingView extends LinearLayout {
     }
 
     public void reload() {
-        boolean enabled = prefs.getBoolean("continue_watching", true);
+        // The Netflix/YouTube banner rows already show continue-watching content,
+        // so this row hides while any banner row is enabled (avoids duplication).
+        boolean bannersOn = prefs.getBoolean("row_netflix", false)
+                || prefs.getBoolean("row_youtube", false);
+        boolean enabled = prefs.getBoolean("continue_watching", true) && !bannersOn;
         setVisibility(enabled ? VISIBLE : GONE);
         int request = ++generation;
         if (query != null) query.cancel();

@@ -171,6 +171,10 @@ public final class AppContentRow extends LinearLayout {
         card.setClickable(true);
         ImageView poster = new ImageView(host);
         poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        // Rounded corners like the app tiles: clip the poster bitmap to the
+        // rounded outline (tile_bg radius = 16dp).
+        poster.setBackgroundResource(R.drawable.banner_poster_bg);
+        poster.setClipToOutline(true);
         int sizePref = Math.max(0, Math.min(2, prefs.getInt("banner_poster_size", 1)));
         int w = dp(new int[]{120, 160, 200}[sizePref]), h = dp(new int[]{68, 90, 112}[sizePref]);
         card.addView(poster, new LayoutParams(w, h));
@@ -206,7 +210,7 @@ public final class AppContentRow extends LinearLayout {
     private android.graphics.drawable.Drawable focusBorder() {
         android.graphics.drawable.GradientDrawable border = new android.graphics.drawable.GradientDrawable();
         border.setColor(0x00000000);
-        border.setCornerRadius(dp(10));
+        border.setCornerRadius(dp(16));
         border.setStroke(dp(2), GlassSettings.themeAccent(host));
         return border;
     }
