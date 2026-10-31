@@ -17,7 +17,8 @@ final class GlassSettings {
     static int dp(Activity host, float n) { return Math.round(n * host.getResources().getDisplayMetrics().density); }
     static GradientDrawable background(Activity host, boolean focused) {
         java.util.Calendar now = java.util.Calendar.getInstance();
-        float day = HomeAppearance.daylight(host.getSharedPreferences("personal_home", 0).getString("theme_mode", "dark"),
+        android.content.SharedPreferences prefs = host.getSharedPreferences("personal_home", 0);
+        float day = HomeAppearance.daylight(prefs.getString("theme_mode", "dark"),
                 now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE));
         boolean light = day >= .5f;
         GradientDrawable shape = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
@@ -25,7 +26,18 @@ final class GlassSettings {
                         : new int[]{focused ? 0xe51a374b : 0xc5132539, focused ? 0xed0b2337 : 0xd009182a});
         shape.setCornerRadius(dp(host, 10));
         shape.setStroke(dp(host, focused ? 2 : 1), focused ? 0xff27d5ff : 0x55415a72);
+        // Glass intensity: 0=airy, 100=solid.
+        int intensity = Math.max(0, Math.min(100, prefs.getInt("glass_alpha", 70)));
+        shape.setAlpha(100 + intensity * 155 / 100);
         return shape;
+    }
+    /** Background blur behind dialogs (Android 12+; older versions keep the dim). */
+    static void applyBlur(android.app.Dialog dialog) {
+        if (dialog == null || dialog.getWindow() == null) return;
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
+            dialog.getWindow().getAttributes().setBlurBehindRadius(40);
+        }
     }
     static TextView label(Activity host, String text, int size, int color) {
         TextView view = new TextView(host); view.setText(text); view.setTextSize(size); view.setTextColor(color); return view;
@@ -170,6 +182,7 @@ final class GlassSettings {
             });
             rows.addView(option);
         }
+        applyBlur(dialog);
         dialog.show();
     }
 }

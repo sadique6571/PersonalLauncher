@@ -16,6 +16,10 @@ final class AppArtwork {
     private AppArtwork(Drawable image, int accent) { this.image = image; this.accent = accent; }
 
     static AppArtwork create(Resources resources, Drawable source) {
+        return create(resources, source, 1f);
+    }
+
+    static AppArtwork create(Resources resources, Drawable source, float logoScale) {
         int size = 256;
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
@@ -78,7 +82,7 @@ final class AppArtwork {
         Canvas cardCanvas = new Canvas(card);
         cardCanvas.drawColor(nativeBackground);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-        float scale = Math.min(270f / bitmap.getWidth(), 140f / bitmap.getHeight());
+        float scale = Math.min(270f / bitmap.getWidth(), 140f / bitmap.getHeight()) * logoScale;
         float w = bitmap.getWidth() * scale, h = bitmap.getHeight() * scale;
         float x = (320 - w) / 2f, y = (180 - h) / 2f;
         cardCanvas.drawBitmap(bitmap, null, new RectF(x, y, x + w, y + h), paint);

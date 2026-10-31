@@ -83,6 +83,12 @@ final class IconCache {
         }
     }
 
+    /** Deletes the whole disk cache (used when logo size changes). */
+    void clear() {
+        File[] files = dir.listFiles();
+        if (files != null) for (File f : files) f.delete();
+    }
+
     /** Deletes stale versions of one package (and their accent entries). */
     private void prune(String pkg, long keepVersion) {
         String prefix = safe(pkg) + "_";
@@ -112,6 +118,8 @@ final class IconCache {
                 new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0));
         Set<String> packages = new HashSet<>();
         android.content.res.Resources resources = app.getResources();
+        float logoScale = new float[]{.8f, 1f, 1.2f}[Math.max(0, Math.min(2,
+                app.getSharedPreferences("personal_home", Context.MODE_PRIVATE).getInt("logo_size", 1)))];
         for (ResolveInfo info : found) {
             String pkg = info.activityInfo.packageName;
             if (pkg.equals(app.getPackageName()) || !packages.add(pkg)) continue;
@@ -123,7 +131,7 @@ final class IconCache {
                     logo = app.getDrawable(R.drawable.logo_youtube);
                 if (pkg.equals("com.netflix.ninja") || pkg.equals("com.netflix.mediaclient"))
                     logo = app.getDrawable(R.drawable.logo_netflix);
-                AppArtwork artwork = AppArtwork.create(resources, logo);
+                AppArtwork artwork = AppArtwork.create(resources, logo, logoScale);
                 Bitmap composed = ((android.graphics.drawable.BitmapDrawable) artwork.image).getBitmap();
                 cache.save(pkg, version, composed, artwork.accent);
             } catch (RuntimeException removedDuringQuery) {

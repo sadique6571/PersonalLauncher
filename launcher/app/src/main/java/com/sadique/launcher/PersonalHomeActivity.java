@@ -63,7 +63,7 @@ public final class PersonalHomeActivity extends Activity {
     private SharedPreferences prefs;
     private LinearLayout page, header, actions;
     private GridLayout grid;
-    private TextView userName, time, date, networkStatus, appHeading;
+    private TextView userName, time, date, networkStatus, appHeading, greeting, homeWeather;
     private ImageView avatar;
     private Bitmap avatarBitmap;
     private Bitmap customWallpaper;
@@ -105,6 +105,7 @@ public final class PersonalHomeActivity extends Activity {
             if (light != lastLight) {
                 lastLight = light;
                 refreshTileSurfaces();
+                updateOnlineWallpaper();
             }
             handler.postDelayed(this, 60_000 - System.currentTimeMillis() % 60_000);
         }
@@ -156,13 +157,33 @@ public final class PersonalHomeActivity extends Activity {
         buildHome();
     }
 
+    /** Logo size inside tiles from settings: small / normal / large. */
+    private float logoScale() {
+        return new float[]{.8f, 1f, 1.2f}[Math.max(0, Math.min(2, prefs.getInt("logo_size", 1)))];
+    }
+
+    /** Current theme accent color: Midnight Cyan, Sunset Orange, Deep Purple, or Custom. */
+    private int accentColor() {
+        switch (prefs.getInt("theme_name", 0)) {
+            case 1: return 0xffff9a5c; // Sunset Orange
+            case 2: return 0xffb388ff; // Deep Purple
+            case 3: return prefs.getInt("custom_accent", CYAN);
+            default: return CYAN; // Midnight Cyan
+        }
+    }
+
+    /** Tile corner radius from settings: sharp / rounded / round. */
+    private int tileRadius() {
+        return dp(new int[]{4, 16, 28}[Math.max(0, Math.min(2, prefs.getInt("tile_corners", 1)))]);
+    }
+
     private GradientDrawable surface(boolean focused) {
         GradientDrawable shape = new GradientDrawable();
         float day = appearanceDaylight();
         shape.setColor(blend(focused ? 0xff153d5b : 0xff092038, focused ? 0xff407596 : 0xff335975, day));
         shape.setAlpha(focused ? 238 : 208);
-        shape.setCornerRadius(dp(16));
-        shape.setStroke(dp(focused ? 3 : 1), focused ? CYAN : 0xff28435e);
+        shape.setCornerRadius(tileRadius());
+        shape.setStroke(dp(focused ? 3 : 1), focused ? accentColor() : 0xff28435e);
         return shape;
     }
 
@@ -218,6 +239,9 @@ public final class PersonalHomeActivity extends Activity {
         android.widget.FrameLayout root = new android.widget.FrameLayout(this);
         root.setBackgroundColor(0xff031126);
         sky = new SkyClock();
+        // Slight overscan so parallax shifts never reveal edges.
+        sky.setScaleX(1.06f);
+        sky.setScaleY(1.06f);
         root.addView(sky, new ViewGroup.LayoutParams(-1, -1));
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(false);
@@ -227,6 +251,19 @@ public final class PersonalHomeActivity extends Activity {
         int inset = dp(tv ? 32 : 16);
         page.setPadding(inset, dp(14), inset, dp(12));
         root.addView(page, new ViewGroup.LayoutParams(-1, -1));
+        // Cinematic shade: subtle dark gradients top and bottom for a film-like frame.
+        GradientDrawable topShade = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0x66000000, 0x00000000});
+        View topBar = new View(this);
+        topBar.setBackground(topShade);
+        topBar.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        root.addView(topBar, new android.widget.FrameLayout.LayoutParams(-1, dp(110), Gravity.TOP));
+        GradientDrawable bottomShade = new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
+                new int[]{0x66000000, 0x00000000});
+        View bottomBar = new View(this);
+        bottomBar.setBackground(bottomShade);
+        bottomBar.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        root.addView(bottomBar, new android.widget.FrameLayout.LayoutParams(-1, dp(110), Gravity.BOTTOM));
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             page.setPadding(inset + insets.getSystemWindowInsetLeft(), dp(14) + insets.getSystemWindowInsetTop(),
                     inset + insets.getSystemWindowInsetRight(), dp(12) + insets.getSystemWindowInsetBottom());
@@ -267,6 +304,10 @@ public final class PersonalHomeActivity extends Activity {
         actions = new LinearLayout(this);
         actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         actions.addView(networkStatus, new LinearLayout.LayoutParams(-2, dp(44)));
+        homeWeather = text("", 13, MUTED);
+        homeWeather.setGravity(Gravity.CENTER);
+        homeWeather.setPadding(dp(10), dp(8), dp(10), dp(8));
+        actions.addView(homeWeather, 0, new LinearLayout.LayoutParams(-2, dp(44)));
         iconAction("Search", R.drawable.ic_search, this::searchApps);
         iconAction("Settings", R.drawable.ic_settings, this::showSettings);
         if (tv) {
@@ -284,12 +325,21 @@ public final class PersonalHomeActivity extends Activity {
         time = text("", clockSize, TEXT);
         time.setGravity(Gravity.CENTER);
         time.setSingleLine(true);
-        time.setTypeface(android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL));
+        String[] clockFonts = {"sans-serif-light", "serif", "monospace"};
+        time.setTypeface(android.graphics.Typeface.create(
+                clockFonts[Math.max(0, Math.min(2, prefs.getInt("clock_font", 0)))], android.graphics.Typeface.NORMAL));
+        // Analog mode: hide the digital time (keeps layout for clockY), SkyClock draws the face.
+        if (prefs.getInt("clock_style", 0) == 1) time.setVisibility(View.INVISIBLE);
         time.setAutoSizeTextTypeUniformWithConfiguration(26, clockSize, 2, android.util.TypedValue.COMPLEX_UNIT_SP);
         date = text("", tv ? 14 : 13, MUTED);
         date.setGravity(Gravity.CENTER);
         clock.addView(time, new LinearLayout.LayoutParams(-1, dp(clockSize + (compact ? 10 : 24))));
         clock.addView(date);
+        TextView greetingView = text(greetingText(), tv ? 15 : 14, MUTED);
+        greetingView.setGravity(Gravity.CENTER);
+        greetingView.setPadding(0, 0, 0, dp(2));
+        greeting = greetingView;
+        page.addView(greeting);
         page.addView(clock);
         time.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             int[] position = new int[2], origin = new int[2];
@@ -308,6 +358,12 @@ public final class PersonalHomeActivity extends Activity {
         grid.setClipToPadding(false);
         LinearLayout appBody = new LinearLayout(this);
         appBody.setOrientation(LinearLayout.VERTICAL);
+        // Grid backdrop: soft panel behind the apps so tiles stand out from the wallpaper.
+        GradientDrawable gridBackdrop = new GradientDrawable();
+        gridBackdrop.setColor(0x33000000);
+        gridBackdrop.setCornerRadius(dp(20));
+        appBody.setBackground(gridBackdrop);
+        appBody.setPadding(dp(8), dp(4), dp(8), dp(8));
         appBody.addView(grid, new LinearLayout.LayoutParams(-1, -2));
         continueWatching = new ContinueWatchingView(this, label -> appHeading.setText(label));
         appBody.addView(continueWatching, new LinearLayout.LayoutParams(-1, -2));
@@ -340,17 +396,114 @@ public final class PersonalHomeActivity extends Activity {
         if (resumed) continueWatching.start();
     }
 
+    /** Time-based greeting, e.g. "Subah Bakhair, Sadique". */
+    private String greetingText() {
+        int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+        String greeting;
+        if (hour >= 5 && hour < 12) greeting = "Subah Bakhair";
+        else if (hour >= 12 && hour < 17) greeting = "Dopahar Bakhair";
+        else if (hour >= 17 && hour < 22) greeting = "Shaam Bakhair";
+        else greeting = "Shab Bakhair";
+        String name = prefs.getString("profile_name", "Sadique Sadiq");
+        String first = name.contains(" ") ? name.substring(0, name.indexOf(' ')) : name;
+        return greeting + ", " + first;
+    }
+
     private void updateClock() {
         Calendar now = Calendar.getInstance();
+        boolean seconds = prefs.getBoolean("clock_seconds", false);
         String value = PersonalHomeModel.time(now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE));
+        if (seconds) {
+            value = String.format(Locale.getDefault(), "%02d:%02d:%02d",
+                    now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE), now.get(Calendar.SECOND));
+        }
         android.text.SpannableString clockText = new android.text.SpannableString(value);
         clockText.setSpan(new android.text.style.RelativeSizeSpan(.42f), value.length() - 2,
                 value.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         time.setText(clockText);
         date.setText(new java.text.SimpleDateFormat("EEE, d MMM yyyy", Locale.getDefault()).format(now.getTime()));
         sky.minute = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
+        sky.clockStyle = prefs.getInt("clock_style", 0);
         sky.invalidate();
+        if (greeting != null) greeting.setText(greetingText());
     }
+
+    /** Per-second ticker, only active when clock seconds are enabled. */
+    private final Runnable secondTick = new Runnable() {
+        @Override public void run() {
+            handler.removeCallbacks(this);
+            if (!resumed || !prefs.getBoolean("clock_seconds", false)) return;
+            updateClock();
+            handler.postDelayed(this, 1000 - (System.currentTimeMillis() % 1000));
+        }
+    };
+
+    /** Picks and loads the right online wallpaper (day/night + slideshow aware). */
+    private int slideshowIndex = 0;
+    private void updateOnlineWallpaper() {
+        if (sky == null || prefs.getInt("wallpaper_source", 0) != 1) return;
+        boolean daynight = prefs.getBoolean("wallpaper_daynight", false);
+        int index;
+        if (daynight) {
+            int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+            boolean isDay = hour >= 6 && hour < 18;
+            // Day uses photos 0-2, night uses 3-5; slideshow advances within the set.
+            index = (isDay ? 0 : 3) + (slideshowIndex % 3);
+        } else {
+            index = slideshowIndex % 6;
+        }
+        sky.loadOnlinePhoto(index);
+    }
+
+    private final Runnable slideshowStep = new Runnable() {
+        @Override public void run() {
+            handler.removeCallbacks(this);
+            if (!resumed) return;
+            int minutes = prefs.getInt("wallpaper_slideshow", 0);
+            if (minutes > 0 && prefs.getInt("wallpaper_source", 0) == 1) {
+                slideshowIndex++;
+                updateOnlineWallpaper();
+                handler.postDelayed(this, minutes * 60_000L);
+            }
+        }
+    };
+
+    private void armSlideshow() {
+        handler.removeCallbacks(slideshowStep);
+        int minutes = prefs.getInt("wallpaper_slideshow", 0);
+        if (minutes > 0 && resumed && prefs.getInt("wallpaper_source", 0) == 1) {
+            handler.postDelayed(slideshowStep, minutes * 60_000L);
+        }
+    }
+    /** Small weather pill in the header, refreshed on resume and every 15 minutes. */
+    private void refreshHomeWeather() {
+        if (homeWeather == null) return;
+        worker.execute(() -> {
+            String value;
+            try {
+                boolean fahrenheit = prefs.getBoolean("weather_fahrenheit", false);
+                double lat = Double.parseDouble(prefs.getString("weather_lat", Double.toString(LandscapeModel.LATITUDE)));
+                double lon = Double.parseDouble(prefs.getString("weather_lon", Double.toString(LandscapeModel.LONGITUDE)));
+                value = LandscapeModel.parseWeather(OnlineContent.json(LandscapeModel.weatherUrl(lat, lon, fahrenheit)), fahrenheit);
+            } catch (Exception unavailable) {
+                value = null;
+            }
+            String text = value;
+            handler.post(() -> {
+                if (isDestroyed() || homeWeather == null) return;
+                if (text != null) {
+                    homeWeather.setText(text);
+                    homeWeather.setVisibility(View.VISIBLE);
+                } else {
+                    homeWeather.setVisibility(View.GONE);
+                }
+                handler.removeCallbacks(weatherRefresh);
+                handler.postDelayed(weatherRefresh, 15 * 60_000L);
+            });
+        });
+    }
+
+    private final Runnable weatherRefresh = this::refreshHomeWeather;
 
     private void updateNetwork() {
         if (networkStatus == null) return;
@@ -423,7 +576,7 @@ public final class PersonalHomeActivity extends Activity {
                         android.graphics.drawable.Drawable logo = app.info.loadIcon(pm);
                         if (pkg.equals("com.google.android.youtube.tv") || pkg.equals("com.google.android.youtube")) logo = getDrawable(R.drawable.logo_youtube);
                         if (pkg.equals("com.netflix.ninja") || pkg.equals("com.netflix.mediaclient")) logo = getDrawable(R.drawable.logo_netflix);
-                        AppArtwork artwork = AppArtwork.create(getResources(), logo);
+                        AppArtwork artwork = AppArtwork.create(getResources(), logo, logoScale());
                         card = ((android.graphics.drawable.BitmapDrawable) artwork.image).getBitmap();
                         accent = artwork.accent;
                         cache.save(pkg, version, card, accent);
@@ -593,6 +746,15 @@ public final class PersonalHomeActivity extends Activity {
 
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN) playNavSound(event.getKeyCode());
+        // Press effect: tile dips slightly the moment OK is pressed.
+        if (event.getAction() == KeyEvent.ACTION_DOWN && carriedApp == null
+                && (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER || event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                || event.getKeyCode() == KeyEvent.KEYCODE_NUMPAD_ENTER)) {
+            View focused = getCurrentFocus();
+            if (focused != null && tileViews.containsValue(focused)) {
+                focused.animate().scaleX(.94f).scaleY(.94f).setDuration(80).start();
+            }
+        }
         if (carriedApp != null && event.getAction() == KeyEvent.ACTION_DOWN) {
             String pkg = carriedApp.info.activityInfo.packageName;
             int from = moveOrder.indexOf(pkg);
@@ -636,7 +798,7 @@ public final class PersonalHomeActivity extends Activity {
             tile.setScaleX(1.07f);
             tile.setScaleY(1.07f);
             tile.setElevation(dp(10));
-            tile.setForeground(tileBorder(CYAN, true));
+            tile.setForeground(tileBorder(accentColor(), true));
         }
         ImageView icon = new ImageView(this);
         icon.setImageDrawable(app.icon);
@@ -648,6 +810,10 @@ public final class PersonalHomeActivity extends Activity {
             tile.setBackground(surface(focus));
             if (!moving) tile.setForeground(tileBorder(app.accent, focus));
             if (focus) focusedPkg = app.info.activityInfo.packageName;
+            if (!moving) {
+                // Focus zoom: gentle scale animation.
+                v.animate().scaleX(focus ? 1.05f : 1f).scaleY(focus ? 1.05f : 1f).setDuration(150).start();
+            }
             tile.setTranslationZ(focus && prefs.getBoolean("focus_glow", true) ? dp(10) : 0);
             if (android.os.Build.VERSION.SDK_INT >= 28) {
                 tile.setOutlineAmbientShadowColor(app.accent);
@@ -661,6 +827,14 @@ public final class PersonalHomeActivity extends Activity {
                 sky.focusX = position[0] - origin[0] + tile.getWidth() / 2f;
                 sky.focusY = position[1] - origin[1] + tile.getHeight() / 2f;
                 sky.focusRadius = tile.getWidth(); sky.focusAccent = prefs.getBoolean("focus_glow", true) ? app.accent : 0;
+                // Parallax: wallpaper drifts slightly opposite to the focused tile.
+                float cx = position[0] + tile.getWidth() / 2f;
+                float cy = position[1] + tile.getHeight() / 2f;
+                android.graphics.Point size = new android.graphics.Point();
+                getWindowManager().getDefaultDisplay().getSize(size);
+                sky.animate().translationX((size.x / 2f - cx) / size.x * dp(36))
+                        .translationY((size.y / 2f - cy) / size.y * dp(36))
+                        .setDuration(350).start();
             } else sky.focusAccent = 0;
             sky.invalidate();
         });
@@ -670,7 +844,7 @@ public final class PersonalHomeActivity extends Activity {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED));
             if (carriedApp != null) { open.run(); return; }
             v.animate().scaleX(1.08f).scaleY(1.08f).alpha(.7f).setDuration(120).withEndAction(() -> {
-                v.setScaleX(1f); v.setScaleY(1f); v.setAlpha(1f);
+                v.setScaleX(1.05f); v.setScaleY(1.05f); v.setAlpha(1f);
                 open.run();
             }).start();
         });
@@ -848,14 +1022,14 @@ public final class PersonalHomeActivity extends Activity {
     private void showSettings() {
         LinearLayout rows = new LinearLayout(this); rows.setOrientation(LinearLayout.VERTICAL);
         panel = GlassSettings.panel(this, "Settings", rows);
-        addPanelRow(rows, "Launcher settings", "Layout, wallpaper & apps", R.drawable.ic_settings, CYAN, this::launcherSettings);
+        addPanelRow(rows, "Launcher settings", "Layout, wallpaper & apps", R.drawable.ic_settings, accentColor(), this::launcherSettings);
         TextView quickLabel = GlassSettings.label(this, "Quick actions", 12, 0xff9bb6cb);
         quickLabel.setPadding(dp(4), dp(10), 0, dp(4));
         rows.addView(quickLabel);
         LinearLayout strip = new LinearLayout(this);
         strip.setOrientation(LinearLayout.HORIZONTAL);
         strip.setGravity(Gravity.CENTER_VERTICAL);
-        addQuickCard(strip, "Search apps", R.drawable.ic_search, CYAN, this::searchApps);
+        addQuickCard(strip, "Search apps", R.drawable.ic_search, accentColor(), this::searchApps);
         addQuickCard(strip, "Play Store", R.drawable.ic_apps, 0xff59e493, () -> openStore(""));
         addQuickCard(strip, "Screensaver", R.drawable.ic_picture, 0xff67baff, this::screensaverSettings);
         rows.addView(strip, new LinearLayout.LayoutParams(-1, -2));
@@ -886,8 +1060,18 @@ public final class PersonalHomeActivity extends Activity {
         rows.addView(GlassSettings.row(this, label, hint, icon, color, () -> { if (!label.equals("Launcher settings") && panel != null) panel.dismiss(); action.run(); }));
     }
 
+    /** Custom accent color picker (8 colors). Applies the Custom theme. */
+    private void chooseAccentColor() {
+        String[] names = {"Cyan", "Orange", "Purple", "Green", "Red", "Yellow", "Pink", "White"};
+        int[] colors = {0xff40d9ff, 0xffff9a5c, 0xffb388ff, 0xff69f0ae, 0xffff5252, 0xffffea00, 0xffff80ab, 0xffffffff};
+        chooseSetting("Accent color", names, which -> {
+            prefs.edit().putInt("theme_name", 3).putInt("custom_accent", colors[which]).apply();
+            applyAppearance(); refreshApps();
+        });
+    }
+
     private void launcherSettings() {
-        String[] labels = {"Hide / unhide apps", "App columns", "Tile size", "Tile spacing", "Focused app title size", "Clock size", "Dark mode", "Wallpaper", "Wallpaper darkness", "App colour glow", "Screensaver & weather", "Continue watching", "Profile name & photo", "Choose default Home", "Reset layout & unhide apps", "Rearrange apps"};
+        String[] labels = {"Hide / unhide apps", "App columns", "Tile size", "Tile spacing", "Tile corners", "Logo size", "Focused app title size", "Clock size", "Clock style", "Clock font", "Clock seconds", "Clock glow", "Theme", "Accent color", "Dark mode", "Wallpaper", "Wallpaper source", "Day / night wallpaper", "Wallpaper slideshow", "Glass intensity", "Wallpaper darkness", "App colour glow", "Screensaver & weather", "Continue watching", "Profile name & photo", "Choose default Home", "Reset layout & unhide apps", "Rearrange apps"};
         Runnable[] choices = {
             this::hiddenApps,
             () -> chooseSetting("App columns", new String[]{"Automatic", "2", "3", "4", "5", "6"}, which -> {
@@ -899,16 +1083,65 @@ public final class PersonalHomeActivity extends Activity {
             () -> chooseSetting("Tile spacing", new String[]{"Compact", "Normal", "Wide"}, which -> {
                 prefs.edit().putInt("tile_spacing", which).apply(); refreshApps();
             }),
+            () -> chooseSetting("Tile corners", new String[]{"Sharp", "Rounded", "Round"}, which -> {
+                prefs.edit().putInt("tile_corners", which).apply(); refreshApps();
+            }),
+            () -> chooseSetting("Logo size", new String[]{"Small", "Normal", "Large"}, which -> {
+                prefs.edit().putInt("logo_size", which).apply();
+                appWorker.execute(() -> new IconCache(this).clear());
+                cachedApps = null;
+                loadApps();
+            }),
             () -> chooseSetting("Focused app title size", new String[]{"Small", "Normal", "Large", "Extra large"}, which -> {
                 int size = new int[]{24,32,40,48}[which]; prefs.edit().putInt("focus_title_size", size).apply(); appHeading.setTextSize(size);
             }),
             () -> chooseSetting("Clock size", new String[]{"Small", "Normal", "Large"}, which -> {
                 prefs.edit().putInt("clock_size", (tv ? new int[]{54,66,80} : new int[]{44,56,66})[which]).apply(); buildHome();
             }),
+            () -> chooseSetting("Clock style", new String[]{"Digital", "Analog"}, which -> {
+                prefs.edit().putInt("clock_style", which).apply(); buildHome();
+            }),
+            () -> chooseSetting("Clock font", new String[]{"Light", "Serif", "Mono"}, which -> {
+                prefs.edit().putInt("clock_font", which).apply(); buildHome();
+            }),
+            () -> chooseSetting("Clock seconds", new String[]{"Off", "On"}, which -> {
+                prefs.edit().putBoolean("clock_seconds", which == 1).apply();
+                handler.removeCallbacks(secondTick);
+                if (which == 1 && resumed) secondTick.run();
+                else updateClock();
+            }),
+            () -> chooseSetting("Clock glow", new String[]{"Off", "On"}, which -> {
+                prefs.edit().putBoolean("clock_glow", which == 1).apply();
+                sky.invalidate();
+            }),
+            () -> chooseSetting("Theme", new String[]{"Midnight Cyan", "Sunset Orange", "Deep Purple", "Custom"}, which -> {
+                prefs.edit().putInt("theme_name", which).apply();
+                if (which == 3) chooseAccentColor();
+                else { applyAppearance(); refreshApps(); }
+            }),
+            () -> chooseAccentColor(),
             () -> chooseSetting("Dark mode", new String[]{"Dark (Midnight Cyan)", "Automatic day / night", "Light"}, which -> {
                 prefs.edit().putString("theme_mode", new String[]{"dark","auto","light"}[which]).apply(); applyAppearance();
             }),
             this::wallpaperSettings,
+            () -> chooseSetting("Wallpaper source", new String[]{"Built-in", "Online"}, which -> {
+                prefs.edit().putInt("wallpaper_source", which).apply();
+                updateOnlineWallpaper();
+                armSlideshow();
+                sky.invalidate();
+            }),
+            () -> chooseSetting("Day / night wallpaper", new String[]{"Off", "On"}, which -> {
+                prefs.edit().putBoolean("wallpaper_daynight", which == 1).apply();
+                updateOnlineWallpaper();
+            }),
+            () -> chooseSetting("Wallpaper slideshow", new String[]{"Off", "15 minutes", "30 minutes", "1 hour"}, which -> {
+                prefs.edit().putInt("wallpaper_slideshow", new int[]{0, 15, 30, 60}[which]).apply();
+                armSlideshow();
+            }),
+            () -> chooseSetting("Glass intensity", new String[]{"Airy", "Normal", "Solid"}, which -> {
+                prefs.edit().putInt("glass_alpha", new int[]{30, 70, 100}[which]).apply();
+                buildHome();
+            }),
             () -> chooseSetting("Wallpaper darkness", new String[]{"Light", "Medium", "Dark"}, which -> {
                 prefs.edit().putInt("background_dim", which * 20).apply(); sky.invalidate();
             }),
@@ -981,7 +1214,7 @@ public final class PersonalHomeActivity extends Activity {
         for (App app : cachedApps) {
             String pkg = app.info.activityInfo.packageName;
             View row = GlassSettings.row(this, app.name, hidden.contains(pkg) ? "Hidden · select to show" : "Visible · select to hide",
-                    R.drawable.ic_apps, CYAN, () -> {});
+                    R.drawable.ic_apps, accentColor(), () -> {});
             row.setOnClickListener(v -> {
                 if (!hidden.add(pkg)) hidden.remove(pkg);
                 prefs.edit().putStringSet("hidden_apps", new HashSet<>(hidden)).apply();
@@ -1127,6 +1360,11 @@ public final class PersonalHomeActivity extends Activity {
         tick.run();
         updateNetwork();
         continueWatching.start();
+        refreshHomeWeather();
+        updateOnlineWallpaper();
+        armSlideshow();
+        handler.removeCallbacks(secondTick);
+        if (prefs.getBoolean("clock_seconds", false)) secondTick.run();
         if (pageWidth > 0) loadApps();
         if (connectivity != null && !networkRegistered) {
             try { connectivity.registerDefaultNetworkCallback(networkCallback); networkRegistered = true; }
@@ -1139,6 +1377,9 @@ public final class PersonalHomeActivity extends Activity {
         if (continueWatching != null) continueWatching.stop();
         handler.removeCallbacks(idleScreensaver);
         handler.removeCallbacks(tick);
+        handler.removeCallbacks(secondTick);
+        handler.removeCallbacks(weatherRefresh);
+        handler.removeCallbacks(slideshowStep);
         if (connectivity != null && networkRegistered) {
             connectivity.unregisterNetworkCallback(networkCallback);
             networkRegistered = false;
@@ -1195,6 +1436,12 @@ public final class PersonalHomeActivity extends Activity {
         private Bitmap backdrop;
         int minute, focusAccent;
         float clockY = -1, focusX, focusY, focusRadius;
+        /** Analog clock mode: 0=digital, 1=analog. Set from prefs. */
+        int clockStyle;
+        /** Online wallpaper with crossfade. */
+        private Bitmap onlineWallpaper, onlineNext;
+        private float crossfade = 1f;
+        private int onlineIndex = -1;
         SkyClock() {
             super(PersonalHomeActivity.this);
             setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -1203,6 +1450,43 @@ public final class PersonalHomeActivity extends Activity {
                 handler.post(() -> { backdrop = bmp; invalidate(); });
             });
         }
+
+        /** Loads an online wallpaper photo (0-5) from the screensaver cache with crossfade. */
+        void loadOnlinePhoto(int index) {
+            if (index == onlineIndex && onlineWallpaper != null) return;
+            onlineIndex = index;
+            worker.execute(() -> {
+                Bitmap bmp = null;
+                try {
+                    java.io.File f = new java.io.File(getCacheDir(), "screensaver_photos/photo_" + index + ".jpg");
+                    if (f.exists()) bmp = BitmapFactory.decodeFile(f.getAbsolutePath());
+                } catch (Exception ignored) {}
+                Bitmap loaded = bmp;
+                handler.post(() -> {
+                    if (loaded == null) return;
+                    if (onlineNext != null && onlineNext != onlineWallpaper) onlineNext.recycle();
+                    onlineNext = loaded;
+                    crossfade = 0f;
+                    handler.removeCallbacks(crossfadeStep);
+                    handler.post(crossfadeStep);
+                });
+            });
+        }
+
+        private final Runnable crossfadeStep = new Runnable() {
+            @Override public void run() {
+                crossfade += 0.06f;
+                if (crossfade >= 1f) {
+                    crossfade = 1f;
+                    if (onlineWallpaper != null) onlineWallpaper.recycle();
+                    onlineWallpaper = onlineNext;
+                    onlineNext = null;
+                } else {
+                    handler.postDelayed(this, 50);
+                }
+                invalidate();
+            }
+        };
         @Override protected void onDraw(Canvas canvas) {
             paint.setColor(Color.WHITE);
             paint.setShader(null);
@@ -1212,12 +1496,22 @@ public final class PersonalHomeActivity extends Activity {
             paint.setShader(new LinearGradient(0, 0, 0, getHeight(), top, bottom, Shader.TileMode.CLAMP));
             canvas.drawRect(0, 0, getWidth(), getHeight(), paint); paint.setShader(null);
             String mode = prefs.getString("wallpaper_mode", "mountains");
+            boolean onlineSource = prefs.getInt("wallpaper_source", 0) == 1;
             Bitmap picture = mode.equals("custom") && customWallpaper != null ? customWallpaper : backdrop;
+            // Online wallpaper overrides when enabled and a photo is loaded.
+            if (onlineSource && onlineWallpaper != null) picture = onlineWallpaper;
             float y = clockY >= 0 ? clockY : dp(150);
             if (!mode.equals("solid") && picture != null) {
                 boolean mountains = picture == backdrop;
                 float[] frame = HomeAppearance.frame(getWidth(), getHeight(), picture.getWidth(), picture.getHeight(), y, mountains);
                 canvas.drawBitmap(picture, null, new android.graphics.RectF(frame[0], frame[1], frame[2], frame[3]), wallpaperPaint);
+                // Crossfade: incoming photo fades in over the current one.
+                if (onlineSource && onlineNext != null && crossfade < 1f) {
+                    wallpaperPaint.setAlpha((int) (crossfade * 255));
+                    float[] nextFrame = HomeAppearance.frame(getWidth(), getHeight(), onlineNext.getWidth(), onlineNext.getHeight(), y, false);
+                    canvas.drawBitmap(onlineNext, null, new android.graphics.RectF(nextFrame[0], nextFrame[1], nextFrame[2], nextFrame[3]), wallpaperPaint);
+                    wallpaperPaint.setAlpha(255);
+                }
                 int shade = HomeAppearance.shade(theme, minute, prefs.getInt("background_dim", 0));
                 canvas.drawColor((shade << 24) | 0x00051327);
                 if (mountains && getHeight() > getWidth()) {
@@ -1234,16 +1528,59 @@ public final class PersonalHomeActivity extends Activity {
                 paint.setShader(new RadialGradient(focusX, focusY, focusRadius, glow, Color.TRANSPARENT, Shader.TileMode.CLAMP));
                 canvas.drawCircle(focusX, focusY, focusRadius, paint); paint.setShader(null);
             }
+            float cy = clockY >= 0 ? clockY : dp(150);
+            // Clock glow: soft halo behind the clock.
+            if (prefs.getBoolean("clock_glow", false)) {
+                int accent = accentColor();
+                paint.setShader(new RadialGradient(getWidth() / 2f, cy, dp(160),
+                        (accent & 0x00ffffff) | 0x60000000, Color.TRANSPARENT, Shader.TileMode.CLAMP));
+                canvas.drawCircle(getWidth() / 2f, cy, dp(160), paint); paint.setShader(null);
+            }
+            // Analog clock face.
+            if (clockStyle == 1) {
+                float cx = getWidth() / 2f;
+                float radius = Math.min(getWidth(), getHeight()) / 7f;
+                paint.setShader(null);
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(0x99000000);
+                canvas.drawCircle(cx, cy, radius, paint);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(dp(2));
+                paint.setColor(0xffffffff);
+                canvas.drawCircle(cx, cy, radius, paint);
+                int hour = (minute / 60) % 12, min = minute % 60;
+                // Tick marks.
+                paint.setStrokeWidth(dp(2));
+                for (int i = 0; i < 12; i++) {
+                    double angle = Math.toRadians(i * 30);
+                    float inner = radius * .85f, outer = radius * .95f;
+                    canvas.drawLine(cx + (float)(inner * Math.sin(angle)), cy - (float)(inner * Math.cos(angle)),
+                            cx + (float)(outer * Math.sin(angle)), cy - (float)(outer * Math.cos(angle)), paint);
+                }
+                // Hands.
+                double hourAngle = Math.toRadians((hour + min / 60f) * 30);
+                double minAngle = Math.toRadians(min * 6);
+                paint.setStrokeCap(Paint.Cap.ROUND);
+                paint.setStrokeWidth(dp(6));
+                canvas.drawLine(cx, cy, cx + (float)(radius * .5 * Math.sin(hourAngle)),
+                        cy - (float)(radius * .5 * Math.cos(hourAngle)), paint);
+                paint.setStrokeWidth(dp(4));
+                canvas.drawLine(cx, cy, cx + (float)(radius * .75 * Math.sin(minAngle)),
+                        cy - (float)(radius * .75 * Math.cos(minAngle)), paint);
+                paint.setStyle(Paint.Style.FILL);
+                canvas.drawCircle(cx, cy, dp(5), paint);
+                paint.setStyle(Paint.Style.FILL);
+            }
         }
     }
 
     private android.graphics.drawable.Drawable tileBorder(int accent, boolean focused) {
         GradientDrawable border = new GradientDrawable();
-        border.setColor(Color.TRANSPARENT); border.setCornerRadius(dp(16));
+        border.setColor(Color.TRANSPARENT); border.setCornerRadius(tileRadius());
         border.setStroke(dp(focused ? 3 : 1), focused ? accent : 0x4028435e);
         GradientDrawable bevel = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{0x20ffffff, 0x00ffffff, 0x28000000});
-        bevel.setCornerRadius(dp(16));
+        bevel.setCornerRadius(tileRadius());
         return new android.graphics.drawable.LayerDrawable(new android.graphics.drawable.Drawable[]{bevel, border});
     }
 
