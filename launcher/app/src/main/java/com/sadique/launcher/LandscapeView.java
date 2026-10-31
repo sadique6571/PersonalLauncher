@@ -217,6 +217,26 @@ public final class LandscapeView extends FrameLayout {
         return bytes;
     }
 
+    /** Average luminance of the downloaded photo (0=black, 1=white), sampled small. */
+    private static float photoBrightness(Bitmap image) {
+        if (image == null || image.isRecycled()) return -1;
+        int w = 24, h = 12;
+        Bitmap small = Bitmap.createScaledBitmap(image, w, h, true);
+        int[] pixels = new int[w * h];
+        small.getPixels(pixels, 0, w, 0, 0, w, h);
+        small.recycle();
+        long total = 0;
+        for (int p : pixels) total += (Color.red(p) * 299 + Color.green(p) * 587 + Color.blue(p) * 114) / 1000;
+        return total / (float) (pixels.length * 255);
+    }
+
+    /** Adapts the screensaver clock/date to the photo's brightness (the 0x60 shade
+     *  dims the photo, so only genuinely bright photos flip to dark text). */
+    private void adaptClockColors(boolean brightPhoto) {
+        clock.setTextColor(brightPhoto ? 0xff101418 : 0xfff4f7fb);
+        date.setTextColor(brightPhoto ? 0xff3a4552 : 0xffc4d3e4);
+    }
+
     private void requestPhoto() {
         if (!running || photoBusy || !online()) return;
         photoBusy = true;
@@ -245,6 +265,8 @@ public final class LandscapeView extends FrameLayout {
             }
             Bitmap image = result;
             int loadedPhoto = selectedPhoto;
+            // Sample brightness off the UI thread for the adaptive clock color.
+            final boolean brightPhoto = image != null && photoBrightness(image) > 0.62f;
             handler.post(() -> {
                 if (!running || request != generation) return;
                 photoBusy = false;
@@ -255,7 +277,9 @@ public final class LandscapeView extends FrameLayout {
                         photo.animate().alpha(1f).setDuration(500).start();
                     }).start();
                     hasPhoto = true; displayedPhoto = loadedPhoto;
-                    status.setText("Photos: Unsplash · Weather: Open-Meteo");
+                    // No photo credit label: the screensaver shows just clock + photos.
+                    status.setText("");
+                    adaptClockColors(brightPhoto);
                 } else {
                     status.setText("Landscape rotation unavailable · retrying automatically");
                     handler.removeCallbacks(rotate);

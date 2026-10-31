@@ -43,6 +43,7 @@ final class ClockScene {
     private final Random random = new Random();
     private final View content;
     private final ImageView ambient;
+    private final android.widget.TextClock dreamTime, dreamAmpm, dreamDate;
     private final GradientDrawable glow;
     private int colorIndex;
     private int glowColor;
@@ -76,6 +77,9 @@ final class ClockScene {
     ClockScene(View root) {
         content = root.findViewById(R.id.dreamContent);
         ambient = root.findViewById(R.id.dreamAmbient);
+        dreamTime = root.findViewById(R.id.dreamTime);
+        dreamAmpm = root.findViewById(R.id.dreamAmpm);
+        dreamDate = root.findViewById(R.id.dreamDate);
         glow = new GradientDrawable();
         glow.setGradientType(GradientDrawable.RADIAL_GRADIENT);
         ambient.setBackground(glow);
@@ -169,8 +173,39 @@ final class ClockScene {
                 ambient.setBackground(null);
                 ambient.setImageDrawable(new LayerDrawable(new Drawable[]{
                         new BitmapDrawable(res, bmp), new ColorDrawable(shade)}));
+                adaptClockColors(bmp, shade);
             });
         }, "clock-wallpaper").start();
+    }
+
+    /**
+     * Switches the clock/date between light and dark to stay readable on the
+     * wallpaper. Runs on the main thread; the bitmap was decoded off-thread.
+     */
+    private void adaptClockColors(Bitmap bmp, int shade) {
+        if (bmp == null || bmp.isRecycled() || dreamTime == null) return;
+        int w = bmp.getWidth(), h = bmp.getHeight();
+        if (w <= 0 || h <= 0) return;
+        int sw = 24, sh = 12;
+        Bitmap small = Bitmap.createScaledBitmap(bmp, sw, sh, true);
+        int[] pixels = new int[sw * sh];
+        small.getPixels(pixels, 0, sw, 0, 0, sw, sh);
+        small.recycle();
+        long total = 0;
+        for (int p : pixels) {
+            total += (android.graphics.Color.red(p) * 299
+                    + android.graphics.Color.green(p) * 587
+                    + android.graphics.Color.blue(p) * 114) / 1000;
+        }
+        float lum = total / (float) (pixels.length * 255);
+        float dim = 1f - ((shade >>> 24) / 255f) * 0.92f;
+        boolean dark = lum * dim > 0.55f;
+        int timeColor = dark ? 0xff10233a : 0xe6ffffff;
+        int mutedColor = dark ? 0xff3d5a78 : 0x99ffffff;
+        int faintColor = dark ? 0xff3d5a78 : 0x8cffffff;
+        dreamTime.setTextColor(timeColor);
+        dreamAmpm.setTextColor(mutedColor);
+        dreamDate.setTextColor(faintColor);
     }
 
     /** WallpaperPlayer's decode: sampled and scaled down to cover the screen, never bigger than 4K. */

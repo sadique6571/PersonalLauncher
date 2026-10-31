@@ -39,6 +39,7 @@ public final class ContinueWatchingView extends LinearLayout {
     private final Consumer<String> focusTitle;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final LinearLayout cards;
+    private final TextView heading;
     private final TextView explanation;
     private final Button allow;
     private ExecutorService worker;
@@ -56,7 +57,7 @@ public final class ContinueWatchingView extends LinearLayout {
         super(host); this.host = host; this.focusTitle = focusTitle;
         prefs = host.getSharedPreferences("personal_home", 0);
         setOrientation(VERTICAL); setPadding(0, dp(22), 0, dp(12));
-        TextView heading = label("Continue watching", 23);
+        heading = label("Continue watching", 23);
         addView(heading);
         HorizontalScrollView scroll = new HorizontalScrollView(host);
         scroll.setHorizontalScrollBarEnabled(false);
@@ -70,6 +71,15 @@ public final class ContinueWatchingView extends LinearLayout {
         allow.setText("Allow TV Watch Next access"); allow.setAllCaps(false);
         allow.setOnClickListener(v -> requestAccess());
         addView(allow, new LayoutParams(-2, -2));
+    }
+
+    /**
+     * Adapts the heading/explanation to wallpaper brightness. Cards keep their
+     * dark surface, so their titles stay white.
+     */
+    void setTextColors(int text, int muted) {
+        heading.setTextColor(text);
+        explanation.setTextColor(muted);
     }
 
     private int dp(int n) { return Math.round(n * getResources().getDisplayMetrics().density); }

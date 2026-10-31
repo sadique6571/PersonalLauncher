@@ -30,6 +30,8 @@ public final class AppContentRow extends LinearLayout {
     private final Consumer<String> focusTitle;
     private final LinearLayout cards;
     private final TextView heading;
+    /** Current label color, following the wallpaper brightness (cards sit on the wallpaper). */
+    private int labelColor = 0xfff0f7ff;
     private final HorizontalScrollView scroller;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private ExecutorService worker;
@@ -75,6 +77,22 @@ public final class AppContentRow extends LinearLayout {
         scroller.addView(cards, new LayoutParams(-2, -2));
         addView(scroller, new LayoutParams(-1, -2));
         setVisibility(GONE);
+    }
+
+    /** Adapts the heading and card labels to wallpaper brightness. */
+    void setHeadingColor(int color) {
+        labelColor = color;
+        heading.setTextColor(color);
+        for (int i = 0; i < cards.getChildCount(); i++) {
+            android.view.View card = cards.getChildAt(i);
+            if (card instanceof LinearLayout) {
+                LinearLayout box = (LinearLayout) card;
+                for (int j = 0; j < box.getChildCount(); j++) {
+                    android.view.View v = box.getChildAt(j);
+                    if (v instanceof TextView && "banner_label".equals(v.getTag())) ((TextView) v).setTextColor(color);
+                }
+            }
+        }
     }
 
     void start() {
@@ -159,7 +177,8 @@ public final class AppContentRow extends LinearLayout {
         TextView label = new TextView(host);
         label.setText(item.title);
         label.setTextSize(13);
-        label.setTextColor(0xfff0f7ff);
+        label.setTextColor(labelColor);
+        label.setTag("banner_label");
         label.setMaxLines(1);
         label.setEllipsize(android.text.TextUtils.TruncateAt.END);
         label.setPadding(0, dp(6), 0, 0);

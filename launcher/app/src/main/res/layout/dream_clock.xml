@@ -26,6 +26,7 @@
             android:baselineAligned="true">
 
             <TextClock
+                android:id="@+id/dreamTime"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:format12Hour="h:mm"
@@ -37,6 +38,7 @@
                 android:includeFontPadding="false" />
 
             <TextClock
+                android:id="@+id/dreamAmpm"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="10dp"
@@ -50,6 +52,7 @@
         </LinearLayout>
 
         <TextClock
+            android:id="@+id/dreamDate"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"

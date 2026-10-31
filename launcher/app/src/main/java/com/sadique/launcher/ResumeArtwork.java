@@ -15,6 +15,15 @@ final class ResumeArtwork {
     private static final LruCache<String, Bitmap> CACHE = new LruCache<String, Bitmap>(8 * 1024 * 1024) {
         @Override protected int sizeOf(String key, Bitmap value) { return value.getAllocationByteCount(); }
     };
+    private static java.io.File diskDir;
+
+    private static java.io.File diskFile(Context context, String address) {
+        if (diskDir == null) {
+            diskDir = new java.io.File(context.getApplicationContext().getCacheDir(), "resume_posters");
+            diskDir.mkdirs();
+        }
+        return new java.io.File(diskDir, Integer.toHexString(address.hashCode()) + ".jpg");
+    }
 
     static Bitmap load(Context context, String... candidates) {
         for (String address : candidates) {
@@ -22,6 +31,13 @@ final class ResumeArtwork {
             if (address == null || address.length() > 8192) continue;
             Bitmap cached = CACHE.get(address);
             if (cached != null) return cached;
+            // Disk cache: posters survive restarts and reloads don't re-download.
+            java.io.File disk = diskFile(context, address);
+            if (disk.exists()) {
+                Bitmap bmp = BitmapFactory.decodeFile(disk.getPath());
+                if (bmp != null) { CACHE.put(address, bmp); return bmp; }
+                disk.delete();
+            }
             try {
                 byte[] data;
                 Uri uri = Uri.parse(address);
@@ -33,7 +49,8 @@ final class ResumeArtwork {
                 } else if ("https".equals(uri.getScheme()) && uri.getUserInfo() == null) {
                     HttpsURLConnection connection = (HttpsURLConnection) new URL(address).openConnection();
                     connection.setConnectTimeout(5000); connection.setReadTimeout(5000);
-                    connection.setInstanceFollowRedirects(false);
+                    // Poster CDNs commonly redirect (http->https, signed URLs); follow them.
+                    connection.setInstanceFollowRedirects(true);
                     try {
                         if (connection.getResponseCode() != 200 || connection.getContentLengthLong() > LIMIT) continue;
                         try (InputStream stream = connection.getInputStream()) { data = OnlineContent.readBounded(stream, LIMIT); }
@@ -47,7 +64,13 @@ final class ResumeArtwork {
                 while (Math.max(options.outWidth, options.outHeight) / options.inSampleSize > 640) options.inSampleSize *= 2;
                 options.inJustDecodeBounds = false;
                 Bitmap image = BitmapFactory.decodeByteArray(data, 0, data.length, options);
-                if (image != null) { CACHE.put(address, image); return image; }
+                if (image != null) {
+                    CACHE.put(address, image);
+                    try (java.io.FileOutputStream out = new java.io.FileOutputStream(disk)) {
+                        image.compress(Bitmap.CompressFormat.JPEG, 85, out);
+                    } catch (Exception ignored) { /* memory cache still works */ }
+                    return image;
+                }
             } catch (Exception unavailable) { /* Keep the publishing app's real icon when it supplies no usable poster. */ }
         }
         return null;
