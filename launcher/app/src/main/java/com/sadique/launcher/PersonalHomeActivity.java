@@ -390,7 +390,9 @@ public final class PersonalHomeActivity extends Activity {
         // No auto-size: it mismeasures the trailing AM/PM RelativeSizeSpan and clips it
         // (worse with seconds, when the string is longest). fitClockText() sizes precisely.
         time.setAutoSizeTextTypeWithDefaults(android.widget.TextView.AUTO_SIZE_TEXT_TYPE_NONE);
-        time.setPadding(0, dp(2), 0, dp(10));
+        // Horizontal padding prevents AM/PM clipping from the shadow layer.
+        time.setPadding(dp(12), dp(2), dp(12), dp(10));
+        time.setClipToPadding(false);
         clockTextSize = clockSize;
         date = text("", tv ? 14 : 13, MUTED);
         if (prefs.getBoolean("clock_shadow", true)) {
@@ -430,35 +432,37 @@ public final class PersonalHomeActivity extends Activity {
             }
         });
         appBody.setClipToOutline(true);
-        ScrollView drawerScroll = new ScrollView(this);
-        drawerScroll.setFillViewport(true);
-        drawerScroll.setVerticalScrollBarEnabled(false);
-        LinearLayout drawerContent = new LinearLayout(this);
-        drawerContent.setOrientation(LinearLayout.VERTICAL);
-        drawerContent.addView(grid, new LinearLayout.LayoutParams(-1, -2));
+        // Single scroll: clock scrolls up and stops below the sticky "Your apps" header,
+        // then only the app tiles keep scrolling. (User request 2026-10-31.)
         continueWatching = new ContinueWatchingView(this, label -> appHeading.setText(label));
-        drawerContent.addView(continueWatching, new LinearLayout.LayoutParams(-1, -2));
-        drawerScroll.addView(drawerContent, new ViewGroup.LayoutParams(-1, -2));
-        appBody.addView(drawerScroll, new LinearLayout.LayoutParams(-1, -1));
-        // Scrollable content: clock + banner rows only. The "Your apps" header and the
-        // drawer panel stay fixed below; tiles scroll inside the panel.
-        LinearLayout scrollContent = new LinearLayout(this);
-        scrollContent.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout mainContent = new LinearLayout(this);
+        mainContent.setOrientation(LinearLayout.VERTICAL);
         if (prefs.getBoolean("hide_clock", false)) clock.setVisibility(View.GONE);
         int align = prefs.getInt("clock_align", 1);
         LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(-2, -2);
         clockParams.gravity = new int[]{Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END}[align];
-        scrollContent.addView(clock, clockParams);
+        mainContent.addView(clock, clockParams);
         // Netflix & YouTube banner rows right below the clock (order swappable in settings).
         netflixRow = new AppContentRow(this, "Netflix", new String[]{"com.netflix.ninja"}, label -> appHeading.setText(label));
         youtubeRow = new AppContentRow(this, "YouTube", new String[]{"com.google.android.youtube.tv", "com.google.android.youtube"}, label -> appHeading.setText(label));
         boolean youtubeFirst = prefs.getInt("banner_order", 0) == 1;
-        scrollContent.addView(youtubeFirst ? youtubeRow : netflixRow, new LinearLayout.LayoutParams(-1, -2));
-        scrollContent.addView(youtubeFirst ? netflixRow : youtubeRow, new LinearLayout.LayoutParams(-1, -2));
-        scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
-        page.addView(scroll, new LinearLayout.LayoutParams(-1, -2));
-        page.addView(appHeading);
-        page.addView(appBody, new LinearLayout.LayoutParams(-1, 0, 1));
+        mainContent.addView(youtubeFirst ? youtubeRow : netflixRow, new LinearLayout.LayoutParams(-1, -2));
+        mainContent.addView(youtubeFirst ? netflixRow : youtubeRow, new LinearLayout.LayoutParams(-1, -2));
+        // Sticky header: pinned to top via scroll listener below.
+        // Give it a background so tiles scrolling underneath don't show through.
+        appHeading.setBackgroundColor(0x99031126);
+        mainContent.addView(appHeading);
+        // App panel: grid + continue watching, no nested scroll - all in main scroll.
+        appBody.addView(grid, new LinearLayout.LayoutParams(-1, -2));
+        appBody.addView(continueWatching, new LinearLayout.LayoutParams(-1, -2));
+        mainContent.addView(appBody, new LinearLayout.LayoutParams(-1, -2));
+        scroll.addView(mainContent, new ViewGroup.LayoutParams(-1, -2));
+        page.addView(scroll, new LinearLayout.LayoutParams(-1, -1));
+        // Sticky header logic: pin "Your apps" to top when scrolled past.
+        final int[] headerTopPos = {0};
+        appHeading.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            headerTopPos[0] = appHeading.getTop();
+        });
         // Focus-glow tracker: keep the wallpaper glow on the focused tile no matter
         // which scroller moved.
         View.OnScrollChangeListener glowTracker = (v, x, y, oldX, oldY) -> {
@@ -471,8 +475,17 @@ public final class PersonalHomeActivity extends Activity {
                 sky.invalidate();
             }
         };
-        scroll.setOnScrollChangeListener(glowTracker);
-        drawerScroll.setOnScrollChangeListener(glowTracker);
+        scroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
+            // Sticky header: pin "Your apps" to top once it scrolls there.
+            if (headerTopPos[0] > 0) {
+                if (scrollY >= headerTopPos[0]) {
+                    appHeading.setTranslationY(scrollY - headerTopPos[0]);
+                } else {
+                    appHeading.setTranslationY(0);
+                }
+            }
+            glowTracker.onScrollChange(v, scrollX, scrollY, oldScrollX, oldScrollY);
+        });
         page.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             int width = page.getWidth() - page.getPaddingLeft() - page.getPaddingRight();
             if (width > 0 && width != pageWidth) {
