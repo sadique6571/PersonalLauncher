@@ -14,6 +14,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.LinearGradient;
+import android.graphics.Outline;
 import android.graphics.RadialGradient;
 import android.graphics.Shader;
 import android.graphics.drawable.GradientDrawable;
@@ -29,6 +30,7 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
@@ -419,10 +421,27 @@ public final class PersonalHomeActivity extends Activity {
         gridBackdrop.setCornerRadius(dp(20));
         appBody.setBackground(gridBackdrop);
         appBody.setPadding(dp(8), dp(4), dp(8), dp(8));
-        appBody.addView(grid, new LinearLayout.LayoutParams(-1, -2));
+        // The drawer panel stays fixed on screen; only the tiles scroll inside it,
+        // clipped to the rounded corners so scrolling stops under the header.
+        final int drawerRadius = dp(20);
+        appBody.setOutlineProvider(new ViewOutlineProvider() {
+            @Override public void getOutline(View view, Outline outline) {
+                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), drawerRadius);
+            }
+        });
+        appBody.setClipToOutline(true);
+        ScrollView drawerScroll = new ScrollView(this);
+        drawerScroll.setFillViewport(true);
+        drawerScroll.setVerticalScrollBarEnabled(false);
+        LinearLayout drawerContent = new LinearLayout(this);
+        drawerContent.setOrientation(LinearLayout.VERTICAL);
+        drawerContent.addView(grid, new LinearLayout.LayoutParams(-1, -2));
         continueWatching = new ContinueWatchingView(this, label -> appHeading.setText(label));
-        appBody.addView(continueWatching, new LinearLayout.LayoutParams(-1, -2));
-        // Scrollable content: clock + heading + apps (all scroll together).
+        drawerContent.addView(continueWatching, new LinearLayout.LayoutParams(-1, -2));
+        drawerScroll.addView(drawerContent, new ViewGroup.LayoutParams(-1, -2));
+        appBody.addView(drawerScroll, new LinearLayout.LayoutParams(-1, -1));
+        // Scrollable content: clock + banner rows only. The "Your apps" header and the
+        // drawer panel stay fixed below; tiles scroll inside the panel.
         LinearLayout scrollContent = new LinearLayout(this);
         scrollContent.setOrientation(LinearLayout.VERTICAL);
         if (prefs.getBoolean("hide_clock", false)) clock.setVisibility(View.GONE);
@@ -436,11 +455,13 @@ public final class PersonalHomeActivity extends Activity {
         boolean youtubeFirst = prefs.getInt("banner_order", 0) == 1;
         scrollContent.addView(youtubeFirst ? youtubeRow : netflixRow, new LinearLayout.LayoutParams(-1, -2));
         scrollContent.addView(youtubeFirst ? netflixRow : youtubeRow, new LinearLayout.LayoutParams(-1, -2));
-        scrollContent.addView(appHeading);
-        scrollContent.addView(appBody, new LinearLayout.LayoutParams(-1, -2));
         scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
-        page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-        scroll.setOnScrollChangeListener((v, x, y, oldX, oldY) -> {
+        page.addView(scroll, new LinearLayout.LayoutParams(-1, -2));
+        page.addView(appHeading);
+        page.addView(appBody, new LinearLayout.LayoutParams(-1, 0, 1));
+        // Focus-glow tracker: keep the wallpaper glow on the focused tile no matter
+        // which scroller moved.
+        View.OnScrollChangeListener glowTracker = (v, x, y, oldX, oldY) -> {
             View focused = getCurrentFocus();
             if (focused != null && focused.getTag() instanceof Integer && prefs.getBoolean("focus_glow", true)) {
                 int[] position = new int[2], origin = new int[2];
@@ -449,7 +470,9 @@ public final class PersonalHomeActivity extends Activity {
                 sky.focusY = position[1] - origin[1] + focused.getHeight() / 2f;
                 sky.invalidate();
             }
-        });
+        };
+        scroll.setOnScrollChangeListener(glowTracker);
+        drawerScroll.setOnScrollChangeListener(glowTracker);
         page.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             int width = page.getWidth() - page.getPaddingLeft() - page.getPaddingRight();
             if (width > 0 && width != pageWidth) {
@@ -462,6 +485,9 @@ public final class PersonalHomeActivity extends Activity {
         updateClock();
         updateNetwork();
         adaptTextColors();
+        // buildHome() replaces the SkyClock instance, which drops the in-memory online
+        // wallpaper — re-fetch it so a settings change never resets the wallpaper to default.
+        updateOnlineWallpaper();
         WindowManager.LayoutParams brightness = getWindow().getAttributes();
         brightness.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
         getWindow().setAttributes(brightness);
@@ -717,28 +743,6 @@ public final class PersonalHomeActivity extends Activity {
                 }
             }
             Collections.sort(apps, (a, b) -> a.name.compareToIgnoreCase(b.name));
-            // Track new apps for the NEW badge. On the very first scan the baseline
-            // is seeded silently — the old code marked EVERYTHING new on first run.
-            Set<String> current = new HashSet<>();
-            for (App app : apps) current.add(app.info.activityInfo.packageName);
-            if (!prefs.contains("known_apps")) {
-                prefs.edit().putStringSet("known_apps", current).apply();
-                pruneStaleNewBadges(current);
-            } else {
-                Set<String> known = new HashSet<>(prefs.getStringSet("known_apps", Collections.emptySet()));
-                Set<String> fresh = new HashSet<>(current);
-                fresh.removeAll(known);
-                if (!fresh.isEmpty()) {
-                    Set<String> updated = new HashSet<>(known);
-                    updated.addAll(current);
-                    prefs.edit().putStringSet("known_apps", updated).apply();
-                }
-                Set<String> newApps = new HashSet<>(prefs.getStringSet("new_apps", Collections.emptySet()));
-                newApps.addAll(fresh);
-                // Remove uninstalled.
-                newApps.retainAll(current);
-                prefs.edit().putStringSet("new_apps", newApps).apply();
-            }
             handler.post(() -> {
                 if (!isDestroyed() && generation == appGeneration && !sameApps(cachedApps, apps)) renderApps(apps);
             });
@@ -775,28 +779,6 @@ public final class PersonalHomeActivity extends Activity {
                 }
             }
         });
-    }
-
-    /**
-     * One-time cleanup for badges the old first-run logic wrongly put on every
-     * installed app. Keeps the badge only for apps installed in the last 7 days
-     * (genuinely new); everything else loses it. Runs on the worker thread.
-     */
-    private void pruneStaleNewBadges(Set<String> current) {
-        if (prefs.getBoolean("new_badge_fix_v1", false)) return;
-        prefs.edit().putBoolean("new_badge_fix_v1", true).apply();
-        Set<String> newApps = new HashSet<>(prefs.getStringSet("new_apps", Collections.emptySet()));
-        if (newApps.isEmpty()) return;
-        long cutoff = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000;
-        Set<String> keep = new HashSet<>();
-        android.content.pm.PackageManager pm = getPackageManager();
-        for (String pkg : newApps) {
-            if (!current.contains(pkg)) continue;
-            try {
-                if (pm.getPackageInfo(pkg, 0).firstInstallTime >= cutoff) keep.add(pkg);
-            } catch (Exception gone) { /* dropped below */ }
-        }
-        prefs.edit().putStringSet("new_apps", keep).apply();
     }
 
     /** Cheap letter placeholder so the grid is useful before icons finish. Runs on the worker thread. */
@@ -1029,17 +1011,6 @@ public final class PersonalHomeActivity extends Activity {
         icon.setScaleType(ImageView.ScaleType.FIT_XY);
         icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         tile.addView(icon, new android.widget.FrameLayout.LayoutParams(-1, -1));
-        // NEW badge for freshly installed apps.
-        String pkg = app.info.activityInfo.packageName;
-        Set<String> newApps = prefs.getStringSet("new_apps", Collections.emptySet());
-        if (newApps.contains(pkg)) {
-            TextView badge = text("NEW", 10, 0xffffffff);
-            badge.setBackgroundColor(0xffe53935);
-            badge.setPadding(dp(6), dp(2), dp(6), dp(2));
-            android.widget.FrameLayout.LayoutParams badgeParams = new android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
-            badgeParams.setMargins(0, dp(6), dp(6), 0);
-            tile.addView(badge, badgeParams);
-        }
         tile.setOnFocusChangeListener((v, focus) -> {
             tile.setBackground(surface(focus));
             if (!moving) tile.setForeground(tileBorder(app.accent, focus));
@@ -1074,9 +1045,6 @@ public final class PersonalHomeActivity extends Activity {
         });
         tile.setOnClickListener(v -> {
             Runnable open = () -> {
-                // Clear the NEW badge once launched.
-                Set<String> updated = new HashSet<>(prefs.getStringSet("new_apps", Collections.emptySet()));
-                if (updated.remove(pkg)) prefs.edit().putStringSet("new_apps", updated).apply();
                 launch(new Intent(Intent.ACTION_MAIN)
                         .setClassName(app.info.activityInfo.packageName, app.info.activityInfo.name)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED));
@@ -1907,8 +1875,7 @@ public final class PersonalHomeActivity extends Activity {
                 String k = e.getKey();
                 // Skip secrets, caches, and transient state.
                 if (k.contains("key") || k.contains("secret") || k.contains("token")
-                        || k.contains("password") || k.startsWith("weather_cached")
-                        || k.equals("known_apps") || k.equals("new_apps")) continue;
+                        || k.contains("password") || k.startsWith("weather_cached")) continue;
                 Object v = e.getValue();
                 if (v instanceof String || v instanceof Integer || v instanceof Boolean
                         || v instanceof Long || v instanceof Float) {
