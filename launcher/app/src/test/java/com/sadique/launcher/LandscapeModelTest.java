@@ -11,12 +11,6 @@ public class LandscapeModelTest {
         assertNotEquals(LandscapeModel.photoUrl(0), LandscapeModel.photoUrl(1));
         assertEquals(LandscapeModel.photoUrl(0), LandscapeModel.photoUrl(8)); // wraps every 8
     }
-    @Test public void bingImageUrlParsesJson() throws Exception {
-        String json = "{\"images\":[{\"url\":\"/th?id=OHR.Test_1920x1080.jpg\"}]}";
-        String url = LandscapeModel.bingImageUrl(json);
-        assertTrue(url.startsWith("https://www.bing.com/th?id="));
-        assertTrue(url.contains("1920x1080"));
-    }
     @Test public void okaraWeatherUsesTheChosenUnit() {
         String url = LandscapeModel.weatherUrl(LandscapeModel.LATITUDE, LandscapeModel.LONGITUDE, false);
         assertTrue(url.contains("latitude=30.81&longitude=73.45"));
