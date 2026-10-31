@@ -286,6 +286,9 @@ public final class PersonalHomeActivity extends Activity {
         sky.setScaleX(1.06f);
         sky.setScaleY(1.06f);
         root.addView(sky, new ViewGroup.LayoutParams(-1, -1));
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(false);
+        scroll.setClipToPadding(false);
         page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
         int inset = dp(tv ? 32 : 16);
@@ -427,30 +430,33 @@ public final class PersonalHomeActivity extends Activity {
             }
         });
         appBody.setClipToOutline(true);
-        // Clock + banners scroll WITH the apps inside drawerScroll; the "Your apps"
-        // header stays fixed at top. No cross-scroller coordination, no shaking.
-        // (User request 2026-10-31.)
         ScrollView drawerScroll = new ScrollView(this);
         drawerScroll.setFillViewport(true);
         drawerScroll.setVerticalScrollBarEnabled(false);
         LinearLayout drawerContent = new LinearLayout(this);
         drawerContent.setOrientation(LinearLayout.VERTICAL);
-        if (prefs.getBoolean("hide_clock", false)) clock.setVisibility(View.GONE);
-        int align = prefs.getInt("clock_align", 1);
-        LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(-2, -2);
-        clockParams.gravity = new int[]{Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END}[align];
-        drawerContent.addView(clock, clockParams);
-        // Netflix & YouTube banner rows right below the clock (order swappable in settings).
-        netflixRow = new AppContentRow(this, "Netflix", new String[]{"com.netflix.ninja"}, label -> appHeading.setText(label));
-        youtubeRow = new AppContentRow(this, "YouTube", new String[]{"com.google.android.youtube.tv", "com.google.android.youtube"}, label -> appHeading.setText(label));
-        boolean youtubeFirst = prefs.getInt("banner_order", 0) == 1;
-        drawerContent.addView(youtubeFirst ? youtubeRow : netflixRow, new LinearLayout.LayoutParams(-1, -2));
-        drawerContent.addView(youtubeFirst ? netflixRow : youtubeRow, new LinearLayout.LayoutParams(-1, -2));
         drawerContent.addView(grid, new LinearLayout.LayoutParams(-1, -2));
         continueWatching = new ContinueWatchingView(this, label -> appHeading.setText(label));
         drawerContent.addView(continueWatching, new LinearLayout.LayoutParams(-1, -2));
         drawerScroll.addView(drawerContent, new ViewGroup.LayoutParams(-1, -2));
         appBody.addView(drawerScroll, new LinearLayout.LayoutParams(-1, -1));
+        // Scrollable content: clock + banner rows only. The "Your apps" header and the
+        // drawer panel stay fixed below; tiles scroll inside the panel.
+        LinearLayout scrollContent = new LinearLayout(this);
+        scrollContent.setOrientation(LinearLayout.VERTICAL);
+        if (prefs.getBoolean("hide_clock", false)) clock.setVisibility(View.GONE);
+        int align = prefs.getInt("clock_align", 1);
+        LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(-2, -2);
+        clockParams.gravity = new int[]{Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END}[align];
+        scrollContent.addView(clock, clockParams);
+        // Netflix & YouTube banner rows right below the clock (order swappable in settings).
+        netflixRow = new AppContentRow(this, "Netflix", new String[]{"com.netflix.ninja"}, label -> appHeading.setText(label));
+        youtubeRow = new AppContentRow(this, "YouTube", new String[]{"com.google.android.youtube.tv", "com.google.android.youtube"}, label -> appHeading.setText(label));
+        boolean youtubeFirst = prefs.getInt("banner_order", 0) == 1;
+        scrollContent.addView(youtubeFirst ? youtubeRow : netflixRow, new LinearLayout.LayoutParams(-1, -2));
+        scrollContent.addView(youtubeFirst ? netflixRow : youtubeRow, new LinearLayout.LayoutParams(-1, -2));
+        scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
+        page.addView(scroll, new LinearLayout.LayoutParams(-1, -2));
         page.addView(appHeading);
         page.addView(appBody, new LinearLayout.LayoutParams(-1, 0, 1));
         // Focus-glow tracker: keep the wallpaper glow on the focused tile no matter
@@ -468,6 +474,10 @@ public final class PersonalHomeActivity extends Activity {
         // Per-view adaptive text: update each label's dark/light scheme as it moves
         // over the wallpaper during scroll. (User request 2026-10-31.)
         drawerScroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
+            adaptVisibleTextColors();
+            glowTracker.onScrollChange(v, scrollX, scrollY, oldScrollX, oldScrollY);
+        });
+        scroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
             adaptVisibleTextColors();
             glowTracker.onScrollChange(v, scrollX, scrollY, oldScrollX, oldScrollY);
         });
@@ -1661,8 +1671,8 @@ public final class PersonalHomeActivity extends Activity {
      * Pure wallpaper — theme dark mode is NOT consulted. (User 2026-10-31.)
      */
     private void adaptVisibleTextColors() {
-        // Header labels (name/greeting) sit on the dark header background:
-        // fixed light text so they're always visible. (User 2026-10-31.)
+        // Header labels sit on the dark header background: fixed light text
+        // so they're always visible. (User 2026-10-31.)
         applyLabelScheme(userName, false, false);
         applyLabelScheme(greeting, false, true);
         applyLabelScheme(homeWeather, false, true);
