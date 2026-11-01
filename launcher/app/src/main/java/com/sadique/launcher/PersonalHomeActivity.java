@@ -246,8 +246,8 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private TextView text(String value, int size, int color) {
-        // Thin black outline on all home text (user 2026-11-01).
-        StrokeTextView view = new StrokeTextView(this);
+        // Outline removed 2026-11-01 (user: "buri lag rahi hai") — plain text with drop shadow only.
+        TextView view = new TextView(this);
         view.setText(value);
         view.setTextSize(size);
         view.setTextColor(color);
@@ -1334,7 +1334,7 @@ public final class PersonalHomeActivity extends Activity {
         try { if (bluetooth != null && bluetooth.getAdapter() != null) bluetoothState = bluetooth.getAdapter().isEnabled() ? "On" : "Off"; }
         catch (SecurityException unavailable) { /* Android 12+ can restrict adapter state. */ }
         addPanelRow(rows, "Bluetooth", bluetoothState, android.R.drawable.stat_sys_data_bluetooth, 0xff67baff,
-                () -> openSetting(Settings.ACTION_BLUETOOTH_SETTINGS));
+                () -> launch(SystemSettings.bluetoothAccessoriesIntent(this)));
         Runnable release = QuickControls.attach(this, rows);
         if (tv) addPanelRow(rows, "Input", "HDMI / Live TV", R.drawable.ic_input, 0xffbdd5e5, this::showInputs);
         addPanelRow(rows, "TV system settings", "Display, sound & device", R.drawable.ic_settings, 0xffbdd5e5, () -> openSetting(Settings.ACTION_SETTINGS));

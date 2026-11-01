@@ -38,6 +38,26 @@ final class SystemSettings {
     private static final ComponentName AOSP_TV_SETTINGS =
             new ComponentName("com.android.tv.settings", "com.android.tv.settings.MainSettings");
 
+    /** "Remotes & Accessories" Bluetooth/pairing page in the AOSP TV settings app, verified on
+     *  Google TV / Android TV (HA-Firemote wiki, XDA). Falls back to the standard Bluetooth settings
+     *  flow where the accessories activity does not exist. (User 2026-11-01: the Bluetooth row must
+     *  open Remotes & Accessories, not the general Settings.) */
+    static Intent bluetoothAccessoriesIntent(Context context) {
+        PackageManager pm = context.getPackageManager();
+        ComponentName accessories = ComponentName.unflattenFromString(
+                "com.android.tv.settings/.accessories.AddAccessoryActivity");
+        if (accessories != null) {
+            try {
+                pm.getPackageInfo(accessories.getPackageName(), 0);
+                Intent explicit = new Intent().setComponent(accessories);
+                if (pm.resolveActivity(explicit, 0) != null) return explicit;
+            } catch (PackageManager.NameNotFoundException e) {
+                // Fall through to the standard flow.
+            }
+        }
+        return intent(context, Settings.ACTION_BLUETOOTH_SETTINGS);
+    }
+
     /** The first vendor settings entry from settings_fallback_components that is installed, or null
      *  when none is. China-market firmware keeps pages the AOSP TV settings has no row for -
      *  Xiaomi's Account & Security, where the ADB switch lives - in the vendor's own settings app;

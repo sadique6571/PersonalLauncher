@@ -11,7 +11,7 @@ android {
         applicationId providers.gradleProperty('launcherApplicationId').getOrElse('com.sadique.launcher')
         minSdk 26
         targetSdk 34
-        versionCode 23
+        versionCode 24
         versionName '4.9.1'
     }
 
