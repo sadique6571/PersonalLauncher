@@ -223,6 +223,17 @@
          straight back here. A theme's config.json can set it too. Leave empty to omit. -->
     <string name="stock_home_redirect" translatable="false"></string>
 
+    <!-- Opt-in rescue for firmware whose setup recovery claims HOME when the stock launcher is disabled
+         (Haier/Google TV: com.google.android.tungsten.setupwraith/.RecoveryActivity has HOME priority 1 and
+         loops trying to relaunch the disabled stock home, result -92). HomeKeyService then sends that exact
+         recovery window back here: only the exact RecoveryActivity (never other setup windows), only while
+         the stock Home is disabled or unavailable (the configured stock_home_redirect package, or Google
+         TV's stock Home when none is configured), and only once per boot, so it cannot fight a working
+         setup or loop against Android. Keep the stock launcher enabled unless you have tested this path
+         with working ADB and a way back (see docs/devices/acer-r4g.md). A theme's config.json can set it
+         too ("recovery_home_redirect": true). Off by default. -->
+    <bool name="recovery_home_redirect">false</bool>
+
     <!-- For TVs whose firmware opens the Live TV app (live_tv_package) by itself at every power-on, with no setting
          to change it (Changhong / Homwee boards start com.mediatek.wwtv.tvcenter from its own boot receiver, which
          adb cannot disable on Android 14). While nobody has pressed a key yet after boot or after the screen turns
