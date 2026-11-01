@@ -245,6 +245,7 @@ public class HomeKeyService extends AccessibilityService {
     }
 
     private boolean isSettingsKey(KeyEvent event) {
+        if (SettingsKeyPolicy.isNumberEntryKey(event.getKeyCode())) return false;
         if (event.getKeyCode() == KeyEvent.KEYCODE_SETTINGS) return true;
         for (int code : settingsScancodes) if (event.getScanCode() == code) return true;
         for (int code : settingsKeycodes) if (event.getKeyCode() == code) return true;

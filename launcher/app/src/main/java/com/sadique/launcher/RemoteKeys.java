@@ -242,6 +242,10 @@ final class RemoteKeys {
      * normal one on an earlier release. False means neither list has this key, so the caller can pass it on.
      */
     static boolean handle(Context ctx, KeyEvent event, String app, String holdApp) {
+        // Both accessibility helpers share this path. Guard scan, keycode, front and hold mappings
+        // before consuming DOWN or scheduling a hold, including migrated scan:240 settings targets.
+        app = SettingsKeyPolicy.safeTarget(event.getKeyCode(), app);
+        holdApp = SettingsKeyPolicy.safeTarget(event.getKeyCode(), holdApp);
         if (app == null && holdApp == null) return false;
         if (presses == null) {
             Handler handler = new Handler(Looper.getMainLooper());
