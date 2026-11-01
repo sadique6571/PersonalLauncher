@@ -31,6 +31,7 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
+import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
@@ -65,7 +66,7 @@ public final class PersonalHomeActivity extends Activity {
     private final ExecutorService appWorker = Executors.newSingleThreadExecutor();
     private SharedPreferences prefs;
     private LinearLayout page, header, actions, clockLayout, appBody;    private GridLayout grid;
-    private TextView userName, time, date, networkStatus, appHeading, greeting, homeWeather;
+    private TextView userName, time, date, ampm, networkStatus, appHeading, greeting, homeWeather;
     private ImageView avatar;
     private Bitmap avatarBitmap;
     private Bitmap customWallpaper;
@@ -81,6 +82,10 @@ public final class PersonalHomeActivity extends Activity {
     private boolean firstGridRender = true;
     /** Debounced rebuild: coalesces rapid settings changes into one buildHome(). */
     private boolean buildHomePending = false;
+    /** elapsedRealtime at onCreate entry, for first-frame timing (BootLog). */
+    private long onCreateStartMs;
+    /** First buildHome() also logs the first drawn frame; rebuilds only log their own duration. */
+    private boolean firstBuild = true;
     private List<App> cachedApps;
     /** Move mode: the app being carried, and the visible package order while it moves. Null when off. */
     private App carriedApp;
@@ -135,6 +140,8 @@ public final class PersonalHomeActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        onCreateStartMs = android.os.SystemClock.elapsedRealtime();
+        BootLog.mark("home onCreate");
         prefs = getSharedPreferences("personal_home", MODE_PRIVATE);
         if (!prefs.getBoolean("reference_layout_v42", false)) {
             prefs.edit().putBoolean("reference_layout_v42", true).putString("theme_mode", "dark")
@@ -216,10 +223,18 @@ public final class PersonalHomeActivity extends Activity {
     private GradientDrawable surface(boolean focused) {
         GradientDrawable shape = new GradientDrawable();
         float day = appearanceDaylight();
-        shape.setColor(blend(focused ? 0xff153d5b : 0xff092038, focused ? 0xff407596 : 0xff335975, day));
-        shape.setAlpha(focused ? 238 : 208);
+        // Theme-tinted glass (user 2026-11-01): the dark base takes the theme's hue.
+        int accent = accentColor();
+        float tint = 0.3f;
+        int night = blend(focused ? 0xff153d5b : 0xff092038, accent, tint);
+        int dayC = blend(focused ? 0xff407596 : 0xff335975, accent, tint);
+        shape.setColor(blend(night, dayC, day));
+        // Glass intensity (user 2026-11-01): 0=airy, 100=solid. Focused stays a touch brighter.
+        int intensity = Math.max(0, Math.min(100, prefs.getInt("glass_alpha", 70)));
+        int alpha = 100 + intensity * 155 / 100;
+        shape.setAlpha(focused ? Math.min(255, alpha + 30) : alpha);
         shape.setCornerRadius(tileRadius());
-        shape.setStroke(dp(focused ? 3 : 1), focused ? accentColor() : 0xff28435e);
+        shape.setStroke(dp(focused ? 3 : 1), focused ? accent : 0xff28435e);
         return shape;
     }
 
@@ -231,7 +246,8 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private TextView text(String value, int size, int color) {
-        TextView view = new TextView(this);
+        // Thin black outline on all home text (user 2026-11-01).
+        StrokeTextView view = new StrokeTextView(this);
         view.setText(value);
         view.setTextSize(size);
         view.setTextColor(color);
@@ -271,13 +287,20 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void buildHome() {
+        long buildMs = android.os.SystemClock.elapsedRealtime();
         handler.removeCallbacks(buildHomeTask);
         buildHomePending = false;
         if (continueWatching != null) continueWatching.stop();
         pageWidth = 0;
         android.widget.FrameLayout root = new android.widget.FrameLayout(this);
         root.setBackgroundColor(0xff031126);
+        SkyClock oldSky = sky;
+        if (oldSky != null) handler.removeCallbacks(oldSky.crossfadeStep);
         sky = new SkyClock();
+        // Keep the already-loaded wallpaper across rebuilds: a settings change
+        // must never flash the default wallpaper before the online photo
+        // re-fetches. (User 2026-11-01.)
+        if (oldSky != null) sky.adoptWallpapers(oldSky);
         // Slight overscan so parallax shifts never reveal edges.
         sky.setScaleX(1.06f);
         sky.setScaleY(1.06f);
@@ -391,12 +414,22 @@ public final class PersonalHomeActivity extends Activity {
         time.setTypeface(android.graphics.Typeface.create(
                 clockFonts[Math.max(0, Math.min(2, prefs.getInt("clock_font", 0)))], android.graphics.Typeface.NORMAL));
         // Analog mode: hide the digital time (keeps layout for clockY), SkyClock draws the face.
-        if (prefs.getInt("clock_style", 0) == 1) time.setVisibility(View.INVISIBLE);
-        // No auto-size: it mismeasures the trailing AM/PM RelativeSizeSpan and clips it
-        // (worse with seconds, when the string is longest). fitClockText() sizes precisely.
+        boolean analogClock = prefs.getInt("clock_style", 0) == 1;
+        // AM/PM is a separate view, not a span: it can never be clipped when
+        // seconds make the string longest. (User 2026-11-01.)
+        ampm = text("", Math.max(14, (int) (clockSize * 0.42f)), TEXT);
+        ampm.setSingleLine(true);
+        if (prefs.getBoolean("clock_shadow", true)) {
+            ampm.setShadowLayer(dp(4), 0, dp(2), 0xcc000000);
+        }
+        if (analogClock) {
+            time.setVisibility(View.INVISIBLE);
+            ampm.setVisibility(View.INVISIBLE);
+        }
+        // No auto-size: fitClockText() sizes precisely.
         time.setAutoSizeTextTypeWithDefaults(android.widget.TextView.AUTO_SIZE_TEXT_TYPE_NONE);
-        // Horizontal padding prevents AM/PM clipping from the shadow layer.
-        time.setPadding(dp(12), dp(2), dp(12), dp(10));
+        // Horizontal padding prevents clipping from the shadow layer.
+        time.setPadding(dp(12), dp(2), dp(4), dp(10));
         clockTextSize = clockSize;
         // Analog face radius follows the clock size (diameter ~= digital height).
         if (sky != null) sky.clockRadius = dp(clockSize * 0.85f);
@@ -405,7 +438,15 @@ public final class PersonalHomeActivity extends Activity {
             date.setShadowLayer(dp(6), 0, dp(2), 0xcc000000);
         }
         date.setGravity(Gravity.CENTER);
-        clock.addView(time, new LinearLayout.LayoutParams(-1, dp(clockSize + (compact ? 10 : 36))));
+        LinearLayout timeRow = new LinearLayout(this);
+        timeRow.setOrientation(LinearLayout.HORIZONTAL);
+        timeRow.setGravity(Gravity.CENTER);
+        timeRow.addView(time, new LinearLayout.LayoutParams(-2, -2));
+        LinearLayout.LayoutParams ampmParams = new LinearLayout.LayoutParams(-2, -2);
+        ampmParams.gravity = Gravity.BOTTOM;
+        ampmParams.bottomMargin = dp(6);
+        timeRow.addView(ampm, ampmParams);
+        clock.addView(timeRow, new LinearLayout.LayoutParams(-1, dp(clockSize + (compact ? 10 : 36))));
         clock.addView(date);
         time.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             int[] position = new int[2], origin = new int[2];
@@ -506,6 +547,18 @@ public final class PersonalHomeActivity extends Activity {
         brightness.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
         getWindow().setAttributes(brightness);
         if (resumed) continueWatching.start();
+        BootLog.mark("home buildHome", buildMs);
+        if (firstBuild) {
+            firstBuild = false;
+            // First actually-drawn frame, once: onCreate duration alone is not visible startup time.
+            root.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+                @Override public boolean onPreDraw() {
+                    root.getViewTreeObserver().removeOnPreDrawListener(this);
+                    BootLog.mark("home first frame", onCreateStartMs);
+                    return true;
+                }
+            });
+        }
     }
 
     /** Time-based greeting, e.g. "Subah Bakhair". */
@@ -522,23 +575,24 @@ public final class PersonalHomeActivity extends Activity {
         boolean seconds = prefs.getBoolean("clock_seconds", false);
         boolean is24 = prefs.getBoolean("time_24h", false);
         String value;
+        String ampmText;
         if (is24) {
             value = String.format(Locale.getDefault(), "%02d:%02d",
                     now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE));
             if (seconds) value += String.format(Locale.getDefault(), ":%02d", now.get(Calendar.SECOND));
+            ampmText = "";
         } else {
-            value = PersonalHomeModel.time(now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE));
-            if (seconds) {
-                value = String.format(Locale.getDefault(), "%02d:%02d:%02d %s",
-                        now.get(Calendar.HOUR) == 0 ? 12 : now.get(Calendar.HOUR),
-                        now.get(Calendar.MINUTE), now.get(Calendar.SECOND),
-                        now.get(Calendar.AM_PM) == Calendar.AM ? "AM" : "PM");
-            }
+            int h12 = now.get(Calendar.HOUR) == 0 ? 12 : now.get(Calendar.HOUR);
+            value = String.format(Locale.getDefault(), "%02d:%02d", h12, now.get(Calendar.MINUTE));
+            if (seconds) value += String.format(Locale.getDefault(), ":%02d", now.get(Calendar.SECOND));
+            ampmText = now.get(Calendar.AM_PM) == Calendar.AM ? "AM" : "PM";
         }
-        android.text.SpannableString clockText = new android.text.SpannableString(value);
-        clockText.setSpan(new android.text.style.RelativeSizeSpan(.42f), value.length() - 2,
-                value.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        fitClockText(clockText);
+        fitClockText(value);
+        if (ampm != null) {
+            ampm.setText(ampmText);
+            boolean analog = prefs.getInt("clock_style", 0) == 1;
+            ampm.setVisibility(analog ? View.INVISIBLE : (ampmText.isEmpty() ? View.GONE : View.VISIBLE));
+        }
         date.setText(new java.text.SimpleDateFormat("EEE, d MMM yyyy", Locale.getDefault()).format(now.getTime()));
         sky.minute = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
         sky.clockStyle = prefs.getInt("clock_style", 0);
@@ -547,10 +601,9 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     /**
-     * Sizes the clock text so the whole string — including the shrunken trailing
-     * AM/PM — always fits. Auto-size mismeasured the RelativeSizeSpan and clipped
-     * the end (AM/PM vanishing with seconds on). Measured precisely with a
-     * StaticLayout, then scaled down only if needed; never below 26sp.
+     * Sizes the clock text so the whole string always fits. AM/PM lives in its
+     * own view now, so there is no span left to mismeasure. Measured precisely
+     * with a StaticLayout, then scaled down only if needed; never below 26sp.
      */
     private void fitClockText(CharSequence text) {
         if (time == null) return;
@@ -1032,12 +1085,12 @@ public final class PersonalHomeActivity extends Activity {
                 sky.focusX = position[0] - origin[0] + tile.getWidth() / 2f;
                 sky.focusY = position[1] - origin[1] + tile.getHeight() / 2f;
                 sky.focusRadius = tile.getWidth(); sky.focusAccent = prefs.getBoolean("focus_glow", true) ? app.accent : 0;
-                // Parallax: wallpaper drifts slightly opposite to the focused tile.
-                float cx = position[0] + tile.getWidth() / 2f;
+                // Parallax: wallpaper drifts slightly opposite to the focused tile,
+                // vertical only — never sideways. (User 2026-11-01.)
                 float cy = position[1] + tile.getHeight() / 2f;
                 android.graphics.Point size = new android.graphics.Point();
                 getWindowManager().getDefaultDisplay().getSize(size);
-                sky.animate().translationX((size.x / 2f - cx) / size.x * dp(36))
+                sky.animate().translationX(0)
                         .translationY((size.y / 2f - cy) / size.y * dp(36))
                         .setDuration(350).start();
             } else sky.focusAccent = 0;
@@ -1482,9 +1535,10 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void themeSettings() {
-        String[] labels = {"Theme", "Accent color", "Dark mode", "Launcher font", "Glass intensity"};
-        String[] hints = {"Cyan, Orange, Purple or Custom", "Custom theme color", "Midnight, automatic or light", "Font for the launcher", "Transparency of panels"};
-        int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness};
+        // "Dark mode" removed 2026-11-01 (user): the theme glass color covers it.
+        String[] labels = {"Theme", "Accent color", "Launcher font", "Glass intensity"};
+        String[] hints = {"Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels"};
+        int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness};
         Runnable[] choices = {
             () -> chooseSetting("Theme", new String[]{"Midnight Cyan", "Sunset Orange", "Deep Purple", "Custom"}, which -> {
                 prefs.edit().putInt("theme_name", which).apply();
@@ -1492,9 +1546,6 @@ public final class PersonalHomeActivity extends Activity {
                 else { applyAppearance(); refreshApps(); }
             }),
             () -> chooseAccentColor(),
-            () -> chooseSetting("Dark mode", new String[]{"Dark (Midnight Cyan)", "Automatic day / night", "Light"}, which -> {
-                prefs.edit().putString("theme_mode", new String[]{"dark","auto","light"}[which]).apply(); applyAppearance();
-            }),
             () -> chooseSetting("Launcher font", new String[]{"Default", "Serif", "Mono", "Light"}, which -> {
                 prefs.edit().putInt("app_font", which).apply(); buildHomeSoon();
             }),
@@ -1507,9 +1558,11 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void wallpaperMenu() {
-        String[] labels = {"Wallpaper", "Wallpaper source", "Save as favorite", "Day / night wallpaper", "Wallpaper slideshow", "Wallpaper darkness", "Bottom shade", "Smooth day/night"};
-        String[] hints = {"Mountains or your own picture", "Built-in, online or favorite", "Save current wallpaper", "Different wallpaper day and night", "Change wallpaper over time", "Keep the landscape visible", "Dark gradient behind tiles", "Animate day/night change"};
-        int[] icons = {R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness};
+        // Removed 2026-11-01 (user): "Save as favorite", "Day / night wallpaper",
+        // "Smooth day/night", and the built-in Midnight mountains / Solid midnight options.
+        String[] labels = {"Wallpaper", "Wallpaper source", "Wallpaper slideshow", "Wallpaper darkness", "Bottom shade"};
+        String[] hints = {"Your own picture", "Built-in, online or favorite", "Change wallpaper over time", "Keep the landscape visible", "Dark gradient behind tiles"};
+        int[] icons = {R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_brightness, R.drawable.ic_brightness};
         Runnable[] choices = {
             this::wallpaperSettings,
             () -> chooseSetting("Wallpaper source", new String[]{"Built-in", "Online", "Favorite"}, which -> {
@@ -1518,11 +1571,6 @@ public final class PersonalHomeActivity extends Activity {
                 armSlideshow();
                 sky.invalidate();
             }),
-            () -> { sky.saveFavorite(); sky.reloadFavorite(); },
-            () -> chooseSetting("Day / night wallpaper", new String[]{"Off", "On"}, which -> {
-                prefs.edit().putBoolean("wallpaper_daynight", which == 1).apply();
-                updateOnlineWallpaper();
-            }),
             () -> chooseSetting("Wallpaper slideshow", new String[]{"Off", "15 minutes", "30 minutes", "1 hour"}, which -> {
                 prefs.edit().putInt("wallpaper_slideshow", new int[]{0, 15, 30, 60}[which]).apply();
                 armSlideshow();
@@ -1530,15 +1578,8 @@ public final class PersonalHomeActivity extends Activity {
             () -> chooseSetting("Wallpaper darkness", new String[]{"Light", "Medium", "Dark"}, which -> {
                 prefs.edit().putInt("background_dim", which * 20).apply(); sky.invalidate();
             }),
-            
-            
             () -> chooseSetting("Bottom shade", new String[]{"Off", "On"}, which -> {
                 prefs.edit().putBoolean("bottom_shade", which == 1).apply(); sky.invalidate();
-            }),
-            
-            
-            () -> chooseSetting("Smooth day/night", new String[]{"Off", "On"}, which -> {
-                prefs.edit().putBoolean("daynight_smooth", which == 1).apply(); sky.invalidate();
             }),
         };
         subMenu("Wallpaper", labels, hints, icons, choices);
@@ -1593,15 +1634,14 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void wallpaperSettings() {
-        chooseSetting("Home wallpaper", new String[]{"Midnight mountains", "Solid midnight", "Choose picture", "Saved custom picture"}, which -> {
-            if (which == 2) {
+        // Built-in Midnight mountains / Solid midnight removed 2026-11-01 (user).
+        chooseSetting("Home wallpaper", new String[]{"Choose picture", "Saved custom picture"}, which -> {
+            if (which == 0) {
                 try { startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), 8); }
                 catch (ActivityNotFoundException | SecurityException unavailable) { Toast.makeText(this, "No image picker available on this device", Toast.LENGTH_LONG).show(); }
-            } else if (which == 3) {
+            } else {
                 if (!new File(getFilesDir(), "personal-wallpaper.jpg").exists()) { Toast.makeText(this, "Choose a picture first", Toast.LENGTH_SHORT).show(); return; }
                 prefs.edit().putString("wallpaper_mode", "custom").apply(); loadWallpaper();
-            } else {
-                prefs.edit().putString("wallpaper_mode", which == 0 ? "mountains" : "solid").apply(); customWallpaper = null; sky.invalidate();
             }
         });
     }
@@ -1622,6 +1662,7 @@ public final class PersonalHomeActivity extends Activity {
         applyLabelScheme(homeWeather, false, true);
         applyLabelScheme(networkStatus, false, true);
         applyLabelScheme(time, false, false);
+        applyLabelScheme(ampm, false, false);
         applyLabelScheme(date, false, true);
         applyLabelScheme(appHeading, false, false);
     }
@@ -1642,15 +1683,59 @@ public final class PersonalHomeActivity extends Activity {
     /** Applies the current light/dark text scheme to every wallpaper-backed label. */
     private void chooseSetting(String title, String[] options, java.util.function.IntConsumer selected) {
         String[] shown = options.clone();
-        int current = -1;
-        if (title.equals("Dark mode")) {
-            String mode = prefs.getString("theme_mode", "dark");
-            current = mode.equals("auto") ? 1 : mode.equals("light") ? 2 : 0;
-        } else if (title.equals("Wallpaper darkness")) current = Math.min(2, prefs.getInt("background_dim", 0) / 20);
-        else if (title.equals("App colour glow")) current = prefs.getBoolean("focus_glow", true) ? 0 : 1;
-        else if (title.equals("Header background")) current = headerBgMode();
+        int current = settingCurrentIndex(title);
         if (current >= 0 && current < shown.length) shown[current] += "  ✓";
         GlassSettings.options(this, title, shown, null, selected);
+    }
+
+    /** Index of the currently applied option for a settings chooser (-1 when none applies). (User 2026-11-01.) */
+    private int settingCurrentIndex(String title) {
+        switch (title) {
+            case "Wallpaper darkness": return Math.min(2, prefs.getInt("background_dim", 0) / 20);
+            case "App colour glow": return prefs.getBoolean("focus_glow", true) ? 0 : 1;
+            case "Header background": return headerBgMode();
+            case "App columns": {
+                int v = prefs.getInt(tv ? "tv_columns" : "phone_columns", 0);
+                return v == 0 ? 0 : v - 1;
+            }
+            case "Tile size": return prefs.getBoolean("large_tiles", false) ? 1 : 0;
+            case "Tile spacing": return prefs.getInt("tile_spacing", 0);
+            case "Tile corners": return prefs.getInt("tile_corners", 0);
+            case "Logo size": return Math.max(0, Math.min(2, prefs.getInt("logo_size", 1)));
+            case "Focused app title size": return indexOf(new int[]{24, 32, 40, 48}, prefs.getInt("focus_title_size", tv ? 32 : 26));
+            case "Focus border": return prefs.getInt("focus_border", 0);
+            case "App entrance": return prefs.getBoolean("app_entrance", true) ? 1 : 0;
+            case "Clock size": return indexOf(tv ? new int[]{42, 52, 62} : new int[]{36, 44, 52}, prefs.getInt("clock_size", tv ? 52 : 44));
+            case "Clock style": return prefs.getInt("clock_style", 0);
+            case "Clock font": return prefs.getInt("clock_font", 0);
+            case "Time format": return prefs.getBoolean("time_24h", false) ? 1 : 0;
+            case "Clock alignment": return prefs.getInt("clock_align", 0);
+            case "Clock seconds": return prefs.getBoolean("clock_seconds", false) ? 1 : 0;
+            case "Clock glow": return prefs.getBoolean("clock_glow", false) ? 1 : 0;
+            case "Clock shadow": return prefs.getBoolean("clock_shadow", true) ? 1 : 0;
+            case "Hide clock": return prefs.getBoolean("hide_clock", false) ? 1 : 0;
+            case "Hide greeting": return prefs.getBoolean("hide_greeting", false) ? 1 : 0;
+            case "Theme": return prefs.getInt("theme_name", 0);
+            case "Launcher font": return prefs.getInt("app_font", 0);
+            case "Glass intensity": return indexOf(new int[]{30, 70, 100}, prefs.getInt("glass_alpha", 70));
+            case "Wallpaper source": return prefs.getInt("wallpaper_source", 0);
+            case "Wallpaper slideshow": return indexOf(new int[]{0, 15, 30, 60}, prefs.getInt("wallpaper_slideshow", 0));
+            case "Bottom shade": return prefs.getBoolean("bottom_shade", true) ? 1 : 0;
+            case "Continue watching": return prefs.getBoolean("continue_watching", true) ? 0 : 1;
+            case "Avatar shape": return prefs.getInt("avatar_shape", 0);
+            case "Performance": return prefs.getInt("perf_mode", 0);
+            case "Home wallpaper": return "custom".equals(prefs.getString("wallpaper_mode", "mountains")) ? 1 : -1;
+            case "Temperature unit": return prefs.getBoolean("weather_fahrenheit", false) ? 1 : 0;
+            case "Photo change interval": return indexOf(new int[]{30, 60, 120, 300}, prefs.getInt("photo_seconds", 30));
+            case "Clock position": return prefs.getInt("ss_clock_pos", 1);
+            case "Start screensaver after idle": return indexOf(new int[]{0, 2, 5, 10, 15}, prefs.getInt("idle_screensaver_minutes", 0));
+            default: return -1;
+        }
+    }
+
+    private static int indexOf(int[] values, int value) {
+        for (int i = 0; i < values.length; i++) if (values[i] == value) return i;
+        return -1;
     }
 
     private void refreshApps() {
@@ -1703,26 +1788,50 @@ public final class PersonalHomeActivity extends Activity {
 
     @Override public void onUserInteraction() { super.onUserInteraction(); armIdleScreensaver(); }
 
+    private ImageView profileAvatarPreview;
+
+    /** Refreshes the avatar preview inside the profile dialog, if open. */
+    private void refreshProfileAvatarPreview() {
+        if (profileAvatarPreview == null) return;
+        if (avatarBitmap != null) profileAvatarPreview.setImageBitmap(avatarBitmap);
+        else profileAvatarPreview.setImageResource(R.drawable.ic_person);
+    }
+
     private void editProfile() {
         if (profile != null && profile.isShowing()) return;
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
         form.setPadding(dp(22), dp(10), dp(22), dp(8));
+        // Avatar preview inside the dialog (user 2026-11-01).
+        profileAvatarPreview = new ImageView(this);
+        profileAvatarPreview.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        profileAvatarPreview.setBackground(avatarSurface(false));
+        profileAvatarPreview.setClipToOutline(true);
+        profileAvatarPreview.setContentDescription("Profile photo");
+        refreshProfileAvatarPreview();
+        LinearLayout previewRow = new LinearLayout(this);
+        previewRow.setGravity(Gravity.CENTER);
+        previewRow.setPadding(0, 0, 0, dp(8));
+        previewRow.addView(profileAvatarPreview, new LinearLayout.LayoutParams(dp(96), dp(96)));
+        form.addView(previewRow);
         EditText name = new EditText(this);
         name.setSingleLine(true);
         name.setHint("Your name");
         name.setText(prefs.getString("name", "Sadique Sadiq"));
         name.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS);
         form.addView(name);
-        form.addView(button("Choose profile photo", () -> {
+        // Choose / Remove side by side (user 2026-11-01).
+        LinearLayout photoRow = new LinearLayout(this);
+        photoRow.setOrientation(LinearLayout.HORIZONTAL);
+        Button choose = button("Choose photo", () -> {
             try {
                 startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*")
                         .addCategory(Intent.CATEGORY_OPENABLE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), 7);
             } catch (ActivityNotFoundException | SecurityException unavailable) {
                 Toast.makeText(this, "No photo picker available on this device", Toast.LENGTH_LONG).show();
             }
-        }));
-        form.addView(button("Remove photo", () -> {
+        });
+        Button remove = button("Remove photo", () -> {
             File photo = new File(getFilesDir(), "personal-avatar.png");
             if (photo.exists() && !photo.delete()) {
                 Toast.makeText(this, "Could not remove photo", Toast.LENGTH_SHORT).show();
@@ -1730,18 +1839,38 @@ public final class PersonalHomeActivity extends Activity {
             }
             avatarBitmap = null;
             refreshProfile();
-        }));
+            refreshProfileAvatarPreview();
+        });
+        LinearLayout.LayoutParams photoBtn = new LinearLayout.LayoutParams(0, -2, 1);
+        photoBtn.setMargins(dp(4), dp(8), dp(4), dp(4));
+        photoRow.addView(choose, photoBtn);
+        LinearLayout.LayoutParams photoBtn2 = new LinearLayout.LayoutParams(0, -2, 1);
+        photoBtn2.setMargins(dp(4), dp(8), dp(4), dp(4));
+        photoRow.addView(remove, photoBtn2);
+        form.addView(photoRow);
         form.addView(text("Profile stays on this device. Google login is not used.", 13, MUTED));
-        profile = new AlertDialog.Builder(this).setTitle(prefs.getBoolean("setup", false) ? "Your profile" : "Welcome · set up your Home")
-                .setView(form).setPositiveButton("Save", null).setNegativeButton("Later", null).create();
-        profile.setOnShowListener(d -> profile.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+        // Save on the left, Later on the right (user 2026-11-01).
+        LinearLayout actionRow = new LinearLayout(this);
+        actionRow.setOrientation(LinearLayout.HORIZONTAL);
+        Button save = button("Save", () -> {
             String value = PersonalHomeModel.name(name.getText().toString());
             if (value.isEmpty()) { name.setError("Enter your name"); return; }
             prefs.edit().putString("name", value).putBoolean("setup", true).apply();
             refreshProfile();
-            profile.dismiss();
+            if (profile != null) profile.dismiss();
             handler.post(() -> maybeOfferDefaultHome());
-        }));
+        });
+        Button later = button("Later", () -> { if (profile != null) profile.dismiss(); });
+        LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(0, -2, 1);
+        saveParams.setMargins(dp(4), dp(8), dp(4), 0);
+        LinearLayout.LayoutParams laterParams = new LinearLayout.LayoutParams(0, -2, 1);
+        laterParams.setMargins(dp(4), dp(8), dp(4), 0);
+        actionRow.addView(save, saveParams);
+        actionRow.addView(later, laterParams);
+        form.addView(actionRow);
+        profile = new AlertDialog.Builder(this).setTitle(prefs.getBoolean("setup", false) ? "Your profile" : "Welcome · set up your Home")
+                .setView(form).create();
+        profile.setOnDismissListener(d -> profileAvatarPreview = null);
         profile.show();
     }
 
@@ -1946,7 +2075,7 @@ public final class PersonalHomeActivity extends Activity {
                 handler.post(() -> {
                     if (isDestroyed()) return;
                     if (wallpaper) { customWallpaper = decoded; prefs.edit().putString("wallpaper_mode", "custom").apply(); sky.invalidate(); }
-                    else { avatarBitmap = decoded; refreshProfile(); }
+                    else { avatarBitmap = decoded; refreshProfile(); refreshProfileAvatarPreview(); }
                 });
             } catch (Exception error) {
                 handler.post(() -> { if (!isDestroyed()) Toast.makeText(this, "Could not read this photo. Choose another image.", Toast.LENGTH_LONG).show(); });
@@ -2056,8 +2185,7 @@ public final class PersonalHomeActivity extends Activity {
         private float smoothDay = -1f;
 
         /** Releases transient bitmaps (online photos, crossfade buffer) under memory pressure. */
-        void releaseTransient() {
-            // Don't recycle backdrop — it's the built-in wallpaper, still used in onDraw.
+        void releaseTransient() {            // Don't recycle backdrop — it's the built-in wallpaper, still used in onDraw.
             // Only clear the reloadable online variants.
             onlineNext = null;
             // Keep onlineWallpaper if it's currently displayed; it will be re-fetched on demand.
@@ -2066,6 +2194,29 @@ public final class PersonalHomeActivity extends Activity {
                 onlineWallpaper = null;
             }
             System.gc();
+        }
+        /**
+         * Carry the already-loaded wallpapers into a fresh SkyClock created by
+         * buildHome(), so a settings change never flashes the default wallpaper.
+         * The old instance is detached: its fields are nulled so a stale posted
+         * runnable can never recycle a bitmap this instance is drawing.
+         * (User 2026-11-01.)
+         */
+        void adoptWallpapers(SkyClock old) {
+            backdrop = old.backdrop;
+            onlineWallpaper = old.onlineWallpaper;
+            onlineNext = old.onlineNext;
+            onlineIndex = old.onlineIndex;
+            crossfade = old.crossfade;
+            old.backdrop = null;
+            old.onlineWallpaper = null;
+            old.onlineNext = null;
+            old.onlineIndex = -1;
+            // A crossfade interrupted mid-flight continues on this instance.
+            if (crossfade < 1f) {
+                handler.removeCallbacks(crossfadeStep);
+                handler.post(crossfadeStep);
+            }
         }
         int minute, focusAccent;
         float clockY = -1, focusX, focusY, focusRadius;
