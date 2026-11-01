@@ -179,7 +179,8 @@ tools/tv.py 'settings put secure screensaver_components com.sadique.launcher/.Cl
   unprefixed app, holding for half a second opens the hold one (by keycode or `hold:scan:...`). An entry can
   name an activity (`package/.Activity`), such as an add-on's quick bar, instead of the app's launcher entry.
 - In place of an app, an `app_keys` entry can name an action: `back`, `home`, `recents`, `mute`, `sleep`,
-  `screensaver`, `settings` or `wifi`, so a spare colour button can mute the TV or, held, put it in standby.
+  `screensaver`, `settings`, `wifi` or `home_settings`, so a spare colour button can mute the TV or, held, put it in standby.
+  `home_settings` opens the launcher's own Home settings popup (the same one the remote's Settings button opens).
 - `HOME_KEY_SERVICE=1` also fixes sticks whose Home key sends ALL_APPS, and opens Settings from the remote's
   **gear** button, even one Android does not map (scancodes or keycodes in config.xml).
 - With `settings_key_panel` the gear opens a [small quick settings panel](quick-settings-panel.jpg)

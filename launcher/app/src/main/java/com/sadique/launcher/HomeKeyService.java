@@ -193,6 +193,7 @@ public class HomeKeyService extends AccessibilityService {
         appKeys = RemoteKeys.parseAppKeys(config.appKeys);
         appScancodes = RemoteKeys.parseAppScancodes(config.appKeys);
         RemoteKeys.applyKeyFilter(this, config.keyFilter);
+        RemoteKeys.setDebug(config.remoteKeysDebug);
         homeLongPressHome = config.homeLongPressHome;
         frontAppKeys = RemoteKeys.parseFrontAppKeys(config.appKeys);
         frontAppScancodes = RemoteKeys.parseFrontAppScancodes(config.appKeys);
@@ -264,12 +265,8 @@ public class HomeKeyService extends AccessibilityService {
         // The remote's Settings button always opens the launcher's own settings menu.
         if (isSettingsKey(event)) {
             if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
-                Intent open = new Intent(this, PersonalHomeActivity.class).setAction(MainActivity.ACTION_SHOW_SETTINGS);
-                try {
-                    startActivity(open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-                } catch (ActivityNotFoundException | SecurityException unavailable) {
+                if (!RemoteKeys.launchHomeSettings(this))
                     Toast.makeText(this, R.string.not_available, Toast.LENGTH_SHORT).show();
-                }
             }
             return true;
         }
@@ -284,7 +281,10 @@ public class HomeKeyService extends AccessibilityService {
             redirectHomeKey(event);
             return false;
         }
-        if (event.getKeyCode() != KeyEvent.KEYCODE_ALL_APPS) return false;
+        if (event.getKeyCode() != KeyEvent.KEYCODE_ALL_APPS) {
+            RemoteKeys.debugUnmatched(event);
+            return false;
+        }
         if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) openHome();
         return true;
     }

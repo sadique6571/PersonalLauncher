@@ -168,6 +168,8 @@ final class Config {
     /** Whether the key services request key filtering (config.xml or theme key_filter); false keeps key
      *  auto-repeat working on firmware whose AccessibilityInputFilter drops repeats (TCL Android 12). */
     final boolean keyFilter;
+    /** Verbose remote-key logging for the key services (config.xml or theme remote_keys_debug); off by default. */
+    final boolean remoteKeysDebug;
     /** With keyFilter on, the key services stop filtering while a game controller is connected (gamepad_passthrough). */
     final boolean gamepadPassthrough;
     /** With keyFilter on, the key services swallow Volume Up/Down and repeat a held one themselves (consume_volume_keys). */
@@ -281,7 +283,7 @@ final class Config {
                    boolean keyFilter, boolean dockGlass, String glowStyle, boolean wallpaperCaptions,
                    boolean handleViewInputs, boolean tileMenu, boolean dockEvenPadding, boolean dockBand, boolean cinematicDots, boolean cinematicWhiteFocus, boolean wifiStatusColor, int cinematicScrim, int cinematicArt,
                    Map<String, Set<String>> wallpaperMoods, boolean gamepadPassthrough, boolean consumeVolumeKeys, boolean powerOnHome, boolean homeLongPressHome, boolean wifiStatusWarnings, List<String> topBarApps, boolean showGreeting, boolean headerWhite, boolean clockWallpaper, int clockWallpaperDim, boolean clockGlow, String glassStyle, boolean singleRow, boolean dockBandAll, boolean lunarDate, int lunarUtcOffset, boolean dateBelowClock, boolean vpnPill, String locale, boolean powerOnHomeAlways, boolean inputsConnectedOnly,
-                   int openOnStartNetworkWait, boolean iconOnlyVpn) {
+                   int openOnStartNetworkWait, boolean iconOnlyVpn, boolean remoteKeysDebug) {
         this.handleViewInputs = handleViewInputs;
         this.tileMenu = tileMenu;
         this.inputKeycodes = inputKeycodes;
@@ -331,6 +333,7 @@ final class Config {
         this.iconOnlyButtons = iconOnlyButtons;
         this.iconOnlyInputs = iconOnlyInputs;
         this.iconOnlyVpn = iconOnlyVpn;
+        this.remoteKeysDebug = remoteKeysDebug;
         this.libraryButton = libraryButton;
         this.showLibraryPill = showLibraryPill;
         this.wifiLabelWidth = wifiLabelWidth;
@@ -456,6 +459,7 @@ final class Config {
         boolean iconOnlyButtons = res.getBoolean(R.bool.icon_only_buttons);
         boolean iconOnlyInputs = res.getBoolean(R.bool.icon_only_inputs);
         boolean iconOnlyVpn = res.getBoolean(R.bool.icon_only_vpn);
+        boolean remoteKeysDebug = res.getBoolean(R.bool.remote_keys_debug);
         boolean libraryButton = res.getBoolean(R.bool.library_button);
         boolean showLibraryPill = res.getBoolean(R.bool.show_library_pill);
         int wifiLabelWidth = res.getInteger(R.integer.wifi_label_width);
@@ -565,6 +569,7 @@ final class Config {
             iconOnlyButtons = bool(json, "icon_only_buttons", iconOnlyButtons);
             iconOnlyInputs = bool(json, "icon_only_inputs", iconOnlyInputs);
             iconOnlyVpn = bool(json, "icon_only_vpn", iconOnlyVpn);
+            remoteKeysDebug = bool(json, "remote_keys_debug", remoteKeysDebug);
             libraryButton = bool(json, "library_button", libraryButton);
             showLibraryPill = bool(json, "show_library_pill", showLibraryPill);
             wifiLabelWidth = integer(json, "wifi_label_width", wifiLabelWidth, 0, 300);
@@ -589,6 +594,7 @@ final class Config {
             inputKeycodes = intArray(json, "input_key_keycodes", inputKeycodes);
             handleViewInputs = bool(json, "handle_view_inputs", handleViewInputs);
             appKeys = stringList(json, "app_keys", appKeys);
+            appKeys = RemoteKeys.migrateScanSettingsKeys(appKeys);
             stockHomeRedirect = string(json, "stock_home_redirect", stockHomeRedirect);
             cinematic = bool(json, "cinematic_home", cinematic);
             ambientGlow = bool(json, "ambient_glow", ambientGlow);
@@ -687,7 +693,7 @@ final class Config {
                 consumeVolumeKeys, powerOnHome, homeLongPressHome, wifiStatusWarnings, topBarApps, showGreeting, headerWhite, clockWallpaper,
                 Math.max(0, Math.min(90, clockWallpaperDim)), clockGlow, glassStyle, singleRow && dockRow, dockBandAll, lunar, lunarOffset,
                 dateBelowClock, vpnPill, locale, powerOnHomeAlways, inputsConnectedOnly,
-                Math.max(0, Math.min(600, openOnStartNetworkWait)), iconOnlyVpn);
+                Math.max(0, Math.min(600, openOnStartNetworkWait)), iconOnlyVpn, remoteKeysDebug);
     }
 
     /**

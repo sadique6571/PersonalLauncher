@@ -59,7 +59,6 @@ import java.util.concurrent.Executors;
 public final class PersonalHomeActivity extends Activity {
     private static final int CYAN = 0xff40d9ff, TEXT = 0xfff0f7ff, MUTED = 0xffa4bcd6;
     /** Dark-on-light text scheme, used when the wallpaper behind the text is bright. */
-    private static final int TEXT_DARK = 0xff10233a, MUTED_DARK = 0xff3d5a78;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     /** Dedicated app-loading worker: icon scans never block avatar/wallpaper/import, and a new scan cancels the old. */
@@ -71,7 +70,6 @@ public final class PersonalHomeActivity extends Activity {
     private Bitmap avatarBitmap;
     private Bitmap customWallpaper;
     private ContinueWatchingView continueWatching;
-    private AppContentRow netflixRow, youtubeRow;
     private SkyClock sky;
     private ConnectivityManager connectivity;
     private boolean networkRegistered, resumed, tv;
@@ -276,8 +274,6 @@ public final class PersonalHomeActivity extends Activity {
         handler.removeCallbacks(buildHomeTask);
         buildHomePending = false;
         if (continueWatching != null) continueWatching.stop();
-        if (netflixRow != null) netflixRow.stop();
-        if (youtubeRow != null) youtubeRow.stop();
         pageWidth = 0;
         android.widget.FrameLayout root = new android.widget.FrameLayout(this);
         root.setBackgroundColor(0xff031126);
@@ -452,7 +448,7 @@ public final class PersonalHomeActivity extends Activity {
         drawerContent.addView(continueWatching, new LinearLayout.LayoutParams(-1, -2));
         drawerScroll.addView(drawerContent, new ViewGroup.LayoutParams(-1, -2));
         appBody.addView(drawerScroll, new LinearLayout.LayoutParams(-1, -1));
-        // Scrollable content: clock + banner rows only. The "Your apps" header and the
+        // Scrollable content: clock only. The "Your apps" header and the
         // drawer panel stay fixed below; tiles scroll inside the panel.
         LinearLayout scrollContent = new LinearLayout(this);
         scrollContent.setOrientation(LinearLayout.VERTICAL);
@@ -461,12 +457,6 @@ public final class PersonalHomeActivity extends Activity {
         LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(-2, -2);
         clockParams.gravity = new int[]{Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END}[align];
         scrollContent.addView(clock, clockParams);
-        // Netflix & YouTube banner rows right below the clock (order swappable in settings).
-        netflixRow = new AppContentRow(this, "Netflix", new String[]{"com.netflix.ninja"}, label -> appHeading.setText(label));
-        youtubeRow = new AppContentRow(this, "YouTube", new String[]{"com.google.android.youtube.tv", "com.google.android.youtube"}, label -> appHeading.setText(label));
-        boolean youtubeFirst = prefs.getInt("banner_order", 0) == 1;
-        scrollContent.addView(youtubeFirst ? youtubeRow : netflixRow, new LinearLayout.LayoutParams(-1, -2));
-        scrollContent.addView(youtubeFirst ? netflixRow : youtubeRow, new LinearLayout.LayoutParams(-1, -2));
         scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
         page.addView(scroll, new LinearLayout.LayoutParams(-1, -2));
         page.addView(appHeading);
@@ -623,14 +613,8 @@ public final class PersonalHomeActivity extends Activity {
             handler.postDelayed(slideshowStep, minutes * 60_000L);
         }
     }
-    /** Starts/stops the Netflix/YouTube rows based on their on/off prefs. */
+    /** Refreshes the Continue Watching row (banner rows were removed 2026-11-01). */
     private void updateContentRows() {
-        if (netflixRow == null || youtubeRow == null) return;
-        if (prefs.getBoolean("row_netflix", false)) netflixRow.start(); else netflixRow.stop();
-        if (prefs.getBoolean("row_youtube", false)) youtubeRow.start(); else youtubeRow.stop();
-        netflixRow.setVisibility(prefs.getBoolean("row_netflix", false) ? android.view.View.VISIBLE : android.view.View.GONE);
-        youtubeRow.setVisibility(prefs.getBoolean("row_youtube", false) ? android.view.View.VISIBLE : android.view.View.GONE);
-        // Toggling banners also flips Continue Watching visibility (it hides while banners are on).
         if (continueWatching != null) continueWatching.reload();
     }
 
@@ -1561,37 +1545,15 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void appMenu() {
-        String[] labels = {"Hide / unhide apps", "Rearrange apps", "Continue watching", "Netflix row", "YouTube row", "Banner order", "Banner poster size", "Banner auto-scroll", "Row spacing"};
-        String[] hints = {"Choose which apps appear", "Choose the order of app cards", "Resume titles after your apps", "Netflix banners below the clock", "YouTube banners below the clock", "Netflix or YouTube first", "Small, normal or large posters", "Rows scroll by themselves", "Gap between banner rows"};
-        int[] icons = {R.drawable.ic_apps, R.drawable.ic_swap_vert, R.drawable.ic_livetv, R.drawable.ic_livetv, R.drawable.ic_livetv, R.drawable.ic_swap_vert, R.drawable.ic_picture, R.drawable.ic_livetv, R.drawable.ic_livetv};
+        String[] labels = {"Hide / unhide apps", "Rearrange apps", "Continue watching"};
+        String[] hints = {"Choose which apps appear", "Choose the order of app cards", "Resume titles after your apps"};
+        int[] icons = {R.drawable.ic_apps, R.drawable.ic_swap_vert, R.drawable.ic_livetv};
         Runnable[] choices = {
             this::hiddenApps,
             this::rearrangeApps,
             () -> chooseSetting("Continue watching", new String[]{"Show below apps", "Hide row", "Allow TV Watch Next access"}, which -> {
                 if (which == 2) continueWatching.requestAccess();
                 else { prefs.edit().putBoolean("continue_watching", which == 0).apply(); continueWatching.reload(); }
-            }),
-            () -> chooseSetting("Netflix row", new String[]{"Off", "On"}, which -> {
-                prefs.edit().putBoolean("row_netflix", which == 1).apply();
-                updateContentRows();
-            }),
-            () -> chooseSetting("YouTube row", new String[]{"Off", "On"}, which -> {
-                prefs.edit().putBoolean("row_youtube", which == 1).apply();
-                updateContentRows();
-            }),
-            () -> chooseSetting("Banner order", new String[]{"Netflix first", "YouTube first"}, which -> {
-                prefs.edit().putInt("banner_order", which).apply(); buildHomeSoon();
-            }),
-            () -> chooseSetting("Banner poster size", new String[]{"Small", "Normal", "Large"}, which -> {
-                prefs.edit().putInt("banner_poster_size", which).apply();
-                updateContentRows();
-            }),
-            () -> chooseSetting("Banner auto-scroll", new String[]{"Off", "On"}, which -> {
-                prefs.edit().putBoolean("banner_autoscroll", which == 1).apply();
-                updateContentRows();
-            }),
-            () -> chooseSetting("Row spacing", new String[]{"Compact", "Normal", "Wide"}, which -> {
-                prefs.edit().putInt("row_spacing", which).apply(); buildHomeSoon();
             }),
         };
         subMenu("Apps", labels, hints, icons, choices);
@@ -1652,81 +1614,24 @@ public final class PersonalHomeActivity extends Activity {
         });
     }
 
-    /** Average luminance of a wallpaper region (0=black, 1=white), or -1 if unavailable. */
-    private static float sampleLuminance(Bitmap picture, float topFrac, float bottomFrac) {
-        int w = picture.getWidth(), h = picture.getHeight();
-        if (w <= 0 || h <= 0) return -1;
-        int sw = 24, sh = 12;
-        Bitmap small = Bitmap.createScaledBitmap(picture, sw, sh, true);
-        int y0 = Math.max(0, (int) (sh * topFrac)), y1 = Math.min(sh, (int) (sh * bottomFrac));
-        if (y1 <= y0) { small.recycle(); return -1; }
-        int[] pixels = new int[sw * (y1 - y0)];
-        small.getPixels(pixels, 0, sw, 0, y0, sw, y1 - y0);
-        small.recycle();
-        long total = 0;
-        for (int p : pixels) total += (Color.red(p) * 299 + Color.green(p) * 587 + Color.blue(p) * 114) / 1000;
-        return total / (float) (pixels.length * 255);
-    }
-
-    /**
-     * Adapts all wallpaper-backed text (header, clock, section headings) to the
-     * wallpaper's brightness. Sampling runs off the UI thread; unknown brightness
-     * keeps the current scheme.
-     */
-    /**
-     * Per-label wallpaper-adaptive text: each label samples the wallpaper
-     * brightness BEHIND ITSELF and picks dark or light text accordingly.
-     * Pure wallpaper — theme dark mode is NOT consulted. (User 2026-10-31.)
-     */
+    /** Fixed label style for all wallpaper-backed text (user 2026-11-01). */
     private void adaptVisibleTextColors() {
-        // Header labels sit on the dark header background: fixed light text
-        // so they're always visible. (User 2026-10-31.)
+        // Fixed style for every label (user 2026-11-01): white + black outline + drop shadow.
         applyLabelScheme(userName, false, false);
         applyLabelScheme(greeting, false, true);
         applyLabelScheme(homeWeather, false, true);
         applyLabelScheme(networkStatus, false, true);
-        if (sky == null) return;
-        final Bitmap picture = sky.currentPicture();
-        if (picture == null || picture.isRecycled()) return;
-        final int screenH = getResources().getDisplayMetrics().heightPixels;
-        if (screenH <= 0) return;
-        // Wallpaper-backed labels adapt per-label to what's behind them.
-        worker.execute(() -> {
-            adaptOneLabel(time, picture, screenH, false);
-            adaptOneLabel(date, picture, screenH, true);
-            adaptOneLabel(appHeading, picture, screenH, false);
-        });
+        applyLabelScheme(time, false, false);
+        applyLabelScheme(date, false, true);
+        applyLabelScheme(appHeading, false, false);
     }
 
-    /** Samples wallpaper behind a single label and sets its dark/light color on UI thread. */
-    private void adaptOneLabel(final android.widget.TextView label, final Bitmap picture,
-                               final int screenH, final boolean muted) {
-        if (label == null) return;
-        final int[] pos = new int[2];
-        // Must run on UI thread to read view position; sampling stays on worker.
-        handler.post(() -> {
-            label.getLocationOnScreen(pos);
-            final float yFrac = Math.min(0.98f, Math.max(0f,
-                    (pos[1] + label.getHeight() / 2f) / screenH));
-            worker.execute(() -> {
-                float lum = sampleLuminance(picture, Math.max(0f, yFrac - 0.04f),
-                        Math.min(1f, yFrac + 0.04f));
-                if (lum < 0) return;
-                final boolean dark = lum > 0.55f;
-                handler.post(() -> applyLabelScheme(label, dark, muted));
-            });
-        });
-    }
-
-    /** Applies dark/light color + contrasting shadow to one label. */
+    /** Fixed label style (2026-11-01): white text with a black outline halo and drop shadow,
+     *  readable on any wallpaper. Replaces the old per-label adaptive colors. */
     private void applyLabelScheme(android.widget.TextView label, boolean dark, boolean muted) {
         if (label == null) return;
-        boolean shadow = prefs.getBoolean("clock_shadow", true);
-        int color = dark ? (muted ? MUTED_DARK : TEXT_DARK) : (muted ? MUTED : TEXT);
-        int shadowColor = dark ? 0x88ffffff : 0xcc000000;
-        label.setTextColor(color);
-        if (shadow) label.setShadowLayer(dp(5), 0, dp(2), shadowColor);
-        else label.setShadowLayer(0, 0, 0, 0);
+        label.setTextColor(muted ? 0xE6FFFFFF : 0xFFFFFFFF);
+        label.setShadowLayer(dp(5), 0, dp(2), 0xE6000000);
     }
 
     private void adaptTextColors() {
@@ -2073,8 +1978,6 @@ public final class PersonalHomeActivity extends Activity {
     @Override protected void onPause() {
         resumed = false;
         if (continueWatching != null) continueWatching.stop();
-        if (netflixRow != null) netflixRow.stop();
-        if (youtubeRow != null) youtubeRow.stop();
         handler.removeCallbacks(idleScreensaver);
         handler.removeCallbacks(tick);
         handler.removeCallbacks(secondTick);
@@ -2122,8 +2025,6 @@ public final class PersonalHomeActivity extends Activity {
         if (searchDialog != null) searchDialog.dismiss();
         handler.removeCallbacksAndMessages(null);
         if (continueWatching != null) continueWatching.stop();
-        if (netflixRow != null) netflixRow.stop();
-        if (youtubeRow != null) youtubeRow.stop();
         worker.shutdownNow();
         appWorker.shutdownNow();
         super.onDestroy();

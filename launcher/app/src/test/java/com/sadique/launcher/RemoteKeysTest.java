@@ -136,12 +136,39 @@ public class RemoteKeysTest {
         assertEquals("mute", keys.get(190));
         assertEquals("screensaver", keys.get(195));
         assertEquals("sleep", parseHold("hold:190:sleep").get(190));
-        for (String word : new String[] {"back", "home", "recents", "mute", "sleep", "screensaver", "settings", "wifi", "ignore"}) {
+        for (String word : new String[] {"back", "home", "recents", "mute", "sleep", "screensaver", "settings", "wifi", "ignore", "home_settings"}) {
             assertTrue(word, RemoteKeys.isAction(word));
         }
         assertFalse(RemoteKeys.isAction("com.netflix.ninja"));
         assertFalse(RemoteKeys.isAction("input:com.tcl.tvinput/.passthroughinput.TvPassThroughService/HW1"));
         assertFalse(RemoteKeys.isAction("Mute"));
+    }
+
+    @Test public void homeSettingsScancodeEntry() {
+        Map<Integer, String> scans = RemoteKeys.parseAppScancodes(
+                Arrays.asList("scan:240:home_settings"));
+        assertEquals("home_settings", scans.get(240));
+        assertTrue(RemoteKeys.isAction(scans.get(240)));
+    }
+
+    @Test public void scanSettingsKeysMigrated() {
+        List<String> in = Arrays.asList(
+                "scan:240:com.sadique.launcher/.LauncherSettingsActivity",
+                "scan:240:com.sadique.launcher/.QuickSettingsActivity",
+                "hold:scan:240:com.sadique.launcher/.LauncherSettingsActivity",
+                "scan:240:com.netflix.ninja",
+                "scan:241:com.sadique.launcher/.LauncherSettingsActivity",
+                "190:home_settings",
+                "scan:240:home_settings");
+        List<String> out = RemoteKeys.migrateScanSettingsKeys(in);
+        assertEquals("scan:240:home_settings", out.get(0));
+        assertEquals("scan:240:home_settings", out.get(1));
+        assertEquals("hold:scan:240:home_settings", out.get(2));
+        // Unrelated entries are left untouched.
+        assertEquals("scan:240:com.netflix.ninja", out.get(3));
+        assertEquals("scan:241:com.sadique.launcher/.LauncherSettingsActivity", out.get(4));
+        assertEquals("190:home_settings", out.get(5));
+        assertEquals("scan:240:home_settings", out.get(6));
     }
 
     @Test public void globalActions() {

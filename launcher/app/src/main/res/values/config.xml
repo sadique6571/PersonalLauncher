@@ -121,6 +121,10 @@
          stops filtering, which brings repeat back at the price of the remote buttons below doing nothing. -->
     <bool name="key_filter">true</bool>
 
+    <!-- Verbose logging of remote-key events in HomeKeyService and InputKeyService (config.xml or a theme's
+         "remote_keys_debug"). Off by default; enable to diagnose a misbehaving remote button. -->
+    <bool name="remote_keys_debug">false</bool>
+
     <!-- With key_filter on, true makes HomeKeyService and InputKeyService stop filtering keys while a game
          controller is connected, so games see its buttons (Steam Link with an Xbox controller on a TCL G07
          did not; Moonlight with two controllers put both on player 1, docs/TROUBLESHOOTING.md). The price: the

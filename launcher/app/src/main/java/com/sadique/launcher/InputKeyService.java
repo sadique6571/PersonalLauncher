@@ -45,6 +45,7 @@ public class InputKeyService extends AccessibilityService {
         appKeys = RemoteKeys.parseAppKeys(config.appKeys);
         appScancodes = RemoteKeys.parseAppScancodes(config.appKeys);
         RemoteKeys.applyKeyFilter(this, config.keyFilter);
+        RemoteKeys.setDebug(config.remoteKeysDebug);
         holdAppKeys = RemoteKeys.parseHoldAppKeys(config.appKeys);
         holdAppScancodes = RemoteKeys.parseHoldAppScancodes(config.appKeys);
         // gamepad_passthrough, off by default. Only with key_filter on: off, the service never filters keys.
@@ -68,7 +69,10 @@ public class InputKeyService extends AccessibilityService {
                 holdAppScancodes.get(event.getScanCode()))) return true;
         if (RemoteKeys.handle(this, event, appKeys.get(event.getKeyCode()),
                 holdAppKeys.get(event.getKeyCode()))) return true;
-        if (!isInputKey(event.getKeyCode())) return false;
+        if (!isInputKey(event.getKeyCode())) {
+            RemoteKeys.debugUnmatched(event);
+            return false;
+        }
         if (event.getAction() == KeyEvent.ACTION_UP && !event.isCanceled()) {
             try {
                 startActivity(new Intent(ACTION_VIEW_INPUTS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));

@@ -34,8 +34,11 @@ import java.util.regex.Pattern;
  * so both may call handle() for one event, and it answers each press once.
  * A target of "input:<input id>" switches to that TV input (an HDMI port) instead of opening an app, a target
  * of "inputs" opens the input switcher, for a remote whose source button sends a key Android does not map,
- * one of the action words (back, home, recents, mute, sleep, screensaver, settings, wifi) does that action, and
+ * one of the action words (back, home, recents, mute, sleep, screensaver, settings, wifi, home_settings) does that action, and
  * "package/.Activity" opens that activity rather than the app's launcher entry (an add-on's quick bar, say).
+ * "home_settings" opens the Home settings popup itself: the stable MainActivity alias with
+ * MainActivity.ACTION_SHOW_SETTINGS, the same panel
+ * `adb shell am start -n <pkg>/.MainActivity -a com.sadique.launcher.action.SHOW_SETTINGS` opens.
  */
 final class RemoteKeys {
 
@@ -48,6 +51,29 @@ final class RemoteKeys {
     /** Pre-compiled regex patterns to avoid re-compiling Patterns on every entry during key parsing. */
     private static final Pattern NUMERIC_KEY = Pattern.compile("[0-9]{1,6}");
     private static final Pattern KEYCODE_KEY = Pattern.compile("KEYCODE_[A-Z0-9_]+");
+
+    /** remote_keys_debug (config.xml or a theme): verbose key logging stays off unless this is on. */
+    private static volatile boolean DEBUG = false;
+
+    /** Called by the key services from their config; off by default. */
+    static void setDebug(boolean debug) {
+        DEBUG = debug;
+    }
+
+    private static void debug(String msg) {
+        if (DEBUG) android.util.Log.d("RemoteKeys", msg);
+    }
+
+    /**
+     * Debug aid for a key event nothing consumed: with debugging on, "mapping not matched" gets its own
+     * log line, so it reads apart from "event never delivered" (no line at all) and "activity launch
+     * failed" (logged where the launch runs). Only DOWN, to halve the noise.
+     */
+    static void debugUnmatched(KeyEvent event) {
+        if (!DEBUG || event.getAction() != KeyEvent.ACTION_DOWN) return;
+        debug("unmatched key DOWN device=" + event.getDeviceId()
+                + " keyCode=" + event.getKeyCode() + " scanCode=" + event.getScanCode());
+    }
 
     private RemoteKeys() { }
 
@@ -151,6 +177,35 @@ final class RemoteKeys {
         return parseAppScancodes(prefixed(entries, "hold:"));
     }
 
+    /**
+     * Rewrites the two known-wrong scan:240 settings targets to the "home_settings" action, in place:
+     * they opened a full-screen settings page (LauncherSettingsActivity) or the quick settings panel
+     * (QuickSettingsActivity) instead of the Home settings popup. Only those exact targets are rewritten,
+     * with or without a "hold:" prefix; every other entry — including a deliberate scan:240 mapping to
+     * something else — is left untouched.
+     */
+    static List<String> migrateScanSettingsKeys(List<String> entries) {
+        List<String> out = new ArrayList<>(entries.size());
+        for (String entry : entries) out.add(migrateScanSettingsKey(entry));
+        return out;
+    }
+
+    private static String migrateScanSettingsKey(String entry) {
+        if (entry == null) return null;
+        String text = entry.trim();
+        String prefix = "";
+        String rest = text;
+        if (rest.startsWith("hold:")) {
+            prefix = "hold:";
+            rest = rest.substring(5).trim();
+        }
+        if (rest.equals("scan:240:com.sadique.launcher/.LauncherSettingsActivity")
+                || rest.equals("scan:240:com.sadique.launcher/.QuickSettingsActivity")) {
+            return prefix + "scan:240:home_settings";
+        }
+        return entry;
+    }
+
     /** The entries with this prefix ("hold:", "front:"), the prefix removed, so the normal parsers can read them. */
     private static Iterable<String> prefixed(Iterable<String> entries, String prefix) {
         List<String> found = new ArrayList<>();
@@ -195,6 +250,10 @@ final class RemoteKeys {
                 @Override public void cancel(Runnable hold) { handler.removeCallbacks(hold); }
             });
         }
+        debug("key " + (event.getAction() == KeyEvent.ACTION_DOWN ? "DOWN" : "UP")
+                + " device=" + event.getDeviceId()
+                + " keyCode=" + event.getKeyCode() + " scanCode=" + event.getScanCode()
+                + " -> " + (holdApp != null ? app + " (hold: " + holdApp + ")" : app));
         String button = event.getDeviceId() + ":" + event.getKeyCode() + ":" + event.getScanCode();
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             presses.down(button, event.getEventTime(), event.getRepeatCount(), holdApp, ctx,
@@ -339,11 +398,13 @@ final class RemoteKeys {
     /**
      * Whether a target is an action word rather than an app or an input. A package name always has a dot.
      * "ignore" does nothing on purpose: the button is swallowed, for a remote shortcut that is pressed by accident.
+     * "home_settings" opens the Home settings popup (the MainActivity alias with ACTION_SHOW_SETTINGS).
      */
     static boolean isAction(String target) {
         switch (target) {
             case "back": case "home": case "recents": case "mute": case "sleep":
             case "screensaver": case "settings": case "wifi": case "ignore":
+            case "home_settings":
                 return true;
             default:
                 return false;
@@ -379,10 +440,39 @@ final class RemoteKeys {
             case "wifi":
                 start(ctx, SystemSettings.intent(ctx, Settings.ACTION_WIFI_SETTINGS));
                 break;
+            case "home_settings":
+                launchHomeSettings(ctx);
+                break;
             default:
                 break;   // "ignore", or "sleep" below Android 9: consumed, nothing to do
         }
         return true;
+    }
+
+    /**
+     * Opens the Home settings popup, exactly as
+     * {@code adb shell am start -n <pkg>/.MainActivity -a com.sadique.launcher.action.SHOW_SETTINGS} does:
+     * the stable MainActivity alias (not a concrete settings activity) with ACTION_SHOW_SETTINGS, as a new
+     * task so it opens over whatever app is in front. Returns false when the launch failed.
+     */
+    static boolean launchHomeSettings(Context ctx) {
+        Intent intent = homeSettingsIntent(ctx.getPackageName());
+        try {
+            ctx.startActivity(intent);
+            debug("home_settings launched: " + intent.getComponent());
+            return true;
+        } catch (ActivityNotFoundException | SecurityException e) {
+            debug("home_settings launch FAILED: " + e);
+            return false;
+        }
+    }
+
+    /** The intent launchHomeSettings sends; package-visible so tests can check it without a Context. */
+    static Intent homeSettingsIntent(String packageName) {
+        return new Intent()
+                .setComponent(new ComponentName(packageName, packageName + ".MainActivity"))
+                .setAction(MainActivity.ACTION_SHOW_SETTINGS)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
     }
 
     private static void start(Context ctx, Intent intent) {

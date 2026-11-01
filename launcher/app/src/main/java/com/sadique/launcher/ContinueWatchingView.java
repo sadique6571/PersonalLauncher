@@ -73,18 +73,11 @@ public final class ContinueWatchingView extends LinearLayout {
         addView(allow, new LayoutParams(-2, -2));
     }
 
-    /**
-     * Adapts the heading/explanation to wallpaper brightness. Cards keep their
-     * dark surface, so their titles stay white.
-     */
-    void setTextColors(int text, int muted) {
-        heading.setTextColor(text);
-        explanation.setTextColor(muted);
-    }
-
     private int dp(int n) { return Math.round(n * getResources().getDisplayMetrics().density); }
     private TextView label(String value, int size) {
-        TextView text = new TextView(host); text.setText(value); text.setTextSize(size); text.setTextColor(Color.WHITE); return text;
+        TextView text = new TextView(host); text.setText(value); text.setTextSize(size); text.setTextColor(Color.WHITE);
+        text.setShadowLayer(dp(5), 0, dp(2), 0xE6000000);
+        return text;
     }
     public void start() {
         if (running) { reload(); return; }
