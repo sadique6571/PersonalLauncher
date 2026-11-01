@@ -29,7 +29,7 @@ public final class LandscapeView extends FrameLayout {
     private final SharedPreferences prefs;
     private final ConnectivityManager connectivity;
     private final ImageView photo;
-    private final TextView clock, date, wifi, weather, city, status;
+    private final TextView clock, date, wifi, weather, city, status, details;
     private ExecutorService worker;
     private boolean running, registered, photoBusy, weatherBusy, hasPhoto;
     private int displayedPhoto = -1;
@@ -80,8 +80,9 @@ public final class LandscapeView extends FrameLayout {
         clock = label(88);
         clock.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
         clock.setSingleLine(true);
-        clock.setAutoSizeTextTypeUniformWithConfiguration(32, 100, 2, android.util.TypedValue.COMPLEX_UNIT_SP);
-        center.addView(clock, new LinearLayout.LayoutParams(-1, dp(126)));
+        // Bigger screensaver clock (user 2026-11-01).
+        clock.setAutoSizeTextTypeUniformWithConfiguration(44, 132, 2, android.util.TypedValue.COMPLEX_UNIT_SP);
+        center.addView(clock, new LinearLayout.LayoutParams(-1, dp(168)));
         date = label(20);
         center.addView(date);
         int ssPos = Math.max(0, Math.min(2, prefs.getInt("ss_clock_pos", 1)));
@@ -112,6 +113,12 @@ public final class LandscapeView extends FrameLayout {
         LayoutParams statusPosition = new LayoutParams(-1, -2, Gravity.BOTTOM);
         statusPosition.setMargins(dp(24), 0, dp(24), dp(16));
         addView(status, statusPosition);
+        // Wallpaper details caption at the bottom (user 2026-11-01).
+        details = label(14);
+        details.setGravity(Gravity.CENTER);
+        LayoutParams detailsPosition = new LayoutParams(-1, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        detailsPosition.setMargins(dp(24), 0, dp(24), dp(40));
+        addView(details, detailsPosition);
     }
 
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
@@ -248,8 +255,9 @@ public final class LandscapeView extends FrameLayout {
                         photo.animate().alpha(1f).setDuration(500).start();
                     }).start();
                     hasPhoto = true; displayedPhoto = loadedPhoto;
-                    // No photo credit label: the screensaver shows just clock + photos.
                     status.setText("");
+                    // Wallpaper details caption at the bottom (user 2026-11-01).
+                    details.setText("picsum.photos · #" + loadedPhoto);
                     adaptClockColors();
                 } else {
                     status.setText("Landscape rotation unavailable · retrying automatically");

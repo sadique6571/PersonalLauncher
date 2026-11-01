@@ -91,11 +91,31 @@ public class HomeKeyService extends AccessibilityService {
     private boolean steppingOut;
     /** The bound helper, so the opt-in broadcast can arm it without waiting for a new connection. */
     private static HomeKeyService running;
+    /** Opt-in rescue for the setup recovery that claims HOME when the stock launcher is disabled
+     *  (config.xml recovery_home_redirect). */
+    private boolean recoveryRedirect;
+    /** Last elapsedRealtime a recovery redirect fired; with the once-per-boot rule this stops a loop. */
+    private long lastRecoveryRedirectMs;
+    /** Last elapsedRealtime openHome() launched; duplicate triggers inside the window are dropped. */
+    private long lastOpenHomeMs;
+
+    /** Exact setup-recovery window that claims HOME (priority 1) on Google TV when the stock
+     *  launcher is disabled. Matched exactly: no other setupwraith window is ever redirected. */
+    static final String RECOVERY_PACKAGE = "com.google.android.tungsten.setupwraith";
+    static final String RECOVERY_ACTIVITY = "com.google.android.tungsten.setupwraith.RecoveryActivity";
+    /** Minimum gap between two recovery redirects; the once-per-boot rule is the real loop guard. */
+    static final long RECOVERY_REDIRECT_COOLDOWN_MS = 10_000L;
+    /** Duplicate openHome() triggers inside this window are dropped. */
+    static final long OPEN_HOME_DEDUP_MS = 2_000L;
+    /** Google TV's stock Home; the fallback's disabled-check target when no stock_home_redirect is set. */
+    static final String DEFAULT_STOCK_HOME = "com.google.android.apps.tv.launcherx";
 
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
         running = this;
+        long connectedMs = SystemClock.elapsedRealtime();
+        BootLog.mark("keyservice connected");
         settingsScancodes = getResources().getIntArray(R.array.settings_key_scancodes);
         // The service is directBootAware: Android 11 skips a service that is not while the user is still
         // locked at boot, writes accessibility_enabled=0 and, on TCL G03 firmware, never binds it after the
@@ -103,13 +123,18 @@ public class HomeKeyService extends AccessibilityService {
         UserManager users = getSystemService(UserManager.class);
         if (users.isUserUnlocked()) {
             loadConfig();
+            BootLog.mark("keyservice config (unlocked)", connectedMs);
             return;
         }
+        BootLog.mark("keyservice waiting for unlock");
         unlockReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
                 stopWaitingForUnlock();
+                long t = SystemClock.elapsedRealtime();
+                BootLog.mark("keyservice unlocked");
                 loadConfig();
+                BootLog.mark("keyservice config", t);
             }
         };
         registerReceiver(unlockReceiver, new IntentFilter(Intent.ACTION_USER_UNLOCKED));
@@ -213,6 +238,8 @@ public class HomeKeyService extends AccessibilityService {
         powerOnLiveTv = config.powerOnHome && !config.bootToLiveTv && !config.liveTvPackage.equals(openOnStart)
                 ? config.liveTvPackage : "";
         powerOnAlways = config.powerOnHomeAlways && !config.bootToLiveTv && openOnStart.isEmpty();
+        recoveryRedirect = config.recoveryHomeRedirect;
+        if (recoveryRedirect) BootLog.mark("recovery redirect opt-in on");
         if (!powerOnLiveTv.isEmpty() || powerOnAlways) {
             armPowerOnHome();
         } else if (screenOnReceiver != null) {
@@ -222,7 +249,7 @@ public class HomeKeyService extends AccessibilityService {
         }
         // home_key_service.xml subscribes to no events, so the redirects ask for window changes only when one is on.
         AccessibilityServiceInfo info = getServiceInfo();
-        if (info != null && (!stockHome.isEmpty() || !powerOnLiveTv.isEmpty() || watchFront)) {
+        if (info != null && (!stockHome.isEmpty() || !powerOnLiveTv.isEmpty() || watchFront || recoveryRedirect)) {
             info.eventTypes |= AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED;
             setServiceInfo(info);
         }
@@ -320,6 +347,74 @@ public class HomeKeyService extends AccessibilityService {
         // stock_home_redirect: the firmware turned the stock launcher back on and its home screen came up.
         CharSequence cls = event.getClassName();
         if (!stockHome.isEmpty() && cls != null && stockHome.contains(cls.toString())) openHome();
+        // Opt-in Haier/Google TV rescue (recovery_home_redirect): the setup recovery claims HOME
+        // (priority 1) when the stock launcher is disabled and loops on a failing relaunch. Only the
+        // exact RecoveryActivity is ever redirected, only while the configured stock home is
+        // disabled/unavailable, and only once per boot, so this cannot fight a working setup.
+        if (recoveryRedirect && isRecoveryWindow(event.getPackageName(), event.getClassName())) {
+            maybeRedirectRecovery();
+        }
+    }
+
+    /** Exact component match: the recovery window, and nothing else from setupwraith or elsewhere. */
+    static boolean isRecoveryWindow(CharSequence pkg, CharSequence cls) {
+        if (pkg == null || cls == null) return false;
+        return RECOVERY_PACKAGE.contentEquals(pkg) && RECOVERY_ACTIVITY.equals(cls.toString());
+    }
+
+    /**
+     * Whether the recovery fallback may redirect right now. Pure for tests: every input is a parameter.
+     * Redirects at most once per boot (Android reopens recovery on its own, so without this the service
+     * would steal focus in a loop), with a cooldown as a second guard.
+     */
+    static boolean shouldRedirectRecovery(boolean optIn, CharSequence pkg, CharSequence cls,
+            boolean stockHomeUnavailable, int boot, int lastRedirectBoot, long now, long lastRedirectMs) {
+        if (!optIn || !isRecoveryWindow(pkg, cls) || !stockHomeUnavailable) return false;
+        if (boot < 0 || boot == lastRedirectBoot) return false;
+        return now - lastRedirectMs >= RECOVERY_REDIRECT_COOLDOWN_MS;
+    }
+
+    /** Duplicate openHome() triggers inside the window are dropped (window event + key + power-on can coincide). */
+    static boolean shouldOpenHome(long now, long lastOpenMs) {
+        return now - lastOpenMs >= OPEN_HOME_DEDUP_MS;
+    }
+
+    private void maybeRedirectRecovery() {
+        int boot = Settings.Global.getInt(getContentResolver(), Settings.Global.BOOT_COUNT, -1);
+        SharedPreferences prefs = getSharedPreferences("boot", MODE_PRIVATE);
+        long now = SystemClock.elapsedRealtime();
+        if (!shouldRedirectRecovery(true, RECOVERY_PACKAGE, RECOVERY_ACTIVITY, stockHomeUnavailable(),
+                boot, prefs.getInt("recovery_boot", -1), now, lastRecoveryRedirectMs)) {
+            return;
+        }
+        prefs.edit().putInt("recovery_boot", boot).apply();
+        lastRecoveryRedirectMs = now;
+        BootLog.mark("recovery redirect -> openHome");
+        openHome();
+    }
+
+    /** True when the stock Home cannot serve (disabled for this user). The configured
+     *  stock_home_redirect package, or Google TV's stock Home when none is configured.
+     *  An unknown package never counts as unavailable: no redirect on an assumption. */
+    private boolean stockHomeUnavailable() {
+        String pkg = stockHomePackage.isEmpty() ? DEFAULT_STOCK_HOME : stockHomePackage;
+        try {
+            getPackageManager().getApplicationInfo(pkg, 0);
+        } catch (PackageManager.NameNotFoundException unknown) {
+            return false;
+        }
+        try {
+            int state = getPackageManager().getApplicationEnabledSetting(pkg);
+            if (state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                    || state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER
+                    || state == PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED) {
+                return true;
+            }
+            Intent home = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).setPackage(pkg);
+            return getPackageManager().queryIntentActivities(home, 0).isEmpty();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /** How long power_on_home stays armed after the screen turns on without a reboot. */
@@ -381,6 +476,7 @@ public class HomeKeyService extends AccessibilityService {
         SharedPreferences prefs = getSharedPreferences("boot", MODE_PRIVATE);
         if (!firstBindAfterBoot(boot, prefs.getInt("probe_boot", -1), SystemClock.elapsedRealtime())) return;
         prefs.edit().putInt("probe_boot", boot).apply();
+        BootLog.mark("probe sent");
         try {
             startActivity(new Intent(this, ProbeActivity.class)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION));
@@ -413,6 +509,13 @@ public class HomeKeyService extends AccessibilityService {
     }
 
     private void openHome() {
+        long now = SystemClock.elapsedRealtime();
+        if (!shouldOpenHome(now, lastOpenHomeMs)) {
+            BootLog.mark("openHome deduped");
+            return;
+        }
+        lastOpenHomeMs = now;
+        BootLog.mark("openHome");
         Intent open = stockHomeStays() ? new Intent(this, MainActivity.class)
                 : new Intent(Intent.ACTION_MAIN).setPackage(getPackageName());
         startActivity(open.addCategory(Intent.CATEGORY_HOME)

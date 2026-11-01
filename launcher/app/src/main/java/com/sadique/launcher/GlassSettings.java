@@ -26,15 +26,17 @@ final class GlassSettings {
         }
     }
 
-    static GradientDrawable background(Activity host, boolean focused) {
-        java.util.Calendar now = java.util.Calendar.getInstance();
+    static GradientDrawable background(Activity host, boolean focused) {        java.util.Calendar now = java.util.Calendar.getInstance();
         android.content.SharedPreferences prefs = host.getSharedPreferences("personal_home", 0);
         float day = HomeAppearance.daylight(prefs.getString("theme_mode", "dark"),
                 now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE));
         boolean light = day >= .5f;
-        GradientDrawable shape = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                light ? new int[]{focused ? 0xf04c7b99 : 0xed3b607d, focused ? 0xf0375d7b : 0xed28475f}
-                        : new int[]{focused ? 0xe51a374b : 0xc5132539, focused ? 0xed0b2337 : 0xd009182a});
+        // Theme-tinted glass (user 2026-11-01): the row background takes the theme's hue.
+        int accent = themeAccent(host);
+        int[] base = light ? new int[]{focused ? 0xf04c7b99 : 0xed3b607d, focused ? 0xf0375d7b : 0xed28475f}
+                : new int[]{focused ? 0xe51a374b : 0xc5132539, focused ? 0xed0b2337 : 0xd009182a};
+        int[] tinted = new int[]{tint(base[0], accent), tint(base[1], accent)};
+        GradientDrawable shape = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, tinted);
         shape.setCornerRadius(dp(host, 10));
         shape.setStroke(dp(host, focused ? 2 : 1), focused ? themeAccent(host) : 0x55415a72);
         // Glass intensity: 0=airy, 100=solid.
@@ -42,6 +44,14 @@ final class GlassSettings {
         shape.setAlpha(100 + intensity * 155 / 100);
         return shape;
     }
+    /** Mixes a glass base color 30% toward the theme accent. */
+    private static int tint(int base, int accent) {
+        return android.graphics.Color.rgb(
+                (int) (android.graphics.Color.red(base) + (android.graphics.Color.red(accent) - android.graphics.Color.red(base)) * 0.3f),
+                (int) (android.graphics.Color.green(base) + (android.graphics.Color.green(accent) - android.graphics.Color.green(base)) * 0.3f),
+                (int) (android.graphics.Color.blue(base) + (android.graphics.Color.blue(accent) - android.graphics.Color.blue(base)) * 0.3f));
+    }
+
     /** Background blur behind dialogs (Android 12+; older versions keep the dim). */
     static void applyBlur(android.app.Dialog dialog) {
         if (dialog == null || dialog.getWindow() == null) return;
@@ -51,7 +61,17 @@ final class GlassSettings {
         }
     }
     static TextView label(Activity host, String text, int size, int color) {
-        TextView view = new TextView(host); view.setText(text); view.setTextSize(size); view.setTextColor(color); return view;
+        TextView view = new TextView(host); view.setText(text); view.setTextSize(size); view.setTextColor(color);
+        applyAppFont(host, view);
+        return view;
+    }
+
+    /** Launcher-wide font (Settings → Theme → Launcher font) for settings UI text. (User 2026-11-01.) */
+    static void applyAppFont(android.content.Context ctx, TextView view) {
+        android.content.SharedPreferences prefs = ctx.getSharedPreferences("personal_home", 0);
+        String[] fonts = {"sans-serif", "serif", "monospace", "sans-serif-light"};
+        view.setTypeface(android.graphics.Typeface.create(
+                fonts[Math.max(0, Math.min(3, prefs.getInt("app_font", 0)))], android.graphics.Typeface.NORMAL));
     }
     static View row(Activity host, String title, String subtitle, int icon, int tint, Runnable action) {
         LinearLayout row = new LinearLayout(host); row.setGravity(Gravity.CENTER_VERTICAL);
@@ -149,7 +169,7 @@ final class GlassSettings {
             back.setBackground(background(host, false)); back.setOnClickListener(v -> back(current));
             bar.addView(back, new LinearLayout.LayoutParams(dp(host, 32), dp(host, 36)));
         }
-        TextView heading = label(host, title, 21, Color.WHITE); heading.setTypeface(null, Typeface.BOLD);
+        TextView heading = label(host, title, 21, Color.WHITE); heading.setTypeface(heading.getTypeface(), Typeface.BOLD);
         bar.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
         TextView close = label(host, "×", 26, 0xffc9dfef); close.setGravity(Gravity.CENTER);
         close.setContentDescription("Close settings"); close.setFocusable(true); close.setBackground(background(host, false));

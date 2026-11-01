@@ -176,6 +176,9 @@ final class Config {
     final boolean consumeVolumeKeys;
     /** Stock launcher whose home screen is sent back here if the firmware revives it (config.xml stock_home_redirect). */
     final String stockHomeRedirect;
+    /** Opt-in rescue: the setup recovery window (setupwraith RecoveryActivity) is sent back here when the
+     *  configured stock launcher is disabled (config.xml recovery_home_redirect). Off by default. */
+    final boolean recoveryHomeRedirect;
     /** A Live TV window the firmware opens by itself at power-on is sent back to Home (power_on_home). */
     final boolean powerOnHome;
     /** Every Home press opens this launcher, a held one too, instead of Android's long-press action (home_long_press_home). */
@@ -283,13 +286,14 @@ final class Config {
                    boolean keyFilter, boolean dockGlass, String glowStyle, boolean wallpaperCaptions,
                    boolean handleViewInputs, boolean tileMenu, boolean dockEvenPadding, boolean dockBand, boolean cinematicDots, boolean cinematicWhiteFocus, boolean wifiStatusColor, int cinematicScrim, int cinematicArt,
                    Map<String, Set<String>> wallpaperMoods, boolean gamepadPassthrough, boolean consumeVolumeKeys, boolean powerOnHome, boolean homeLongPressHome, boolean wifiStatusWarnings, List<String> topBarApps, boolean showGreeting, boolean headerWhite, boolean clockWallpaper, int clockWallpaperDim, boolean clockGlow, String glassStyle, boolean singleRow, boolean dockBandAll, boolean lunarDate, int lunarUtcOffset, boolean dateBelowClock, boolean vpnPill, String locale, boolean powerOnHomeAlways, boolean inputsConnectedOnly,
-                   int openOnStartNetworkWait, boolean iconOnlyVpn, boolean remoteKeysDebug) {
+                   int openOnStartNetworkWait, boolean iconOnlyVpn, boolean remoteKeysDebug, boolean recoveryHomeRedirect) {
         this.handleViewInputs = handleViewInputs;
         this.tileMenu = tileMenu;
         this.inputKeycodes = inputKeycodes;
         this.appKeys = Collections.unmodifiableList(appKeys);
         this.keyFilter = keyFilter;
         this.stockHomeRedirect = stockHomeRedirect;
+        this.recoveryHomeRedirect = recoveryHomeRedirect;
         this.dockApps = Collections.unmodifiableList(dockApps);
         this.fillDock = fillDock;
         this.hiddenApps = Collections.unmodifiableList(hiddenApps);
@@ -485,6 +489,7 @@ final class Config {
         boolean handleViewInputs = res.getBoolean(R.bool.handle_view_inputs);
         List<String> appKeys = new ArrayList<>(Arrays.asList(res.getStringArray(R.array.app_keys)));
         String stockHomeRedirect = res.getString(R.string.stock_home_redirect).trim();
+        boolean recoveryHomeRedirect = res.getBoolean(R.bool.recovery_home_redirect);
         boolean cinematic = res.getBoolean(R.bool.cinematic_home);
         boolean ambientGlow = res.getBoolean(R.bool.ambient_glow);
         boolean appGlow = res.getBoolean(R.bool.app_glow);
@@ -596,6 +601,7 @@ final class Config {
             appKeys = stringList(json, "app_keys", appKeys);
             appKeys = RemoteKeys.migrateScanSettingsKeys(appKeys);
             stockHomeRedirect = string(json, "stock_home_redirect", stockHomeRedirect);
+            recoveryHomeRedirect = bool(json, "recovery_home_redirect", recoveryHomeRedirect);
             cinematic = bool(json, "cinematic_home", cinematic);
             ambientGlow = bool(json, "ambient_glow", ambientGlow);
             appGlow = bool(json, "app_glow", appGlow);
@@ -693,7 +699,7 @@ final class Config {
                 consumeVolumeKeys, powerOnHome, homeLongPressHome, wifiStatusWarnings, topBarApps, showGreeting, headerWhite, clockWallpaper,
                 Math.max(0, Math.min(90, clockWallpaperDim)), clockGlow, glassStyle, singleRow && dockRow, dockBandAll, lunar, lunarOffset,
                 dateBelowClock, vpnPill, locale, powerOnHomeAlways, inputsConnectedOnly,
-                Math.max(0, Math.min(600, openOnStartNetworkWait)), iconOnlyVpn, remoteKeysDebug);
+                Math.max(0, Math.min(600, openOnStartNetworkWait)), iconOnlyVpn, remoteKeysDebug, recoveryHomeRedirect);
     }
 
     /**
