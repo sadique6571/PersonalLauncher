@@ -55,7 +55,9 @@ final class GlassSettings {
     /** Background blur behind dialogs (Android 12+; older versions keep the dim). */
     static void applyBlur(android.app.Dialog dialog) {
         if (dialog == null || dialog.getWindow() == null) return;
-        if (android.os.Build.VERSION.SDK_INT >= 31) {
+        android.content.Context context = dialog.getContext();
+        int tier = MemoryProfile.effectiveTier(context, context.getSharedPreferences("personal_home", 0));
+        if (android.os.Build.VERSION.SDK_INT >= 31 && tier != MemoryProfile.TIER_LIGHT) {
             dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
             dialog.getWindow().getAttributes().setBlurBehindRadius(40);
         }

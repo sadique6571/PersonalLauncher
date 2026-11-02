@@ -59,7 +59,7 @@ public final class ContinueWatchingView extends LinearLayout {
         setOrientation(VERTICAL); setPadding(0, dp(22), 0, dp(12));
         heading = label("Continue watching", 23);
         addView(heading);
-        HorizontalScrollView scroll = new HorizontalScrollView(host);
+        TvHorizontalShelf scroll = new TvHorizontalShelf(host);
         scroll.setHorizontalScrollBarEnabled(false);
         cards = new LinearLayout(host);
         cards.setPadding(0, dp(10), 0, dp(10));
@@ -167,7 +167,7 @@ public final class ContinueWatchingView extends LinearLayout {
     private void addCard(Item item) {
         LinearLayout card = new LinearLayout(host); card.setOrientation(VERTICAL);
         card.setPadding(dp(16), dp(16), dp(16), dp(16)); card.setFocusable(true); card.setClickable(true);
-        card.setBackground(background(false)); card.setContentDescription("Resume " + item.title + " in " + item.owner);
+        card.setBackground(background(false)); card.setContentDescription("Resume " + item.title + " in " + item.owner + ". " + host.getString(R.string.h_save_hold));
         ImageView poster = new ImageView(host);
         poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
         poster.setBackground(background(false)); poster.setClipToOutline(true);
@@ -185,13 +185,18 @@ public final class ContinueWatchingView extends LinearLayout {
         });
         TextView title = label(item.title, 19); title.setPadding(0, dp(10), 0, 0); title.setMaxLines(2); title.setMinLines(2); title.setEllipsize(android.text.TextUtils.TruncateAt.END);
         card.addView(title, new LayoutParams(-1, -2));
-        TextView owner = label(item.owner, 13); owner.setPadding(0, dp(6), 0, dp(8)); card.addView(owner);
+        TextView owner = label(item.owner + " · " + host.getString(R.string.h_save_hold), 13); owner.setPadding(0, dp(6), 0, dp(8)); card.addView(owner);
         if (item.duration > 0) {
             ProgressBar progress = new ProgressBar(host, null, android.R.attr.progressBarStyleHorizontal);
             progress.setMax(1000); progress.setProgress(WatchNextModel.progress(item.position, item.duration));
             card.addView(progress, new LayoutParams(-1, dp(6)));
         }
         card.setOnFocusChangeListener((v, focused) -> { card.setBackground(background(focused)); if (focused) focusTitle.accept(item.owner); });
+        card.setOnLongClickListener(v -> {
+            boolean saved = new HomeLibraryStore(host).saveTitle(item.title, item.intent, item.pkg, true);
+            Toast.makeText(host, saved ? R.string.h_saved : R.string.h_unavailable, Toast.LENGTH_SHORT).show();
+            return true;
+        });
         card.setOnClickListener(v -> {
             try {
                 Intent intent = Intent.parseUri(item.intent, Intent.URI_INTENT_SCHEME);

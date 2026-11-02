@@ -242,6 +242,14 @@
         <!-- Bound again by the system after a force stop, which restarts Home on firmware that kills
              third-party apps (TCL tc8000_ay30a2). It reads no notification.
              cmd notification allow_listener com.sadique.launcher/.GuardRevival -->
+        <service android:name=".HomeNotificationService"
+            android:label="@string/h_access_title"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
         <service
             android:name=".GuardRevival"
             android:directBootAware="true"

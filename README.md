@@ -124,3 +124,46 @@ Home enabled before doing this. After migration, APKs with this same package/key
 version codes install as updates. Do not uninstall anything automatically.
 
 Automatic system screensavers require selecting **Personal Launcher Landscapes** in Android settings. Use Screensaver → Set automatic screensaver for selection instructions and status. The DreamService declares the system binding permission and settings metadata; there is no ordinary runtime permission that can silently replace the Android-selected screensaver. A 5-minute Home-only idle fallback can be enabled from setup when firmware restricts the picker.
+
+## Home dashboard and local library (5.0)
+
+The active Home app grid now uses RecyclerView with stable package identities, incremental
+list updates and visible-tile artwork loading. It is the only vertical scrolling viewport:
+Continue Watching is a full-width footer and its cards scroll horizontally with D-pad focus.
+The category strip also follows horizontal focus. Returning from an app restores the selected
+tile; layout rebuilds retain grid state. Light mode keeps wallpaper parallax and dialog blur off.
+There is no Favorites or Recently Opened section.
+
+The existing Settings remote action opens the new Home dashboard, grouped into Your Home,
+Media & TV, and Device controls. Long-press an app to assign or create a category; use the
+category strip to filter without changing hidden apps or the saved app order. Rearrangement
+operates on the complete visible library and preserves hidden slots.
+
+Select the avatar or **Local profiles** in the dashboard to switch between up to six local
+profiles. Each has its own app order, hidden apps, categories, theme, wallpaper/avatar files,
+and saved watchlist. The original/default profile keeps existing files and preferences.
+Long-press a non-default profile to delete it. These profiles do not switch Android users,
+Google accounts or accounts inside streaming apps. Performance/accessibility and remote
+configuration stay global. Settings export/import currently covers the active profile's
+preferences, not the separate registry or image files of every profile.
+
+**Watchlist** stores up to 50 titles locally. Add an HTTP(S) link in the dashboard, or hold a
+Continue Watching card to save the publishing app's resume link. Select a saved title to open
+it; hold to remove it. It is not Google Watchlist sync and cannot retrieve private app histories.
+
+**Now playing** and **Notifications** are optional. Their access page explains the data read
+before opening Android's notification-access settings. Until the user explicitly enables
+Personal Launcher there, neither page can read other apps' sessions or notifications. Only
+supported media actions are enabled. Notifications are capped at 20 in memory, cleared on
+listener disconnect, and never stored or uploaded. Use Refresh to update an open page.
+No notification access is automatically granted, and the existing GuardRevival helper still
+reads no notifications. Disable the new listener in Android settings to revoke this feature.
+
+**Live TV guide** queries at most 24 browsable channels and two now/next programmes per channel
+from the TV provider. It requires the existing TV listings access; firmware may refuse it or
+publish no data. In that case use Inputs. This is not Google's regional Freeplay catalogue.
+
+Install an update over the existing package; do not uninstall or clear data. The package,
+persistent release signing setup, Home alias, Home key service and Settings key mappings are
+preserved. Physical Haier D-pad/scrolling, return-from-app, profile switching and media/provider
+access checks are still required; CI cannot establish those device behaviours.

@@ -35,7 +35,6 @@ import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.GridLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -65,7 +64,11 @@ public final class PersonalHomeActivity extends Activity {
     /** Dedicated app-loading worker: icon scans never block avatar/wallpaper/import, and a new scan cancels the old. */
     private final ExecutorService appWorker = Executors.newSingleThreadExecutor();
     private SharedPreferences prefs;
-    private LinearLayout page, header, actions, clockLayout, appBody;    private GridLayout grid;
+    private LinearLayout page, header, actions, clockLayout, appBody;    private HomeAppGrid<App> grid;
+    private LinearLayout categoryTabs;
+    private String selectedCategory = "";
+    private android.os.Parcelable gridState;
+    private int profileEpoch;
     private TextView userName, time, date, ampm, networkStatus, appHeading, greeting, homeWeather;
     private ImageView avatar;
     private Bitmap avatarBitmap;
@@ -74,6 +77,9 @@ public final class PersonalHomeActivity extends Activity {
     private SkyClock sky;
     private ConnectivityManager connectivity;
     private boolean networkRegistered, resumed, tv;
+    private final android.content.BroadcastReceiver appChanges = new android.content.BroadcastReceiver() {
+        @Override public void onReceive(android.content.Context context, Intent intent) { loadApps(); }
+    };
     private int pageWidth;
     /** Wallpaper-adaptive text: true while the region behind the text is bright (dark text in use). */
     /** Effective clock text size in sp (after the compact-screen cap), for fitClockText(). */
@@ -89,6 +95,7 @@ public final class PersonalHomeActivity extends Activity {
     private List<App> cachedApps;
     /** Move mode: the app being carried, and the visible package order while it moves. Null when off. */
     private App carriedApp;
+    private boolean movingRendered;
     private List<String> moveOrder;
     /** Live tiles by package, for progressive icon fill-in. Rebuilt with the grid. */
     private final java.util.Map<String, View> tileViews = new java.util.HashMap<>();
@@ -153,7 +160,15 @@ public final class PersonalHomeActivity extends Activity {
         UiModeManager modes = getSystemService(UiModeManager.class);
         tv = modes != null && modes.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION;
         connectivity = getSystemService(ConnectivityManager.class);
+        android.content.IntentFilter packages = new android.content.IntentFilter();
+        packages.addAction(Intent.ACTION_PACKAGE_ADDED); packages.addAction(Intent.ACTION_PACKAGE_REMOVED);
+        packages.addAction(Intent.ACTION_PACKAGE_CHANGED); packages.addAction(Intent.ACTION_PACKAGE_REPLACED);
+        packages.addDataScheme("package");
+        if (android.os.Build.VERSION.SDK_INT >= 33) registerReceiver(appChanges, packages, android.content.Context.RECEIVER_EXPORTED);
+        else registerReceiver(appChanges, packages);
         lastLight = appearanceDaylight() >= .5f;
+        focusedPkg = prefs.getString("home_focus_pkg", null);
+        if (state != null) gridState = state.getParcelable("home_grid_state");
         buildHome();
         loadAvatar();
         loadWallpaper();
@@ -291,6 +306,8 @@ public final class PersonalHomeActivity extends Activity {
         handler.removeCallbacks(buildHomeTask);
         buildHomePending = false;
         if (continueWatching != null) continueWatching.stop();
+        if (grid != null && grid.getLayoutManager() != null) gridState = grid.getLayoutManager().onSaveInstanceState();
+        tileViews.clear();
         pageWidth = 0;
         android.widget.FrameLayout root = new android.widget.FrameLayout(this);
         root.setBackgroundColor(0xff031126);
@@ -342,7 +359,7 @@ public final class PersonalHomeActivity extends Activity {
         avatar.setBackground(avatarSurface(false));
         avatar.setClipToOutline(true);
         avatar.setFocusable(true);
-        avatar.setOnClickListener(v -> editProfile());
+        avatar.setOnClickListener(v -> showProfiles());
         avatar.setOnFocusChangeListener((v, focus) -> v.setBackground(avatarSurface(focus)));
         header.addView(avatar, new LinearLayout.LayoutParams(dp(48), dp(48)));
         LinearLayout identity = new LinearLayout(this);
@@ -459,7 +476,8 @@ public final class PersonalHomeActivity extends Activity {
         appHeading.setSingleLine(true);
         appHeading.setEllipsize(android.text.TextUtils.TruncateAt.END);
         appHeading.setPadding(dp(4), dp(8), 0, dp(12));
-        grid = new GridLayout(this);
+        grid = new HomeAppGrid<>(this, app -> app.info.activityInfo.packageName,
+                (app, width) -> createAppTile(app, width, carriedApp != null && app.info.activityInfo.packageName.equals(carriedApp.info.activityInfo.packageName)));
         grid.setClipChildren(false);
         grid.setClipToPadding(false);
         appBody = new LinearLayout(this);
@@ -479,16 +497,9 @@ public final class PersonalHomeActivity extends Activity {
             }
         });
         appBody.setClipToOutline(true);
-        ScrollView drawerScroll = new ScrollView(this);
-        drawerScroll.setFillViewport(true);
-        drawerScroll.setVerticalScrollBarEnabled(false);
-        LinearLayout drawerContent = new LinearLayout(this);
-        drawerContent.setOrientation(LinearLayout.VERTICAL);
-        drawerContent.addView(grid, new LinearLayout.LayoutParams(-1, -2));
         continueWatching = new ContinueWatchingView(this, label -> appHeading.setText(label));
-        drawerContent.addView(continueWatching, new LinearLayout.LayoutParams(-1, -2));
-        drawerScroll.addView(drawerContent, new ViewGroup.LayoutParams(-1, -2));
-        appBody.addView(drawerScroll, new LinearLayout.LayoutParams(-1, -1));
+        grid.setFooter(continueWatching);
+        appBody.addView(grid, new LinearLayout.LayoutParams(-1, -1));
         // Scrollable content: clock only. The "Your apps" header and the
         // drawer panel stay fixed below; tiles scroll inside the panel.
         LinearLayout scrollContent = new LinearLayout(this);
@@ -501,6 +512,13 @@ public final class PersonalHomeActivity extends Activity {
         scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
         page.addView(scroll, new LinearLayout.LayoutParams(-1, -2));
         page.addView(appHeading);
+        TvHorizontalShelf categoryScroll = new TvHorizontalShelf(this);
+        categoryScroll.setHorizontalScrollBarEnabled(false);
+        categoryTabs = new LinearLayout(this);
+        categoryTabs.setPadding(0, 0, 0, dp(5));
+        categoryScroll.addView(categoryTabs);
+        page.addView(categoryScroll, new LinearLayout.LayoutParams(-1, -2));
+        refreshCategories();
         page.addView(appBody, new LinearLayout.LayoutParams(-1, 0, 1));
         // Focus-glow tracker: keep the wallpaper glow on the focused tile no matter
         // which scroller moved.
@@ -516,9 +534,11 @@ public final class PersonalHomeActivity extends Activity {
         };
         // Per-view adaptive text: update each label's dark/light scheme as it moves
         // over the wallpaper during scroll. (User request 2026-10-31.)
-        drawerScroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
-            adaptVisibleTextColors();
-            glowTracker.onScrollChange(v, scrollX, scrollY, oldScrollX, oldScrollY);
+        grid.addOnScrollListener(new androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
+            @Override public void onScrolled(androidx.recyclerview.widget.RecyclerView view, int dx, int dy) {
+                adaptVisibleTextColors();
+                glowTracker.onScrollChange(view, 0, 0, 0, 0);
+            }
         });
         scroll.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
             adaptVisibleTextColors();
@@ -766,7 +786,9 @@ public final class PersonalHomeActivity extends Activity {
 
     private int appGeneration;
     private void loadApps() {
+        if (carriedApp != null) { carriedApp = null; moveOrder = null; }
         int generation = ++appGeneration;
+        List<App> prior = cachedApps;
         appWorker.execute(() -> {
             List<ResolveInfo> found = new ArrayList<>();
             if (tv) found.addAll(getPackageManager().queryIntentActivities(
@@ -776,7 +798,8 @@ public final class PersonalHomeActivity extends Activity {
             Set<String> packages = new HashSet<>();
             List<App> apps = new ArrayList<>();
             java.util.Map<String, App> previous = new java.util.HashMap<>();
-            if (cachedApps != null) for (App app : cachedApps) previous.put(app.info.activityInfo.packageName, app);
+            List<App> snapshot = prior;
+            if (snapshot != null) for (App app : snapshot) previous.put(app.info.activityInfo.packageName, app);
             // Phase 1: labels only — the grid renders immediately with letter placeholders.
             for (ResolveInfo info : found) {
                 if (generation != appGeneration) return;
@@ -799,39 +822,57 @@ public final class PersonalHomeActivity extends Activity {
             handler.post(() -> {
                 if (!isDestroyed() && generation == appGeneration && !sameApps(cachedApps, apps)) renderApps(apps);
             });
-            // Phase 2: icons one by one — disk cache first, then compose and store.
-            IconCache cache = new IconCache(this);
-            android.content.pm.PackageManager pm = getPackageManager();
-            for (App app : apps) {
-                if (generation != appGeneration) return;
-                if (app.iconReady) continue;
-                String pkg = app.info.activityInfo.packageName;
-                try {
-                    long version = IconCache.version(pm, pkg);
-                    Bitmap card = cache.load(pkg, version);
-                    int accent;
-                    if (card != null) {
-                        accent = cache.accent(pkg, version, CYAN);
-                    } else {
-                        android.graphics.drawable.Drawable logo = app.info.loadIcon(pm);
-                        if (pkg.equals("com.google.android.youtube.tv") || pkg.equals("com.google.android.youtube")) logo = getDrawable(R.drawable.logo_youtube);
-                        if (pkg.equals("com.netflix.ninja") || pkg.equals("com.netflix.mediaclient")) logo = getDrawable(R.drawable.logo_netflix);
-                        AppArtwork artwork = AppArtwork.create(getResources(), logo, logoScale());
-                        card = ((android.graphics.drawable.BitmapDrawable) artwork.image).getBitmap();
-                        accent = artwork.accent;
-                        cache.save(pkg, version, card, accent);
-                    }
-                    Bitmap finished = card;
-                    int finishedAccent = accent;
-                    handler.post(() -> {
-                        if (!isDestroyed() && generation == appGeneration)
-                            updateTileIcon(pkg, new android.graphics.drawable.BitmapDrawable(getResources(), finished), finishedAccent);
-                    });
-                } catch (RuntimeException removedDuringQuery) {
-                    // The package vanished mid-load; the next loadApps pass drops it.
-                }
-            }
         });
+    }
+
+    /** Only bound/visible tiles request artwork. Serial work and generation checks bound concurrency. */
+    private void requestAppIcon(App app) {
+        if (app.iconReady || app.iconLoading || isDestroyed()) return;
+        app.iconLoading = true;
+        int generation = appGeneration;
+        appWorker.execute(() -> {
+            if (generation != appGeneration || isDestroyed()) { app.iconLoading = false; return; }
+            String pkg = app.info.activityInfo.packageName;
+            try {
+                IconCache cache = new IconCache(this);
+                android.content.pm.PackageManager pm = getPackageManager();
+                long version = IconCache.version(pm, pkg);
+                Bitmap card = cache.load(pkg, version);
+                int accent;
+                if (card != null) accent = cache.accent(pkg, version, CYAN);
+                else {
+                    android.graphics.drawable.Drawable logo = app.info.loadIcon(pm);
+                    if (pkg.equals("com.google.android.youtube.tv") || pkg.equals("com.google.android.youtube")) logo = getDrawable(R.drawable.logo_youtube);
+                    if (pkg.equals("com.netflix.ninja") || pkg.equals("com.netflix.mediaclient")) logo = getDrawable(R.drawable.logo_netflix);
+                    AppArtwork artwork = AppArtwork.create(getResources(), logo, logoScale());
+                    card = ((android.graphics.drawable.BitmapDrawable) artwork.image).getBitmap(); accent = artwork.accent;
+                    cache.save(pkg, version, card, accent);
+                }
+                Bitmap finished = card; int finishedAccent = accent;
+                handler.post(() -> {
+                    app.iconLoading = false;
+                    if (!isDestroyed() && generation == appGeneration) {
+                        updateTileIcon(pkg, new android.graphics.drawable.BitmapDrawable(getResources(), finished), finishedAccent);
+                        trimAppIcons();
+                    }
+                });
+            } catch (RuntimeException removed) { handler.post(() -> app.iconLoading = false); }
+        });
+    }
+
+    private void trimAppIcons() {
+        if (cachedApps == null) return;
+        long bytes = 0;
+        for (App app : cachedApps) if (app.icon instanceof android.graphics.drawable.BitmapDrawable)
+            bytes += ((android.graphics.drawable.BitmapDrawable) app.icon).getBitmap().getAllocationByteCount();
+        long budget = MemoryProfile.iconCacheBytes(MemoryProfile.effectiveTier(this, prefs));
+        for (App app : cachedApps) {
+            if (bytes <= budget) break;
+            if (!app.iconReady || tileViews.containsKey(app.info.activityInfo.packageName)) continue;
+            if (app.icon instanceof android.graphics.drawable.BitmapDrawable)
+                bytes -= ((android.graphics.drawable.BitmapDrawable) app.icon).getBitmap().getAllocationByteCount();
+            app.icon = null; app.iconReady = false; // Visible tiles will reload from disk; never recycle a drawn bitmap.
+        }
     }
 
     /** Cheap letter placeholder so the grid is useful before icons finish. Runs on the worker thread. */
@@ -874,6 +915,7 @@ public final class PersonalHomeActivity extends Activity {
         android.graphics.drawable.Drawable icon;
         int accent;
         boolean iconReady;
+        volatile boolean iconLoading;
         App(String name, ResolveInfo info, android.graphics.drawable.Drawable icon, int accent, boolean iconReady) {
             this.name = name; this.info = info; this.icon = icon; this.accent = accent; this.iconReady = iconReady;
         }
@@ -890,45 +932,68 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void renderApps(List<App> apps) {
+        boolean restoreFocus = grid.hasFocus() || (focusedPkg != null && !hasWindowFocus());
         cachedApps = apps;
-        appHeading.setText("Your apps");
-        grid.removeAllViews();
-        tileViews.clear();
+        appHeading.setText(selectedCategory.isEmpty() ? getString(R.string.h_all_apps) : selectedCategory);
+        HomeLibraryStore library = new HomeLibraryStore(this);
+        List<App> visible = orderedApps(apps);
+        Set<String> hidden = prefs.getStringSet("hidden_apps", Collections.emptySet());
+        visible.removeIf(app -> hidden.contains(app.info.activityInfo.packageName)
+                || (!selectedCategory.isEmpty() && !selectedCategory.equals(library.category(app.info.activityInfo.packageName))));
         int avail = gridWidth();
         int columns = PersonalHomeModel.columns((int) (avail / getResources().getDisplayMetrics().density),
                 prefs.getInt(tv ? "tv_columns" : "phone_columns", 0), prefs.getBoolean("large_tiles", false));
-        grid.setColumnCount(columns);
-        int width = avail / columns;
-        Set<String> hidden = prefs.getStringSet("hidden_apps", Collections.emptySet());
-        for (App app : orderedApps(apps)) {
-            if (!hidden.contains(app.info.activityInfo.packageName)) addAppTile(grid, app, width);
-        }
-        // Staggered entrance: tiles slide in one by one — only on the very first
-        // render. Replaying it on every rebuild was the visible "launcher keeps
-        // refreshing" flash. Stagger capped so large libraries don't animate for seconds.
-        if (prefs.getBoolean("app_entrance", true) && firstGridRender) {
-            int count = grid.getChildCount();
-            for (int i = 0; i < count; i++) {
-                View tile = grid.getChildAt(i);
-                tile.setTranslationX(-dp(60));
-                tile.setAlpha(0f);
-                tile.animate().translationX(0).alpha(1f)
-                        .setDuration(400).setStartDelay(Math.min(i * 70, 600))
-                        .setInterpolator(new android.view.animation.DecelerateInterpolator())
-                        .start();
-            }
-        }
+        grid.submit(visible, columns, avail / columns);
+        if (movingRendered) { movingRendered = false; grid.rebind(); }
+        if (gridState != null) { grid.getLayoutManager().onRestoreInstanceState(gridState); gridState = null; }
+        if (visible.isEmpty()) appHeading.setText(R.string.h_no_apps);
+        if (restoreFocus && (panel == null || !panel.isShowing()) && (searchDialog == null || !searchDialog.isShowing()))
+            grid.focusKey(focusedPkg);
         firstGridRender = false;
-        if (grid.getChildCount() == 0) {
-            appHeading.setText("No visible apps");
-            Toast.makeText(this, "Unhide apps in Settings → Launcher settings", Toast.LENGTH_LONG).show();
-        }
-        // Restore D-pad focus to the previously focused app when it is still visible.
-        View restore = focusedPkg == null ? null : tileViews.get(focusedPkg);
-        if (restore != null) restore.requestFocus();
-        else if (grid.getChildCount() > 0 && grid.findFocus() == null) focusFirstApp();
         if (searchRefresh != null) searchRefresh.run();
     }
+
+    private void refreshCategories() {
+        if (categoryTabs == null) return;
+        categoryTabs.removeAllViews();
+        List<String> names = new ArrayList<>(); names.add(""); names.addAll(new HomeLibraryStore(this).categories());
+        for (String category : names) {
+            Button chip = button(category.isEmpty() ? getString(R.string.h_all_apps) : category, () -> {
+                selectedCategory = category;
+                gridState = null;
+                if (cachedApps != null) renderApps(cachedApps);
+                refreshCategories();
+                int selected = names.indexOf(category);
+                categoryTabs.post(() -> { if (selected >= 0 && selected < categoryTabs.getChildCount()) categoryTabs.getChildAt(selected).requestFocus(); });
+            });
+            chip.setTextSize(12); chip.setPadding(dp(12), dp(3), dp(12), dp(3));
+            chip.setMinimumHeight(dp(36)); chip.setMinHeight(dp(36));
+            chip.setBackground(surface(category.equals(selectedCategory)));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, dp(40)); params.setMargins(dp(3), 0, dp(3), 0);
+            categoryTabs.addView(chip, params);
+        }
+    }
+
+    private void chooseCategoryFilter() {
+        List<String> names = new HomeLibraryStore(this).categories(); names.add(0, getString(R.string.h_all_apps));
+        new AlertDialog.Builder(this).setTitle(R.string.h_categories).setItems(names.toArray(new String[0]), (dialog, which) -> {
+            selectedCategory = which == 0 ? "" : names.get(which); gridState = null;
+            refreshCategories(); if (cachedApps != null) renderApps(cachedApps);
+        }).show();
+    }
+
+    private void showProfiles() {
+        HomeLibraryUi.profiles(this, () -> {
+            profileEpoch++;
+            focusedPkg = prefs.getString("home_focus_pkg", null); gridState = null; selectedCategory = "";
+            avatarBitmap = null; customWallpaper = null;
+            if (sky != null) handler.removeCallbacks(sky.crossfadeStep);
+            sky = null;
+            buildHome(); loadAvatar(); loadWallpaper();
+        }, this::editProfile);
+    }
+
+    private File profileAsset(String name) { return new File(getFilesDir(), new HomeLibraryStore(this).assetName(name)); }
 
     /** Direct move mode: long-press > Move, then arrows carry the tile, OK drops it, Back cancels. */
     private void startMoveMode(App app) {
@@ -938,29 +1003,24 @@ public final class PersonalHomeActivity extends Activity {
         visible.removeIf(a -> hidden.contains(a.info.activityInfo.packageName));
         moveOrder = new ArrayList<>();
         for (App a : visible) moveOrder.add(a.info.activityInfo.packageName);
+        selectedCategory = ""; refreshCategories();
         carriedApp = app;
         renderMoveGrid();
         Toast.makeText(this, "Arrows move · OK places · Back cancels", Toast.LENGTH_LONG).show();
     }
 
     private void renderMoveGrid() {
+        movingRendered = true;
         java.util.Map<String, App> byPackage = new java.util.LinkedHashMap<>();
         for (App app : cachedApps) byPackage.put(app.info.activityInfo.packageName, app);
         appHeading.setText("Move " + carriedApp.name);
-        grid.removeAllViews();
-        tileViews.clear();
         int avail = gridWidth();
         int columns = PersonalHomeModel.columns((int) (avail / getResources().getDisplayMetrics().density),
                 prefs.getInt(tv ? "tv_columns" : "phone_columns", 0), prefs.getBoolean("large_tiles", false));
-        grid.setColumnCount(columns);
-        int width = avail / columns;
         String movingPkg = carriedApp.info.activityInfo.packageName;
-        for (String pkg : moveOrder) {
-            App app = byPackage.get(pkg);
-            if (app != null) addAppTile(grid, app, width, pkg.equals(movingPkg));
-        }
-        View moving = grid.getChildAt(moveOrder.indexOf(movingPkg));
-        if (moving != null) moving.requestFocus();
+        List<App> moved = new ArrayList<>();
+        for (String pkg : moveOrder) { App app = byPackage.get(pkg); if (app != null) moved.add(app); }
+        grid.submit(moved, columns, avail / columns); grid.rebind(); grid.focusKey(movingPkg);
     }
 
     private void commitMove() {
@@ -1038,15 +1098,12 @@ public final class PersonalHomeActivity extends Activity {
         return super.dispatchKeyEvent(event);
     }
 
-    private void addAppTile(GridLayout parent, App app, int width) {
-        addAppTile(parent, app, width, false);
-    }
-
-    private void addAppTile(GridLayout parent, App app, int width, boolean moving) {
+    private View createAppTile(App app, int width, boolean moving) {
+        requestAppIcon(app);
         android.widget.FrameLayout tile = new android.widget.FrameLayout(this);
         tile.setBackground(surface(false));
         tile.setClipToOutline(true);
-        tile.setElevation(dp(3));
+        tile.setElevation(perfAllows("parallax") ? dp(3) : 0);
         tile.setFocusable(true);
         tile.setClickable(true);
         tile.setContentDescription(app.name);
@@ -1059,7 +1116,8 @@ public final class PersonalHomeActivity extends Activity {
             tile.setForeground(tileBorder(accentColor(), true));
         }
         ImageView icon = new ImageView(this);
-        icon.setImageDrawable(app.icon);
+        if (app.icon != null) icon.setImageDrawable(app.icon);
+        else icon.setImageResource(R.drawable.ic_apps);
         // Artwork is composed at the card's 16:9 ratio; no second inset or crop here.
         icon.setScaleType(ImageView.ScaleType.FIT_XY);
         icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -1091,7 +1149,7 @@ public final class PersonalHomeActivity extends Activity {
                 android.graphics.Point size = new android.graphics.Point();
                 getWindowManager().getDefaultDisplay().getSize(size);
                 sky.animate().translationX(0)
-                        .translationY((size.y / 2f - cy) / size.y * dp(36))
+                        .translationY(perfAllows("parallax") ? (size.y / 2f - cy) / size.y * dp(36) : 0)
                         .setDuration(350).start();
             } else sky.focusAccent = 0;
             sky.invalidate();
@@ -1109,9 +1167,10 @@ public final class PersonalHomeActivity extends Activity {
             }).start();
         });
         tile.setOnLongClickListener(v -> {
-            new AlertDialog.Builder(this).setTitle(app.name).setItems(new String[]{"App info", "Hide from launcher", "Move app"}, (dialog, which) -> {
+            new AlertDialog.Builder(this).setTitle(app.name).setItems(new String[]{"App info", "Hide from launcher", "Move app", getString(R.string.h_category)}, (dialog, which) -> {
                 if (which == 0) launch(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + app.info.activityInfo.packageName)));
                 else if (which == 2) startMoveMode(app);
+                else if (which == 3) HomeLibraryUi.category(this, app.info.activityInfo.packageName, () -> { refreshCategories(); if (cachedApps != null) renderApps(cachedApps); });
                 else {
                     Set<String> hidden = new HashSet<>(prefs.getStringSet("hidden_apps", Collections.emptySet()));
                     hidden.add(app.info.activityInfo.packageName);
@@ -1121,15 +1180,21 @@ public final class PersonalHomeActivity extends Activity {
             }).show();
             return true;
         });
-        GridLayout.LayoutParams position = new GridLayout.LayoutParams();
+        android.widget.FrameLayout.LayoutParams position = new android.widget.FrameLayout.LayoutParams(-1, -2);
         int spacing = Math.max(0, Math.min(2, prefs.getInt("tile_spacing", 1)));
         int hm = new int[]{dp(4), dp(8), dp(14)}[spacing];
         int vm = new int[]{dp(5), dp(10), dp(16)}[spacing];
         position.width = width - hm * 2;
         position.height = Math.round(position.width * 9f / 16f);
         position.setMargins(hm, vm, hm, vm);
-        tileViews.put(app.info.activityInfo.packageName, tile);
-        parent.addView(tile, position);
+        tile.setLayoutParams(position);
+        tile.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+            @Override public void onViewAttachedToWindow(View view) { tileViews.put(app.info.activityInfo.packageName, view); }
+            @Override public void onViewDetachedFromWindow(View view) {
+                if (tileViews.get(app.info.activityInfo.packageName) == view) tileViews.remove(app.info.activityInfo.packageName);
+            }
+        });
+        return tile;
     }
 
     private void searchApps() {
@@ -1313,32 +1378,22 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void showSettings() {
-        LinearLayout rows = new LinearLayout(this); rows.setOrientation(LinearLayout.VERTICAL);
-        panel = GlassSettings.panel(this, "Settings", rows);
-        addPanelRow(rows, "Launcher settings", "Layout, wallpaper & apps", R.drawable.ic_settings, accentColor(), this::launcherSettings);
-        TextView quickLabel = GlassSettings.label(this, "Quick actions", 12, 0xff9bb6cb);
-        quickLabel.setPadding(dp(4), dp(10), 0, dp(4));
-        rows.addView(quickLabel);
-        LinearLayout strip = new LinearLayout(this);
-        strip.setOrientation(LinearLayout.HORIZONTAL);
-        strip.setGravity(Gravity.CENTER_VERTICAL);
-        addQuickCard(strip, "Search apps", R.drawable.ic_search, accentColor(), this::searchApps);
-        addQuickCard(strip, "Play Store", R.drawable.ic_apps, 0xff59e493, () -> openStore(""));
-        addQuickCard(strip, "Screensaver", R.drawable.ic_picture, 0xff67baff, this::screensaverSettings);
-        rows.addView(strip, new LinearLayout.LayoutParams(-1, -2));
-        boolean online = networkStatus.getCurrentTextColor() == 0xff59e493;
-        addPanelRow(rows, "Wi-Fi", online ? "Internet connected" : "No internet / disconnected", R.drawable.ic_wifi,
-                networkStatus.getCurrentTextColor(), () -> openSetting(Settings.ACTION_WIFI_SETTINGS));
-        android.bluetooth.BluetoothManager bluetooth = getSystemService(android.bluetooth.BluetoothManager.class);
-        String bluetoothState = "Open Bluetooth settings";
-        try { if (bluetooth != null && bluetooth.getAdapter() != null) bluetoothState = bluetooth.getAdapter().isEnabled() ? "On" : "Off"; }
-        catch (SecurityException unavailable) { /* Android 12+ can restrict adapter state. */ }
-        addPanelRow(rows, "Bluetooth", bluetoothState, android.R.drawable.stat_sys_data_bluetooth, 0xff67baff,
-                () -> launch(SystemSettings.bluetoothAccessoriesIntent(this)));
-        Runnable release = QuickControls.attach(this, rows);
-        if (tv) addPanelRow(rows, "Input", "HDMI / Live TV", R.drawable.ic_input, 0xffbdd5e5, this::showInputs);
-        addPanelRow(rows, "TV system settings", "Display, sound & device", R.drawable.ic_settings, 0xffbdd5e5, () -> openSetting(Settings.ACTION_SETTINGS));
-        panel.setOnDismissListener(d -> release.run()); panel.show();
+        if (panel != null && panel.isShowing()) { panel.dismiss(); return; }
+        panel = HomeDashboard.show(this, networkStatus.getText().toString(), action -> {
+            switch (action) {
+                case HomeDashboard.SETTINGS: launcherSettings(); break;
+                case HomeDashboard.SEARCH: searchApps(); break;
+                case HomeDashboard.STORE: openStore(""); break;
+                case HomeDashboard.SCREENSAVER: screensaverSettings(); break;
+                case HomeDashboard.PROFILES: showProfiles(); break;
+                case HomeDashboard.CATEGORIES: chooseCategoryFilter(); break;
+                case HomeDashboard.WATCHLIST: HomeLibraryUi.watchlist(this); break;
+                case HomeDashboard.WIFI: openSetting(Settings.ACTION_WIFI_SETTINGS); break;
+                case HomeDashboard.BLUETOOTH: launch(SystemSettings.bluetoothAccessoriesIntent(this)); break;
+                case HomeDashboard.INPUTS: showInputs(); break;
+                default: openSetting(Settings.ACTION_SETTINGS); break;
+            }
+        });
     }
 
     private void addQuickCard(LinearLayout strip, String title, int icon, int tint, Runnable action) {
@@ -1640,7 +1695,7 @@ public final class PersonalHomeActivity extends Activity {
                 try { startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), 8); }
                 catch (ActivityNotFoundException | SecurityException unavailable) { Toast.makeText(this, "No image picker available on this device", Toast.LENGTH_LONG).show(); }
             } else {
-                if (!new File(getFilesDir(), "personal-wallpaper.jpg").exists()) { Toast.makeText(this, "Choose a picture first", Toast.LENGTH_SHORT).show(); return; }
+                if (!profileAsset("personal-wallpaper.jpg").exists()) { Toast.makeText(this, "Choose a picture first", Toast.LENGTH_SHORT).show(); return; }
                 prefs.edit().putString("wallpaper_mode", "custom").apply(); loadWallpaper();
             }
         });
@@ -1648,9 +1703,10 @@ public final class PersonalHomeActivity extends Activity {
 
     private void loadWallpaper() {
         if (!"custom".equals(prefs.getString("wallpaper_mode", "mountains"))) return;
+        int epoch = profileEpoch; File file = profileAsset("personal-wallpaper.jpg");
         worker.execute(() -> {
-            Bitmap image = BitmapFactory.decodeFile(new File(getFilesDir(), "personal-wallpaper.jpg").getPath());
-            handler.post(() -> { if (!isDestroyed()) { customWallpaper = image; if (sky != null) sky.invalidate(); adaptTextColors(); } });
+            Bitmap image = ProfileAssets.load(this, file, false);
+            handler.post(() -> { if (!isDestroyed() && epoch == profileEpoch) { customWallpaper = image; if (sky != null) sky.invalidate(); adaptTextColors(); } });
         });
     }
 
@@ -1832,7 +1888,7 @@ public final class PersonalHomeActivity extends Activity {
             }
         });
         Button remove = button("Remove photo", () -> {
-            File photo = new File(getFilesDir(), "personal-avatar.png");
+            File photo = profileAsset("personal-avatar.png");
             if (photo.exists() && !photo.delete()) {
                 Toast.makeText(this, "Could not remove photo", Toast.LENGTH_SHORT).show();
                 return;
@@ -1910,9 +1966,10 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void loadAvatar() {
+        int epoch = profileEpoch; File file = profileAsset("personal-avatar.png");
         worker.execute(() -> {
-            Bitmap image = BitmapFactory.decodeFile(new File(getFilesDir(), "personal-avatar.png").getPath());
-            handler.post(() -> { if (!isDestroyed()) { avatarBitmap = image; refreshProfile(); } });
+            Bitmap image = ProfileAssets.load(this, file, true);
+            handler.post(() -> { if (!isDestroyed() && epoch == profileEpoch) { avatarBitmap = image; refreshProfile(); } });
         });
     }
 
@@ -2050,6 +2107,8 @@ public final class PersonalHomeActivity extends Activity {
         if ((request != 7 && request != 8) || result != RESULT_OK || data == null || data.getData() == null) return;
         boolean wallpaper = request == 8;
         Uri uri = data.getData();
+        int importEpoch = profileEpoch;
+        File targetAsset = profileAsset(wallpaper ? "personal-wallpaper.jpg" : "personal-avatar.png");
         worker.execute(() -> {
             try {
                 BitmapFactory.Options options = new BitmapFactory.Options();
@@ -2066,14 +2125,14 @@ public final class PersonalHomeActivity extends Activity {
                     decoded = BitmapFactory.decodeStream(input, null, options);
                 }
                 if (decoded == null) throw new java.io.IOException("Invalid image");
-                android.util.AtomicFile destination = new android.util.AtomicFile(new File(getFilesDir(), wallpaper ? "personal-wallpaper.jpg" : "personal-avatar.png"));
+                android.util.AtomicFile destination = new android.util.AtomicFile(targetAsset);
                 FileOutputStream out = destination.startWrite();
                 try {
                     if (!decoded.compress(wallpaper ? Bitmap.CompressFormat.JPEG : Bitmap.CompressFormat.PNG, wallpaper ? 85 : 100, out)) throw new java.io.IOException("Cannot save image");
                     destination.finishWrite(out);
                 } catch (Exception error) { destination.failWrite(out); throw error; }
                 handler.post(() -> {
-                    if (isDestroyed()) return;
+                    if (isDestroyed() || importEpoch != profileEpoch) return;
                     if (wallpaper) { customWallpaper = decoded; prefs.edit().putString("wallpaper_mode", "custom").apply(); sky.invalidate(); }
                     else { avatarBitmap = decoded; refreshProfile(); refreshProfileAvatarPreview(); }
                 });
@@ -2091,21 +2150,28 @@ public final class PersonalHomeActivity extends Activity {
         tick.run();
         updateNetwork();
         continueWatching.start();
-        updateContentRows();
         refreshHomeWeather();
         updateOnlineWallpaper();
         armSlideshow();
         handler.removeCallbacks(secondTick);
         if (prefs.getBoolean("clock_seconds", false)) secondTick.run();
-        if (pageWidth > 0) loadApps();
+        if (pageWidth > 0 && cachedApps == null) loadApps();
+        else if (grid != null && focusedPkg != null && (panel == null || !panel.isShowing())) grid.post(() -> grid.focusKey(focusedPkg));
         if (connectivity != null && !networkRegistered) {
             try { connectivity.registerDefaultNetworkCallback(networkCallback); networkRegistered = true; }
             catch (RuntimeException unavailable) { /* Snapshot above remains available. */ }
         }
     }
 
+    @Override protected void onSaveInstanceState(Bundle state) {
+        super.onSaveInstanceState(state);
+        if (grid != null && grid.getLayoutManager() != null) state.putParcelable("home_grid_state", grid.getLayoutManager().onSaveInstanceState());
+    }
+
     @Override protected void onPause() {
         resumed = false;
+        if (grid != null && grid.getLayoutManager() != null) gridState = grid.getLayoutManager().onSaveInstanceState();
+        if (focusedPkg != null) prefs.edit().putString("home_focus_pkg", focusedPkg).apply();
         if (continueWatching != null) continueWatching.stop();
         handler.removeCallbacks(idleScreensaver);
         handler.removeCallbacks(tick);
@@ -2140,7 +2206,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void focusFirstApp() {
-        if (grid.getChildCount() > 0) grid.getChildAt(0).requestFocus();
+        if (grid != null) grid.focusKey(focusedPkg);
     }
 
     @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
@@ -2149,6 +2215,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        unregisterReceiver(appChanges);
         if (panel != null) panel.dismiss();
         if (profile != null) profile.dismiss();
         if (searchDialog != null) searchDialog.dismiss();
@@ -2166,8 +2233,7 @@ public final class PersonalHomeActivity extends Activity {
         if (level >= TRIM_MEMORY_UI_HIDDEN) {
             // Clear online wallpaper (reloadable from cache/network).
             if (sky != null) sky.releaseTransient();
-            // Trim icon memory cache.
-            System.gc(); // Hint; actual collection is up to the runtime.
+            trimAppIcons();
         }
         // TRIM_MEMORY_RUNNING_CRITICAL: also drop the crossfade buffer.
         if (level >= TRIM_MEMORY_RUNNING_CRITICAL) {
@@ -2193,7 +2259,7 @@ public final class PersonalHomeActivity extends Activity {
             if (backdrop != null) {
                 onlineWallpaper = null;
             }
-            System.gc();
+
         }
         /**
          * Carry the already-loaded wallpapers into a fresh SkyClock created by
@@ -2237,7 +2303,7 @@ public final class PersonalHomeActivity extends Activity {
                 Bitmap bmp = BitmapFactory.decodeResource(getResources(), R.drawable.personal_wallpaper);
                 Bitmap fav = null;
                 try {
-                    java.io.File f = new java.io.File(getFilesDir(), "favorite_wallpaper.jpg");
+                    java.io.File f = profileAsset("favorite_wallpaper.jpg");
                     if (f.exists()) fav = BitmapFactory.decodeFile(f.getAbsolutePath());
                 } catch (Exception ignored) {}
                 Bitmap bg = bmp, fg = fav;
@@ -2249,7 +2315,7 @@ public final class PersonalHomeActivity extends Activity {
             worker.execute(() -> {
                 Bitmap fav = null;
                 try {
-                    java.io.File f = new java.io.File(getFilesDir(), "favorite_wallpaper.jpg");
+                    java.io.File f = profileAsset("favorite_wallpaper.jpg");
                     if (f.exists()) fav = BitmapFactory.decodeFile(f.getAbsolutePath());
                 } catch (Exception ignored) {}
                 Bitmap loaded = fav;
@@ -2274,7 +2340,7 @@ public final class PersonalHomeActivity extends Activity {
                 try {
                     Bitmap current = onlineWallpaper != null ? onlineWallpaper : backdrop;
                     if (current == null) return;
-                    java.io.File out = new java.io.File(getFilesDir(), "favorite_wallpaper.jpg");
+                    java.io.File out = profileAsset("favorite_wallpaper.jpg");
                     try (java.io.FileOutputStream fos = new java.io.FileOutputStream(out)) {
                         current.compress(Bitmap.CompressFormat.JPEG, 90, fos);
                     }
