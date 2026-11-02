@@ -29,6 +29,7 @@ public class InputKeyService extends AccessibilityService {
     private boolean repairRecord;
     /** consume_volume_keys: Volume Up/Down go to VolumeKeys instead of on to the firmware. */
     private boolean consumeVolumeKeys;
+    private boolean volumeKeyFilter;
     /** Stops key filtering while a game controller is connected; null unless gamepad_passthrough and key_filter. */
     private GamepadPassthrough gamepads;
 
@@ -42,6 +43,7 @@ public class InputKeyService extends AccessibilityService {
         if (repairRecord) ServiceRepair.connected(this, getClass());
         inputKeycodes = config.inputKeycodes;
         consumeVolumeKeys = config.consumeVolumeKeys;
+        volumeKeyFilter = config.keyFilter;
         appKeys = RemoteKeys.parseAppKeys(config.appKeys);
         appScancodes = RemoteKeys.parseAppScancodes(config.appKeys);
         RemoteKeys.applyKeyFilter(this, config.keyFilter);
@@ -63,8 +65,8 @@ public class InputKeyService extends AccessibilityService {
 
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
-        if (RemoteSetup.handle(this, event)) return true;
         if (consumeVolumeKeys && VolumeKeys.handle(this, event)) return true;
+        if (volumeKeyFilter) VolumeKeys.observe(this, event);
         // A scancode entry is more specific than any keycode, so it goes first.
         if (RemoteKeys.handle(this, event, appScancodes.get(event.getScanCode()),
                 holdAppScancodes.get(event.getScanCode()))) return true;
@@ -95,7 +97,7 @@ public class InputKeyService extends AccessibilityService {
     public void onDestroy() {
         RemoteKeys.release(this);
         if (gamepads != null) gamepads.stop();
-        if (consumeVolumeKeys) VolumeKeys.stop();
+        if (consumeVolumeKeys || volumeKeyFilter) VolumeKeys.stop();
         super.onDestroy();
     }
 
