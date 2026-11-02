@@ -34,6 +34,16 @@ final class LandscapeModel {
                 + "&timezone=auto";
     }
 
+    /** Picsum supplies a photographer and original dimensions, but no location or scene title. */
+    static String photoCaption(String body) throws org.json.JSONException {
+        org.json.JSONObject info = new org.json.JSONObject(body);
+        String author = HomeLibraryModel.title(info.optString("author", ""));
+        int width = info.optInt("width", 0), height = info.optInt("height", 0);
+        String credit = author.isEmpty() ? "Photo" : "Photo by " + author;
+        if (width > 0 && height > 0) credit += " · " + width + " × " + height;
+        return credit + " · Lorem Picsum";
+    }
+
     static String condition(int code) {
         if (code == 0) return "Clear";
         if (code == 1) return "Mainly clear";

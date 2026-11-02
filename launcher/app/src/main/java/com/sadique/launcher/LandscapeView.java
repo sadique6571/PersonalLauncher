@@ -117,11 +117,11 @@ public final class LandscapeView extends FrameLayout {
         statusPosition.setMargins(dp(24), 0, dp(24), dp(16));
         addView(status, statusPosition);
         // Wallpaper details caption at the bottom (user 2026-11-01).
-        details = label(14);
-        details.setGravity(Gravity.CENTER);
-        LayoutParams detailsPosition = new LayoutParams(-1, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-        detailsPosition.setMargins(dp(24), 0, dp(24), dp(40));
-        addView(details, detailsPosition);
+        details = label(13);
+        details.setGravity(Gravity.START); details.setMaxLines(2);
+        details.setPadding(0, dp(8), 0, 0);
+        // Keep the photo credit in the same stack so it cannot overlap the weather.
+        conditions.addView(details);
     }
 
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
@@ -239,6 +239,7 @@ public final class LandscapeView extends FrameLayout {
         worker.execute(() -> {
             Bitmap result = null;
             int selectedPhoto = -1;
+            String caption = "Photo details unavailable";
             for (int attempt = 0; attempt < 3 && result == null && !Thread.currentThread().isInterrupted(); attempt++) {
               int candidate = firstPhoto + attempt;
               if (candidate == previousPhoto) continue;
@@ -253,10 +254,17 @@ public final class LandscapeView extends FrameLayout {
                 while (Math.max(bounds.outWidth, bounds.outHeight) / bounds.inSampleSize > 1920) bounds.inSampleSize *= 2;
                 result = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
                 selectedPhoto = candidate;
+                if (result != null) {
+                    try {
+                        caption = LandscapeModel.photoCaption(OnlineContent.json(
+                                "https://picsum.photos/seed/pl" + candidate + "/info"));
+                    } catch (Exception unavailable) { /* A credit lookup must not discard a loaded image. */ }
+                }
               } catch (Exception unavailable) { /* Try another landscape instead of retaining one failed source forever. */ }
             }
             Bitmap image = result;
             int loadedPhoto = selectedPhoto;
+            String photoCaption = caption;
             handler.post(() -> {
                 if (!running || request != generation) return;
                 photoBusy = false;
@@ -264,12 +272,12 @@ public final class LandscapeView extends FrameLayout {
                     // Fade through: old photo out, new photo in.
                     photo.animate().alpha(0f).setDuration(250).withEndAction(() -> {
                         photo.setImageBitmap(image);
+                        details.setText(photoCaption);
                         photo.animate().alpha(1f).setDuration(500).start();
                     }).start();
                     hasPhoto = true; displayedPhoto = loadedPhoto;
                     status.setText("");
                     // Wallpaper details caption at the bottom (user 2026-11-01).
-                    details.setText("picsum.photos · #" + loadedPhoto);
                     adaptClockColors();
                 } else {
                     status.setText("Landscape rotation unavailable · retrying automatically");

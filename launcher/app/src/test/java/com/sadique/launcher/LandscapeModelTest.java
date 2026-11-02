@@ -4,6 +4,13 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class LandscapeModelTest {
+    @Test public void photoCaptionUsesActualMetadataWithoutInventingALocation() throws Exception {
+        String caption = LandscapeModel.photoCaption("{\"author\":\"Test Photographer\",\"width\":2400,\"height\":1600}");
+        assertEquals("Photo by Test Photographer · 2400 × 1600 · Lorem Picsum", caption);
+    }
+    @Test public void missingPhotoMetadataHasNoNumberOrMadeUpLocation() throws Exception {
+        assertEquals("Photo · Lorem Picsum", LandscapeModel.photoCaption("{\"id\":\"123\"}"));
+    }
     @Test public void photoSeedsAreUniqueAndAlwaysUseHttps() {
         // Bing daily wallpaper API
         assertTrue(LandscapeModel.photoUrl(0).startsWith("https://www.bing.com/HPImageArchive.aspx"));
