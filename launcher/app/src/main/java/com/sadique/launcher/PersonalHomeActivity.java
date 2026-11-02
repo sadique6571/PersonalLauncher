@@ -1049,6 +1049,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
+        if (VolumeKeys.control(this, event)) return true;
         if (event.getAction() == KeyEvent.ACTION_DOWN) playNavSound(event.getKeyCode());
         // Press effect: tile dips slightly the moment OK is pressed.
         if (event.getAction() == KeyEvent.ACTION_DOWN && carriedApp == null
@@ -2168,6 +2169,8 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     @Override protected void onPause() {
+        VolumeKeys.stop();
+        VolumeSlider.hide(this);
         resumed = false;
         if (grid != null && grid.getLayoutManager() != null) gridState = grid.getLayoutManager().onSaveInstanceState();
         if (focusedPkg != null) prefs.edit().putString("home_focus_pkg", focusedPkg).apply();

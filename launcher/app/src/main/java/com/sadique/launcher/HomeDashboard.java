@@ -13,7 +13,7 @@ final class HomeDashboard {
     private HomeDashboard() { }
     static AlertDialog show(Activity host, String network, Runnable rebuild, Actions actions) {
         LinearLayout rows = HomeLibraryUi.rows(host);
-        AlertDialog panel = GlassSettings.panel(host, host.getString(R.string.h_dashboard), rows);
+        AlertDialog panel = GlassSettings.panel(host, host.getString(R.string.h_dashboard), rows, true);
         rows.addView(GlassSettings.label(host, network, 12, 0xffb5cadd));
         section(host, rows, R.string.h_quick_settings);
         pair(host, rows, panel, actions, R.string.h_wifi, R.drawable.ic_wifi, WIFI,
