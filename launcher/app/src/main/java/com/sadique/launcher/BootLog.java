@@ -10,18 +10,26 @@ import android.util.Log;
  */
 public final class BootLog {
     private static final String TAG = "LauncherBoot";
+    private static final java.util.ArrayDeque<String> EVENTS = new java.util.ArrayDeque<>();
+    private static synchronized void remember(String event) {
+        if (EVENTS.size() == 32) EVENTS.removeFirst();
+        EVENTS.addLast(event);
+    }
+    static synchronized String snapshot() { return String.join("\n", EVENTS); }
 
     private BootLog() {
     }
 
     /** A single timestamped event, e.g. {@code BootLog.mark("home onCreate")}. */
     public static void mark(String what) {
-        Log.i(TAG, SystemClock.elapsedRealtime() + "ms " + what);
+        String event = SystemClock.elapsedRealtime() + "ms " + what;
+        remember(event); Log.i(TAG, event);
     }
 
     /** An event plus how long since {@code startMs} (also from elapsedRealtime). */
     public static void mark(String what, long startMs) {
         long now = SystemClock.elapsedRealtime();
-        Log.i(TAG, now + "ms " + what + " took=" + (now - startMs) + "ms");
+        String event = now + "ms " + what + " took=" + (now - startMs) + "ms";
+        remember(event); Log.i(TAG, event);
     }
 }

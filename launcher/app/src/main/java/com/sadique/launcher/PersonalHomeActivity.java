@@ -354,7 +354,7 @@ public final class PersonalHomeActivity extends Activity {
         header.setGravity(Gravity.CENTER_VERTICAL);
         applyHeaderBackground();
         avatar = new ImageView(this);
-        avatar.setContentDescription("Edit profile photo");
+        avatar.setContentDescription(getString(R.string.h_profiles));
         avatar.setScaleType(ImageView.ScaleType.CENTER_CROP);
         avatar.setBackground(avatarSurface(false));
         avatar.setClipToOutline(true);
@@ -497,14 +497,14 @@ public final class PersonalHomeActivity extends Activity {
             }
         });
         appBody.setClipToOutline(true);
-        continueWatching = new ContinueWatchingView(this, label -> appHeading.setText(label));
-        grid.setFooter(continueWatching);
+        continueWatching = new ContinueWatchingView(this, label -> { if (!prefs.getBoolean("apps_only", false)) appHeading.setText(label); });
+        if (!prefs.getBoolean("apps_only", false)) grid.setFooter(continueWatching);
         appBody.addView(grid, new LinearLayout.LayoutParams(-1, -1));
         // Scrollable content: clock only. The "Your apps" header and the
         // drawer panel stay fixed below; tiles scroll inside the panel.
         LinearLayout scrollContent = new LinearLayout(this);
         scrollContent.setOrientation(LinearLayout.VERTICAL);
-        if (prefs.getBoolean("hide_clock", false)) clock.setVisibility(View.GONE);
+        if (prefs.getBoolean("hide_clock", false) || prefs.getBoolean("apps_only", false)) clock.setVisibility(View.GONE);
         int align = prefs.getInt("clock_align", 1);
         LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(-2, -2);
         clockParams.gravity = new int[]{Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END}[align];
@@ -566,7 +566,7 @@ public final class PersonalHomeActivity extends Activity {
         WindowManager.LayoutParams brightness = getWindow().getAttributes();
         brightness.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
         getWindow().setAttributes(brightness);
-        if (resumed) continueWatching.start();
+        if (resumed && !prefs.getBoolean("apps_only", false)) continueWatching.start();
         BootLog.mark("home buildHome", buildMs);
         if (firstBuild) {
             firstBuild = false;
@@ -934,7 +934,7 @@ public final class PersonalHomeActivity extends Activity {
     private void renderApps(List<App> apps) {
         boolean restoreFocus = grid.hasFocus() || (focusedPkg != null && !hasWindowFocus());
         cachedApps = apps;
-        appHeading.setText(selectedCategory.isEmpty() ? getString(R.string.h_all_apps) : selectedCategory);
+        appHeading.setText(R.string.h_your_apps);
         HomeLibraryStore library = new HomeLibraryStore(this);
         List<App> visible = orderedApps(apps);
         Set<String> hidden = prefs.getStringSet("hidden_apps", Collections.emptySet());
@@ -983,6 +983,10 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void showProfiles() {
+        LauncherPin.require(this, this::showProfilesUnlocked);
+    }
+
+    private void showProfilesUnlocked() {
         HomeLibraryUi.profiles(this, () -> {
             profileEpoch++;
             focusedPkg = prefs.getString("home_focus_pkg", null); gridState = null; selectedCategory = "";
@@ -1063,6 +1067,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
+        if (RemoteSetup.handle(this, event)) return true;
         if (event.getAction() == KeyEvent.ACTION_DOWN) playNavSound(event.getKeyCode());
         // Press effect: tile dips slightly the moment OK is pressed.
         if (event.getAction() == KeyEvent.ACTION_DOWN && carriedApp == null
@@ -1379,13 +1384,19 @@ public final class PersonalHomeActivity extends Activity {
 
     private void showSettings() {
         if (panel != null && panel.isShowing()) { panel.dismiss(); return; }
-        panel = HomeDashboard.show(this, networkStatus.getText().toString(), action -> {
+        LauncherPin.require(this, this::showSettingsUnlocked);
+    }
+
+    private void showSettingsUnlocked() {
+        panel = HomeDashboard.show(this, networkStatus.getText().toString(), () -> {
+            gridState = null; buildHome();
+        }, action -> {
             switch (action) {
                 case HomeDashboard.SETTINGS: launcherSettings(); break;
                 case HomeDashboard.SEARCH: searchApps(); break;
                 case HomeDashboard.STORE: openStore(""); break;
                 case HomeDashboard.SCREENSAVER: screensaverSettings(); break;
-                case HomeDashboard.PROFILES: showProfiles(); break;
+                case HomeDashboard.PROFILES: showProfilesUnlocked(); break;
                 case HomeDashboard.CATEGORIES: chooseCategoryFilter(); break;
                 case HomeDashboard.WATCHLIST: HomeLibraryUi.watchlist(this); break;
                 case HomeDashboard.WIFI: openSetting(Settings.ACTION_WIFI_SETTINGS); break;
@@ -2149,7 +2160,7 @@ public final class PersonalHomeActivity extends Activity {
         handler.removeCallbacks(tick);
         tick.run();
         updateNetwork();
-        continueWatching.start();
+        if (!prefs.getBoolean("apps_only", false)) continueWatching.start();
         refreshHomeWeather();
         updateOnlineWallpaper();
         armSlideshow();

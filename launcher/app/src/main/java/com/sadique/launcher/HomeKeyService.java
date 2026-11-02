@@ -152,6 +152,14 @@ public class HomeKeyService extends AccessibilityService {
     }
 
     /** The opt-in broadcast: arm this binding now, or drop the receiver if the opt-in was turned off. */
+    static boolean requestSleep() {
+        HomeKeyService service = running;
+        return service != null && android.os.Build.VERSION.SDK_INT >= 28
+                && service.performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN);
+    }
+
+    static boolean isConnected() { return running != null; }
+
     static void applyStandbyOptIn() {
         HomeKeyService service = running;
         if (service == null) return;
@@ -281,6 +289,7 @@ public class HomeKeyService extends AccessibilityService {
 
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
+        if (RemoteSetup.handle(this, event)) return true;
         // power_on_home: the first key after power-on hands the TV to the user (power and wake keys don't count).
         if (powerOnUntil != 0 && event.getAction() == KeyEvent.ACTION_DOWN
                 && event.getKeyCode() != KeyEvent.KEYCODE_POWER && event.getKeyCode() != KeyEvent.KEYCODE_WAKEUP) {

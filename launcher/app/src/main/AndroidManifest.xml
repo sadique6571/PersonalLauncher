@@ -86,6 +86,7 @@
         android:theme="@style/Theme.TvHome"
         android:allowBackup="false"
         android:localeConfig="@xml/locales_config">
+        <receiver android:name=".LauncherSleep" android:exported="false" />
 
         <activity
             android:name=".PersonalHomeActivity"
