@@ -11,8 +11,8 @@ android {
         applicationId providers.gradleProperty('launcherApplicationId').getOrElse('com.sadique.launcher')
         minSdk 26
         targetSdk 34
-        versionCode 24
-        versionName '4.9.1'
+        versionCode 25
+        versionName '5.0'
     }
 
     // CI may compile with the debug key; published APKs require the persistent release key.
@@ -57,4 +57,6 @@ dependencies {
     implementation 'androidx.dynamicanimation:dynamicanimation:1.0.0'
     // Test only (never in the APK): plain JVM tests for the module card validators, src/test.
     testImplementation 'junit:junit:4.13.2'
+    // Real JSON implementation for local profile/watchlist JVM tests; never packaged in the APK.
+    testImplementation 'org.json:json:20240303'
 }
