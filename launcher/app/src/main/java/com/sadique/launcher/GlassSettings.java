@@ -132,6 +132,9 @@ final class GlassSettings {
         }
     }
     static AlertDialog panel(Activity host, String title, LinearLayout rows) {
+        return panel(host, title, rows, false);
+    }
+    static AlertDialog panel(Activity host, String title, LinearLayout rows, boolean focusHeader) {
         java.lang.ref.WeakReference<Panel> reference = PANELS.get(host);
         Panel state = reference == null ? null : reference.get();
         if (state == null || !state.dialog.isShowing()) {
@@ -173,17 +176,35 @@ final class GlassSettings {
         }
         TextView heading = label(host, title, 21, Color.WHITE); heading.setTypeface(heading.getTypeface(), Typeface.BOLD);
         bar.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView close = label(host, "×", 26, 0xffc9dfef); close.setGravity(Gravity.CENTER);
-        close.setContentDescription("Close settings"); close.setFocusable(true); close.setBackground(background(host, false));
-        close.setOnFocusChangeListener((v, f) -> close.setBackground(background(host, f)));
-        bar.addView(close, new LinearLayout.LayoutParams(dp(host, 36), dp(host, 36)));
+        ImageView settings = new ImageView(host);
+        settings.setImageResource(R.drawable.ic_settings); settings.setColorFilter(0xffc9dfef);
+        settings.setPadding(dp(host, 7), dp(host, 7), dp(host, 7), dp(host, 7));
+        settings.setContentDescription(host.getString(R.string.tv_settings));
+        settings.setId(View.generateViewId()); settings.setFocusable(true); settings.setClickable(true);
+        settings.setNextFocusUpId(settings.getId()); settings.setBackground(background(host, false));
+        bar.addView(settings, new LinearLayout.LayoutParams(dp(host, 36), dp(host, 36)));
         page.addView(bar);
         ScrollView scroll = new ScrollView(host); scroll.setVerticalScrollBarEnabled(false);
         scroll.addView(rows); page.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         current.content.addView(page, new LinearLayout.LayoutParams(-1, -1));
-        close.setOnClickListener(v -> current.dialog.dismiss());
-        current.dialog.setOnShowListener(d -> focusRows(rows));
-        if (current.dialog.isShowing()) rows.post(() -> focusRows(rows));
+        settings.setOnFocusChangeListener((v, f) -> {
+            settings.setBackground(background(host, f));
+            if (f) scroll.scrollTo(0, 0);
+        });
+        settings.setOnClickListener(v -> {
+            current.dialog.dismiss();
+            try {
+                host.startActivity(SystemSettings.intent(host, android.provider.Settings.ACTION_SETTINGS));
+            } catch (android.content.ActivityNotFoundException | SecurityException unavailable) {
+                android.widget.Toast.makeText(host, R.string.not_available, android.widget.Toast.LENGTH_SHORT).show();
+            }
+        });
+        Runnable initialFocus = () -> {
+            if (focusHeader) { settings.requestFocus(); scroll.scrollTo(0, 0); }
+            else focusRows(rows);
+        };
+        current.dialog.setOnShowListener(d -> initialFocus.run());
+        if (current.dialog.isShowing()) rows.post(initialFocus);
         return current.dialog;
     }
     private static void focusRows(LinearLayout rows) {

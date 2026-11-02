@@ -66,7 +66,7 @@ public class InputKeyService extends AccessibilityService {
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
         if (consumeVolumeKeys && VolumeKeys.handle(this, event)) return true;
-        if (volumeKeyFilter) VolumeKeys.observe(this, event);
+        if (volumeKeyFilter && VolumeKeys.control(this, event)) return true;
         // A scancode entry is more specific than any keycode, so it goes first.
         if (RemoteKeys.handle(this, event, appScancodes.get(event.getScanCode()),
                 holdAppScancodes.get(event.getScanCode()))) return true;
@@ -98,6 +98,7 @@ public class InputKeyService extends AccessibilityService {
         RemoteKeys.release(this);
         if (gamepads != null) gamepads.stop();
         if (consumeVolumeKeys || volumeKeyFilter) VolumeKeys.stop();
+        VolumeSlider.hide(this);
         super.onDestroy();
     }
 

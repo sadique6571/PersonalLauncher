@@ -41,6 +41,19 @@ final class SystemSettings {
     /** Use the firmware's Bluetooth settings route: pairing-only AddAccessoryActivity skips the
      * paired devices / remotes screen on Haier Google TV. */
     static Intent bluetoothAccessoriesIntent(Context context) {
+        PackageManager pm = context.getPackageManager();
+        String authority = "com.android.tv.settings.accessories.sliceprovider";
+        ComponentName activity = new ComponentName("com.android.tv.settings",
+                "com.android.tv.settings.slice.SliceActivity");
+        try {
+            android.content.pm.ActivityInfo info = pm.getActivityInfo(activity, 0);
+            if (info.enabled && info.exported && pm.resolveContentProvider(authority, 0) != null) {
+                return new Intent("android.settings.SLICE_SETTINGS").setComponent(activity)
+                        .putExtra("slice_uri", "content://" + authority + "/general");
+            }
+        } catch (PackageManager.NameNotFoundException unavailable) {
+            // Other firmware keeps its standard Bluetooth route.
+        }
         return intent(context, Settings.ACTION_BLUETOOTH_SETTINGS);
     }
 
