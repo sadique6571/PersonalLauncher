@@ -5,11 +5,11 @@
 - Package: `com.sadique.launcher`
 - Version: 4.8
 - Plain Java, classic Android Views, `minSdk` 26. Internet permission is used for online screensaver photos, weather and city lookup.
-- Day/night Home wallpaper, compact toolbar, configurable app grid, quick settings and local profile.
+- Day/night Home wallpaper, compact toolbar, configurable app grid, quick settings and editable name and photo.
 
 ## Home screen
 
-- TV: profile at the top left with greeting underneath; weather, network status, Quick actions drawer and Settings at the top right. Search, Play Store and Screensaver are inside Quick actions; Inputs stay in Settings and voice uses the remote Assistant button.
+- TV: profile at the top left with greeting underneath; weather, network status, Quick actions drawer and Settings at the top right. Search and the notification bell are in the toolbar. Play Store and Screensaver are at the end of Settings; voice uses the remote Assistant button.
 - Clock with date (digital or analog, 3 fonts, seconds, glow, shadow, 12/24-hour, left/center/right alignment, hide option). Large bold style like the demo. Apps appear directly below the clock; the clock scrolls away with content.
 - One app drawer. Long-press an app → Move app, or use Launcher settings → Rearrange apps; saved order survives restarts and new apps append. Small 16:9 rounded cards show original app icons without wordmark banners. Clean card backgrounds and proportional logos avoid stretched edge pixels; a subtle highlight and shadow give tiles a raised appearance. No labels underneath.
 - Focus uses a matching icon-colour glow/border with zoom, press dip and parallax wallpaper effects.
@@ -125,70 +125,39 @@ version codes install as updates. Do not uninstall anything automatically.
 
 Automatic system screensavers require selecting **Personal Launcher Landscapes** in Android settings. Use Screensaver → Set automatic screensaver for selection instructions and status. The DreamService declares the system binding permission and settings metadata; there is no ordinary runtime permission that can silently replace the Android-selected screensaver. A 5-minute Home-only idle fallback can be enabled from setup when firmware restricts the picker.
 
-## Home dashboard and local library (5.0)
+### Simplified TV Home (5.2)
 
-The active Home app grid now uses RecyclerView with stable package identities, incremental
-list updates and visible-tile artwork loading. It is the only vertical scrolling viewport:
-Continue Watching is a full-width footer and its cards scroll horizontally with D-pad focus.
-The category strip also follows horizontal focus. Returning from an app restores the selected
-tile; layout rebuilds retain grid state. Light mode keeps wallpaper parallax and dialog blur off.
-There is no Favorites or Recently Opened section.
+Home has one editable name/photo and a notification bell next to Search. Local profile switching,
+watchlists, Now Playing, Live Guide and remote-button learning have been removed. Existing name,
+layout and current avatar/wallpaper paths are preserved on update. Saved legacy profile data is not
+used to switch identities and is not deleted. Continue Watching still opens shared streaming entries,
+with no watchlist-save long press. The category bar has no “All apps” button; select a category again
+to reset it, or use Reset filter in Categories. The strip is hidden when no categories exist.
 
-The existing Settings remote action opens the new Home dashboard, grouped into Your Home,
-Media & TV, and Device controls. Long-press an app to assign or create a category; use the
-category strip to filter without changing hidden apps or the saved app order. Rearrangement
-operates on the complete visible library and preserves hidden slots.
+The bell lists notification alerts only and updates while open. Foreground-service, ongoing,
+non-clearable, group-summary, playback and active-progress status entries are excluded. Finished,
+clearable download alerts can still appear. Access consent is requested separately; no refresh or
+permission controls are mixed into the alert list. Notification content stays in bounded memory,
+is never stored or sent, and the existing listener component/consent remains valid.
 
-Select the avatar or **Local profiles** in the dashboard to switch between up to six local
-profiles. Each has its own app order, hidden apps, categories, theme, wallpaper/avatar files,
-and saved watchlist. The original/default profile keeps existing files and preferences.
-Long-press a non-default profile to delete it. These profiles do not switch Android users,
-Google accounts or accounts inside streaming apps. Performance/accessibility and remote
-configuration stay global. Settings export/import currently covers the active profile's
-preferences, not the separate registry or image files of every profile.
+Settings starts with a two-column TV-style button grid for Network, Bluetooth, Inputs, Display,
+Sound and TV settings. Bluetooth uses the standard firmware Bluetooth settings action, not the
+pair-new-accessory screen. Volume and launcher preferences follow; Search, Store and Screensaver
+are at the bottom. Startup diagnostics is hidden from the normal panel; boot log instrumentation
+is retained for troubleshooting. The optional launcher PIN, apps-only mode and inexact sleep timer
+remain available; PIN is a UI gate, not Android security. Sleep needs the Home accessibility service,
+may be delayed by Android, and clears on reboot. Home/Settings theme mappings and accessibility
+permissions are not modified by this update. No Favorites or Recently Opened feature is added.
 
-**Watchlist** stores up to 50 titles locally. Add an HTTP(S) link in the dashboard, or hold a
-Continue Watching card to save the publishing app's resume link. Select a saved title to open
-it; hold to remove it. It is not Google Watchlist sync and cannot retrieve private app histories.
+Validation includes notification filtering and legacy asset-path/category tests. Physical TV checks
+are still needed for button focus, notification delivery and the firmware Bluetooth screen.
 
-**Now playing** and **Notifications** are optional. Their access page explains the data read
-before opening Android's notification-access settings. Until the user explicitly enables
-Personal Launcher there, neither page can read other apps' sessions or notifications. Only
-supported media actions are enabled. Notifications are capped at 20 in memory, cleared on
-listener disconnect, and never stored or uploaded. Use Refresh to update an open page.
-No notification access is automatically granted, and the existing GuardRevival helper still
-reads no notifications. Disable the new listener in Android settings to revoke this feature.
+When accessibility key filtering is active, held volume uses a fallback repeat only when the firmware
+provides no native repeats. The original tap still goes to Android. Shared press identity prevents
+both key services from adding/resetting repeat loops; release cancels it and a 30-second safety limit
+covers a lost release. The explicit consume_volume_keys compatibility mode remains available.
 
-**Live TV guide** queries at most 24 browsable channels and two now/next programmes per channel
-from the TV provider. It requires the existing TV listings access; firmware may refuse it or
-publish no data. In that case use Inputs. This is not Google's regional Freeplay catalogue.
-
-Install an update over the existing package; do not uninstall or clear data. The package,
-persistent release signing setup, Home alias, Home key service and Settings key mappings are
-preserved. Physical Haier D-pad/scrolling, return-from-app, profile switching and media/provider
-access checks are still required; CI cannot establish those device behaviours.
-
-### Optional launcher tools (5.1)
-
-The Home dashboard includes **Remote buttons**, **Apps-only mode**, **Startup diagnostics**,
-**Launcher PIN**, and **Sleep timer**. They are local tools; no Google code/assets were copied.
-
-- Remote buttons learns Android keycodes, not shared Linux scan codes. It saves local overrides
-  separately from theme JSON, preserves Home/navigation/power/digits, and supports restoring each
-  original mapping. Outside Home it needs an enabled accessibility key service with key filtering.
-  Keys consumed by firmware cannot be learned. The settings key (83) and dot key (76) remain distinct.
-- Apps-only hides the clock and the Continue Watching shelf. Categories, the app grid, and the top
-  controls remain available. It is off by default and does not delete saved titles or profiles.
-- Diagnostics displays the current HOME resolver, redirect/service state, uptime and up to 32 timing
-  events retained by this process. It does not read logcat, send data, or collect device identifiers.
-- The optional 4–8 digit PIN gates the dashboard and profile chooser, including their settings/profile
-  editing actions. It is a launcher UI gate, not Android security or a streaming-app parental lock.
-  A salted PBKDF2 hash is computed on a worker; five failed attempts impose a 30-second cooldown.
-  Clearing launcher data removes the PIN. It is not included in profile/theme exports.
-- Sleep timer requests standby through the already-bound Home key accessibility service. Android may
-  delay its inexact alarm; unsupported firmware can refuse standby. Cancel is available in the timer
-  panel. No extra permission, polling or permanent service is added, and reboot clears the alarm.
-- App tiles expose collection row/column information to accessibility services. The section heading
-  reads “Your apps”; “All apps” appears only in the category filter.
-
-Physical TV testing remains required for key capture, TalkBack, focus movement and standby.
+Horizontal app navigation follows visible app order across row boundaries: Right enters the next row,
+Left enters the preceding row, and the first/last item stops in place. Pending off-screen focus is
+tracked during held-key repeats so geometric focus search cannot jump into the header. Up/Down and
+Continue Watching retain their own navigation.

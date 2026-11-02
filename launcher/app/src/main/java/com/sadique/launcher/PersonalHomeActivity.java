@@ -354,12 +354,12 @@ public final class PersonalHomeActivity extends Activity {
         header.setGravity(Gravity.CENTER_VERTICAL);
         applyHeaderBackground();
         avatar = new ImageView(this);
-        avatar.setContentDescription(getString(R.string.h_profiles));
+        avatar.setContentDescription(getString(R.string.h_edit_profile));
         avatar.setScaleType(ImageView.ScaleType.CENTER_CROP);
         avatar.setBackground(avatarSurface(false));
         avatar.setClipToOutline(true);
         avatar.setFocusable(true);
-        avatar.setOnClickListener(v -> showProfiles());
+        avatar.setOnClickListener(v -> LauncherPin.require(this, this::editProfile));
         avatar.setOnFocusChangeListener((v, focus) -> v.setBackground(avatarSurface(focus)));
         header.addView(avatar, new LinearLayout.LayoutParams(dp(48), dp(48)));
         LinearLayout identity = new LinearLayout(this);
@@ -393,7 +393,8 @@ public final class PersonalHomeActivity extends Activity {
         homeWeather.setGravity(Gravity.CENTER);
         homeWeather.setPadding(dp(10), dp(8), dp(10), dp(8));
         actions.addView(homeWeather, 0, new LinearLayout.LayoutParams(-2, dp(44)));
-        iconAction("Search", R.drawable.ic_search, this::searchApps);
+        iconAction(getString(R.string.h_search), R.drawable.ic_search, this::searchApps);
+        iconAction(getString(R.string.h_notifications), R.drawable.ic_notifications, this::showNotifications);
         iconAction("Settings", R.drawable.ic_settings, this::showSettings);
         if (tv) {
             header.addView(actions, new LinearLayout.LayoutParams(-2, -2));
@@ -956,10 +957,11 @@ public final class PersonalHomeActivity extends Activity {
     private void refreshCategories() {
         if (categoryTabs == null) return;
         categoryTabs.removeAllViews();
-        List<String> names = new ArrayList<>(); names.add(""); names.addAll(new HomeLibraryStore(this).categories());
+        List<String> names = new HomeLibraryStore(this).categories();
+        ((View) categoryTabs.getParent()).setVisibility(names.isEmpty() ? View.GONE : View.VISIBLE);
         for (String category : names) {
-            Button chip = button(category.isEmpty() ? getString(R.string.h_all_apps) : category, () -> {
-                selectedCategory = category;
+            Button chip = button(category, () -> {
+                selectedCategory = category.equals(selectedCategory) ? "" : category;
                 gridState = null;
                 if (cachedApps != null) renderApps(cachedApps);
                 refreshCategories();
@@ -980,21 +982,6 @@ public final class PersonalHomeActivity extends Activity {
             selectedCategory = which == 0 ? "" : names.get(which); gridState = null;
             refreshCategories(); if (cachedApps != null) renderApps(cachedApps);
         }).show();
-    }
-
-    private void showProfiles() {
-        LauncherPin.require(this, this::showProfilesUnlocked);
-    }
-
-    private void showProfilesUnlocked() {
-        HomeLibraryUi.profiles(this, () -> {
-            profileEpoch++;
-            focusedPkg = prefs.getString("home_focus_pkg", null); gridState = null; selectedCategory = "";
-            avatarBitmap = null; customWallpaper = null;
-            if (sky != null) handler.removeCallbacks(sky.crossfadeStep);
-            sky = null;
-            buildHome(); loadAvatar(); loadWallpaper();
-        }, this::editProfile);
     }
 
     private File profileAsset(String name) { return new File(getFilesDir(), new HomeLibraryStore(this).assetName(name)); }
@@ -1067,7 +1054,6 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
-        if (RemoteSetup.handle(this, event)) return true;
         if (event.getAction() == KeyEvent.ACTION_DOWN) playNavSound(event.getKeyCode());
         // Press effect: tile dips slightly the moment OK is pressed.
         if (event.getAction() == KeyEvent.ACTION_DOWN && carriedApp == null
@@ -1100,6 +1086,7 @@ public final class PersonalHomeActivity extends Activity {
             }
             return true;
         }
+        if (grid != null && grid.horizontalKey(event)) return true;
         return super.dispatchKeyEvent(event);
     }
 
@@ -1382,6 +1369,11 @@ public final class PersonalHomeActivity extends Activity {
         });
     }
 
+    private void showNotifications() {
+        if (panel != null && panel.isShowing()) panel.dismiss();
+        panel = HomeNotificationsUi.show(this);
+    }
+
     private void showSettings() {
         if (panel != null && panel.isShowing()) { panel.dismiss(); return; }
         LauncherPin.require(this, this::showSettingsUnlocked);
@@ -1396,12 +1388,13 @@ public final class PersonalHomeActivity extends Activity {
                 case HomeDashboard.SEARCH: searchApps(); break;
                 case HomeDashboard.STORE: openStore(""); break;
                 case HomeDashboard.SCREENSAVER: screensaverSettings(); break;
-                case HomeDashboard.PROFILES: showProfilesUnlocked(); break;
                 case HomeDashboard.CATEGORIES: chooseCategoryFilter(); break;
-                case HomeDashboard.WATCHLIST: HomeLibraryUi.watchlist(this); break;
                 case HomeDashboard.WIFI: openSetting(Settings.ACTION_WIFI_SETTINGS); break;
                 case HomeDashboard.BLUETOOTH: launch(SystemSettings.bluetoothAccessoriesIntent(this)); break;
                 case HomeDashboard.INPUTS: showInputs(); break;
+                case HomeDashboard.DISPLAY: openSetting(Settings.ACTION_DISPLAY_SETTINGS); break;
+                case HomeDashboard.SOUND: openSetting(Settings.ACTION_SOUND_SETTINGS); break;
+                case HomeDashboard.IDENTITY: editProfile(); break;
                 default: openSetting(Settings.ACTION_SETTINGS); break;
             }
         });

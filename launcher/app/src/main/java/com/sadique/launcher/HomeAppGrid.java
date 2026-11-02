@@ -75,6 +75,30 @@ final class HomeAppGrid<T> extends RecyclerView {
         }).dispatchUpdatesTo(adapter);
     }
 
+    /** Called by Home before framework geometric focus search can escape to the toolbar. */
+    boolean horizontalKey(android.view.KeyEvent event) {
+        int code = event.getKeyCode();
+        if (code != android.view.KeyEvent.KEYCODE_DPAD_LEFT && code != android.view.KeyEvent.KEYCODE_DPAD_RIGHT) {
+            if (event.getAction() == android.view.KeyEvent.ACTION_DOWN
+                    && (code == android.view.KeyEvent.KEYCODE_DPAD_UP || code == android.view.KeyEvent.KEYCODE_DPAD_DOWN)) pendingFocus = null;
+            return false;
+        }
+        int position = -1;
+        if (pendingFocus != null) for (int i = 0; i < items.size(); i++)
+            if (pendingFocus.equals(key.apply(items.get(i)))) { position = i; break; }
+        if (position < 0) {
+            View focused = findFocus();
+            View cell = focused == null ? null : findContainingItemView(focused);
+            if (cell != null) position = getChildAdapterPosition(cell);
+        }
+        if (position < 0 || position >= items.size()) return false; // Footer/header keep their own navigation.
+        if (event.getAction() == android.view.KeyEvent.ACTION_DOWN && !event.isCanceled()) {
+            int next = AppGridNavigation.horizontal(position, items.size(), code == android.view.KeyEvent.KEYCODE_DPAD_RIGHT);
+            if (next != position) focusKey(key.apply(items.get(next)));
+        }
+        return true;
+    }
+
     void rebind() { adapter.notifyItemRangeChanged(0, items.size()); }
     void focusKey(String pkg) {
         if (items.isEmpty()) { if (footer != null) footer.requestFocus(); return; }
