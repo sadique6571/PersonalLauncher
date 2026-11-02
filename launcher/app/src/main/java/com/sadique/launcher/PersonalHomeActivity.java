@@ -2208,7 +2208,7 @@ public final class PersonalHomeActivity extends Activity {
     private void handleHomeAction(Intent intent) {
         if (intent == null) return;
         if (MainActivity.ACTION_VIEW_INPUTS.equals(intent.getAction())) handler.post(() -> showInputs());
-        else if (MainActivity.ACTION_LAUNCHER_SETTINGS.equals(intent.getAction())) handler.post(() -> launcherSettings());
+        else if (MainActivity.ACTION_LAUNCHER_SETTINGS.equals(intent.getAction())) handler.post(() -> LauncherPin.require(this, this::launcherSettings));
         else if (MainActivity.ACTION_SHOW_SETTINGS.equals(intent.getAction())) handler.post(this::showSettings);
     }
 

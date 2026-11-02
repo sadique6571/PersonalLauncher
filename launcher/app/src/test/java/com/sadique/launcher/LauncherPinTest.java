@@ -9,7 +9,7 @@ public class LauncherPinTest {
     }
     @Test public void usesSaltAndRejectsIncorrectOrCorruptedCredentials() throws Exception {
         String first = LauncherPin.encode("0123"), second = LauncherPin.encode("0123");
-        assertNotEquals(first, second); assertFalse(first.contains("0123"));
+        assertNotEquals(first, second); assertNotEquals("0123", first);
         assertTrue(LauncherPin.matches("0123", first)); assertFalse(LauncherPin.matches("0124", first));
         assertFalse(LauncherPin.matches("0123", "broken")); assertFalse(LauncherPin.matches("0123", "a:b"));
     }

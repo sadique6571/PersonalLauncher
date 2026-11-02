@@ -18,6 +18,9 @@ public final class LauncherSleep extends BroadcastReceiver {
         return PendingIntent.getBroadcast(context, 741, new Intent(context, LauncherSleep.class),
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
+    static boolean due(long deadline, long now, int savedBoot, int currentBoot) {
+        return deadline > 0 && now >= deadline && currentBoot >= 0 && savedBoot == currentBoot;
+    }
     static long remaining(Context context) {
         android.content.SharedPreferences prefs = context.getSharedPreferences("launcher_sleep", 0);
         int boot = Settings.Global.getInt(context.getContentResolver(), Settings.Global.BOOT_COUNT, -1);
@@ -55,9 +58,8 @@ public final class LauncherSleep extends BroadcastReceiver {
     }
     @Override public void onReceive(Context context, Intent intent) {
         android.content.SharedPreferences prefs = context.getSharedPreferences("launcher_sleep", 0);
-        if (prefs.getLong("deadline", 0) == 0 || remaining(context) > 0) return;
         int boot = Settings.Global.getInt(context.getContentResolver(), Settings.Global.BOOT_COUNT, -1);
-        if (boot == -1 || prefs.getInt("boot", -2) != boot) { cancel(context); return; }
+        if (!due(prefs.getLong("deadline", 0), SystemClock.elapsedRealtime(), prefs.getInt("boot", -2), boot)) return;
         cancel(context);
         if (!HomeKeyService.requestSleep()) Toast.makeText(context, R.string.h_sleep_failed, Toast.LENGTH_LONG).show();
     }
