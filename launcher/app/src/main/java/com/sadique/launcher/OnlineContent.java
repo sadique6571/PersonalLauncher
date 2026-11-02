@@ -11,7 +11,7 @@ import javax.net.ssl.HttpsURLConnection;
 final class OnlineContent {
     private static boolean allowedHost(String host) {
         return host.equals("images.unsplash.com")
-                || host.equals("api.open-meteo.com") || host.equals("geocoding-api.open-meteo.com")
+                || host.equals("api.open-meteo.com") || host.equals("geocoding-api.open-meteo.com") || host.equals("wttr.in")
                 || host.equals("picsum.photos") || host.equals("fastly.picsum.photos")
                 || host.equals("www.bing.com");
     }

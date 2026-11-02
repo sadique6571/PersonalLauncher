@@ -109,7 +109,7 @@ public final class LandscapeView extends FrameLayout {
         weatherStatus = label(12); weatherStatus.setGravity(Gravity.START);
         conditions.addView(weatherStatus);
         LayoutParams weatherPosition = new LayoutParams(-1, -2, Gravity.BOTTOM | Gravity.START);
-        weatherPosition.setMargins(dp(24), 0, dp(24), dp(44));
+        weatherPosition.setMargins(dp(24), 0, dp(24), dp(88));
         addView(conditions, weatherPosition);
         status = label(12);
         status.setText("Connecting to online landscapes…");
@@ -118,10 +118,10 @@ public final class LandscapeView extends FrameLayout {
         addView(status, statusPosition);
         // Wallpaper details caption at the bottom (user 2026-11-01).
         details = label(13);
-        details.setGravity(Gravity.START); details.setMaxLines(2);
-        details.setPadding(0, dp(8), 0, 0);
-        // Keep the photo credit in the same stack so it cannot overlap the weather.
-        conditions.addView(details);
+        details.setGravity(Gravity.CENTER); details.setMaxLines(2);
+        LayoutParams detailsPosition = new LayoutParams(-1, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        detailsPosition.setMargins(dp(24), 0, dp(24), dp(40));
+        addView(details, detailsPosition);
     }
 
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
@@ -303,7 +303,7 @@ public final class LandscapeView extends FrameLayout {
             try {
                 double lat = Double.parseDouble(prefs.getString("weather_lat", Double.toString(LandscapeModel.LATITUDE)));
                 double lon = Double.parseDouble(prefs.getString("weather_lon", Double.toString(LandscapeModel.LONGITUDE)));
-                result = LandscapeModel.parseWeather(OnlineContent.json(LandscapeModel.weatherUrl(lat, lon, fahrenheit)), fahrenheit);
+                result = WeatherClient.fetch(lat, lon, fahrenheit);
             } catch (Exception unavailable) {
                 android.util.Log.w("PersonalWeather", "Screensaver weather refresh failed", unavailable);
             }

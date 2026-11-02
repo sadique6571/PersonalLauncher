@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="passive_home_name">Personal Launcher Home (native volume)</string>
+    <string name="passive_home_description">Returns from stock Home without filtering remote keys. Uses the TV volume panel; custom remote key mappings are unavailable in this mode.</string>
     <string name="h_dashboard">Settings</string>
     <string name="h_edit_profile">Edit current profile</string>
     <string name="h_no_category">No category</string>
