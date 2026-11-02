@@ -719,14 +719,16 @@ public final class PersonalHomeActivity extends Activity {
     private void refreshHomeWeather() {
         if (homeWeather == null) return;
         // Show cached value immediately.
-        String cached = prefs.getString("weather_cached", null);
+        String cached = weatherCacheKey().equals(prefs.getString("weather_cache_key", ""))
+                ? prefs.getString("weather_cached", null) : null;
         long cachedAt = prefs.getLong("weather_cached_at", 0);
         String cacheKey = weatherCacheKey();
         boolean cacheValid = cached != null
                 && System.currentTimeMillis() - cachedAt < WEATHER_CACHE_MS
                 && cacheKey.equals(prefs.getString("weather_cache_key", ""));
         if (cacheValid) {
-            homeWeather.setText(cached);
+            homeWeather.setText(weatherLabel(cached, cachedAt));
+            homeWeather.setAlpha(1f);
             homeWeather.setVisibility(View.VISIBLE);
             // Schedule next refresh for when the cache expires.
             handler.removeCallbacks(weatherRefresh);
@@ -736,7 +738,7 @@ public final class PersonalHomeActivity extends Activity {
         }
         // Show stale cache while fetching (with reduced opacity to indicate staleness).
         if (cached != null) {
-            homeWeather.setText(cached);
+            homeWeather.setText(weatherLabel(cached, cachedAt));
             homeWeather.setAlpha(0.6f);
             homeWeather.setVisibility(View.VISIBLE);
         }
@@ -746,7 +748,7 @@ public final class PersonalHomeActivity extends Activity {
                 boolean fahrenheit = prefs.getBoolean("weather_fahrenheit", false);
                 double lat = Double.parseDouble(prefs.getString("weather_lat", Double.toString(LandscapeModel.LATITUDE)));
                 double lon = Double.parseDouble(prefs.getString("weather_lon", Double.toString(LandscapeModel.LONGITUDE)));
-                value = LandscapeModel.parseWeather(OnlineContent.json(LandscapeModel.weatherUrl(lat, lon, fahrenheit)), fahrenheit);
+                value = WeatherClient.fetch(lat, lon, fahrenheit);
             } catch (Exception unavailable) {
                 value = null;
             }
@@ -760,7 +762,7 @@ public final class PersonalHomeActivity extends Activity {
                             .putLong("weather_cached_at", System.currentTimeMillis())
                             .putString("weather_cache_key", weatherCacheKey())
                             .apply();
-                    homeWeather.setText(text);
+                    homeWeather.setText(weatherLabel(text, System.currentTimeMillis()));
                     homeWeather.setAlpha(1f);
                     homeWeather.setVisibility(View.VISIBLE);
                 } else if (cached == null) {
@@ -769,7 +771,7 @@ public final class PersonalHomeActivity extends Activity {
                 }
                 // If fetch failed but we have stale cache, keep showing it (dimmed).
                 handler.removeCallbacks(weatherRefresh);
-                handler.postDelayed(weatherRefresh, WEATHER_CACHE_MS);
+                handler.postDelayed(weatherRefresh, text == null ? 60_000L : WEATHER_CACHE_MS);
             });
         });
     }
@@ -779,6 +781,12 @@ public final class PersonalHomeActivity extends Activity {
         return prefs.getString("weather_lat", "") + ","
                 + prefs.getString("weather_lon", "") + ","
                 + prefs.getBoolean("weather_fahrenheit", false);
+    }
+
+    private String weatherLabel(String value, long fetchedAt) {
+        if (fetchedAt <= 0) return value;
+        return value + " · updated " + new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                .format(new java.util.Date(fetchedAt));
     }
 
     private final Runnable weatherRefresh = this::refreshHomeWeather;
@@ -1049,7 +1057,8 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
-        if (VolumeKeys.control(this, event)) return true;
+        if (VolumeKeys.direction(event.getKeyCode()) != 0
+                && !PassiveHomeService.enabled(this) && VolumeKeys.control(this, event)) return true;
         if (event.getAction() == KeyEvent.ACTION_DOWN) playNavSound(event.getKeyCode());
         // Press effect: tile dips slightly the moment OK is pressed.
         if (event.getAction() == KeyEvent.ACTION_DOWN && carriedApp == null
