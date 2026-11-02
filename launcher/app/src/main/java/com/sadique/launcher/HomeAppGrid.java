@@ -123,6 +123,18 @@ final class HomeAppGrid<T> extends RecyclerView {
                 T item = items.get(position);
                 frame.setTag(key.apply(item));
                 View tile = factory.create(item, cellWidth);
+                frame.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+                tile.setAccessibilityDelegate(new View.AccessibilityDelegate() {
+                    @Override public void onInitializeAccessibilityNodeInfo(View host, android.view.accessibility.AccessibilityNodeInfo info) {
+                        super.onInitializeAccessibilityNodeInfo(host, info);
+                        int current = cell.getBindingAdapterPosition();
+                        if (current != RecyclerView.NO_POSITION) {
+                            int columns = manager.getSpanCount();
+                            info.setCollectionItemInfo(android.view.accessibility.AccessibilityNodeInfo.CollectionItemInfo.obtain(
+                                    current / columns, 1, current % columns, 1, false));
+                        }
+                    }
+                });
                 frame.addView(tile, tile.getLayoutParams());
             }
         }

@@ -167,3 +167,28 @@ Install an update over the existing package; do not uninstall or clear data. The
 persistent release signing setup, Home alias, Home key service and Settings key mappings are
 preserved. Physical Haier D-pad/scrolling, return-from-app, profile switching and media/provider
 access checks are still required; CI cannot establish those device behaviours.
+
+### Optional launcher tools (5.1)
+
+The Home dashboard includes **Remote buttons**, **Apps-only mode**, **Startup diagnostics**,
+**Launcher PIN**, and **Sleep timer**. They are local tools; no Google code/assets were copied.
+
+- Remote buttons learns Android keycodes, not shared Linux scan codes. It saves local overrides
+  separately from theme JSON, preserves Home/navigation/power/digits, and supports restoring each
+  original mapping. Outside Home it needs an enabled accessibility key service with key filtering.
+  Keys consumed by firmware cannot be learned. The settings key (83) and dot key (76) remain distinct.
+- Apps-only hides the clock and the Continue Watching shelf. Categories, the app grid, and the top
+  controls remain available. It is off by default and does not delete saved titles or profiles.
+- Diagnostics displays the current HOME resolver, redirect/service state, uptime and up to 32 timing
+  events retained by this process. It does not read logcat, send data, or collect device identifiers.
+- The optional 4–8 digit PIN gates the dashboard and profile chooser, including their settings/profile
+  editing actions. It is a launcher UI gate, not Android security or a streaming-app parental lock.
+  A salted PBKDF2 hash is computed on a worker; five failed attempts impose a 30-second cooldown.
+  Clearing launcher data removes the PIN. It is not included in profile/theme exports.
+- Sleep timer requests standby through the already-bound Home key accessibility service. Android may
+  delay its inexact alarm; unsupported firmware can refuse standby. Cancel is available in the timer
+  panel. No extra permission, polling or permanent service is added, and reboot clears the alarm.
+- App tiles expose collection row/column information to accessibility services. The section heading
+  reads “Your apps”; “All apps” appears only in the category filter.
+
+Physical TV testing remains required for key capture, TalkBack, focus movement and standby.

@@ -11,7 +11,7 @@ final class HomeDashboard {
             WATCHLIST=6, WIFI=7, BLUETOOTH=8, INPUTS=9, SYSTEM=10;
     interface Actions { void open(int action); }
     private HomeDashboard() { }
-    static AlertDialog show(Activity host, String network, Actions actions) {
+    static AlertDialog show(Activity host, String network, Runnable rebuild, Actions actions) {
         LinearLayout rows = HomeLibraryUi.rows(host);
         AlertDialog panel = GlassSettings.panel(host, host.getString(R.string.h_dashboard), rows);
         String name = host.getSharedPreferences("personal_home", 0).getString("name", "Personal");
@@ -32,6 +32,15 @@ final class HomeDashboard {
         row(host, rows, R.string.h_notifications, R.string.h_optional_access, R.drawable.ic_notifications, () -> { panel.dismiss(); HomeMediaUi.notifications(host); });
         row(host, rows, R.string.h_live_guide, R.string.h_guide_hint, R.drawable.ic_live_guide, () -> { panel.dismiss(); HomeLiveGuide.show(host); });
         section(host, rows, R.string.h_device);
+        row(host, rows, R.string.h_remote_setup, R.string.h_remote_setup_hint, R.drawable.ic_settings, () -> { panel.dismiss(); RemoteSetup.show(host); });
+        boolean appsOnly = host.getSharedPreferences("personal_home", 0).getBoolean("apps_only", false);
+        rows.addView(GlassSettings.row(host, host.getString(R.string.h_apps_only), host.getString(appsOnly ? R.string.h_on : R.string.h_off), R.drawable.ic_apps, GlassSettings.themeAccent(host), () -> {
+            host.getSharedPreferences("personal_home", 0).edit().putBoolean("apps_only", !appsOnly).apply();
+            panel.dismiss(); rebuild.run();
+        }));
+        row(host, rows, R.string.h_diagnostics, R.string.h_diagnostics_hint, R.drawable.ic_settings, () -> { panel.dismiss(); LauncherDiagnostics.show(host); });
+        row(host, rows, R.string.h_local_pin, R.string.h_local_pin_hint, R.drawable.ic_person, () -> { panel.dismiss(); LauncherPin.settings(host); });
+        row(host, rows, R.string.h_sleep_timer, R.string.h_sleep_timer_hint, R.drawable.ic_media_pause, () -> { panel.dismiss(); LauncherSleep.show(host); });
         Runnable release = QuickControls.attach(host, rows);
         row(host, rows, R.string.h_wifi, R.string.h_network_hint, R.drawable.ic_wifi, () -> { panel.dismiss(); actions.open(WIFI); });
         row(host, rows, R.string.h_bluetooth, R.string.h_accessories_hint, android.R.drawable.stat_sys_data_bluetooth, () -> { panel.dismiss(); actions.open(BLUETOOTH); });
