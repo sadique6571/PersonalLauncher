@@ -131,8 +131,8 @@ Home has one editable name/photo and a notification bell next to Search. Local p
 watchlists, Now Playing, Live Guide and remote-button learning have been removed. Existing name,
 layout and current avatar/wallpaper paths are preserved on update. Saved legacy profile data is not
 used to switch identities and is not deleted. Continue Watching still opens shared streaming entries,
-with no watchlist-save long press. The category bar has no “All apps” button; select a category again
-to reset it, or use Reset filter in Categories. The strip is hidden when no categories exist.
+with no watchlist-save long press. There is no category strip or “All apps” button on Home; use Categories in Settings to filter,
+and Reset filter there to restore the full app grid.
 
 The bell lists notification alerts only and updates while open. Foreground-service, ongoing,
 non-clearable, group-summary, playback and active-progress status entries are excluded. Finished,
@@ -159,5 +159,6 @@ covers a lost release. The explicit consume_volume_keys compatibility mode remai
 
 Horizontal app navigation follows visible app order across row boundaries: Right enters the next row,
 Left enters the preceding row, and the first/last item stops in place. Pending off-screen focus is
-tracked during held-key repeats so geometric focus search cannot jump into the header. Up/Down and
-Continue Watching retain their own navigation.
+tracked during held-key repeats so geometric focus search cannot jump into the header. Up/Down follow columns; Up from the first row goes directly to Search. Only Search, the bell and
+Settings are in the toolbar focus path, and Down returns to apps. Decorative header elements cannot
+receive focus. Continue Watching is entered deliberately with Down from the bottom app row.

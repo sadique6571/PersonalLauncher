@@ -23,6 +23,9 @@ final class HomeAppGrid<T> extends RecyclerView {
     private View footer;
     private String pendingFocus;
     private int cellWidth;
+    private Runnable upFromApps;
+    void setUpFromApps(Runnable action) { upFromApps = action; }
+    void cancelPendingFocus() { pendingFocus = null; }
 
     HomeAppGrid(Context context, Function<T, String> key, Factory<T> factory) {
         super(context);
@@ -75,14 +78,12 @@ final class HomeAppGrid<T> extends RecyclerView {
         }).dispatchUpdatesTo(adapter);
     }
 
-    /** Called by Home before framework geometric focus search can escape to the toolbar. */
-    boolean horizontalKey(android.view.KeyEvent event) {
+    /** Deterministic row/column navigation before framework geometric focus search. */
+    boolean navigateKey(android.view.KeyEvent event) {
         int code = event.getKeyCode();
-        if (code != android.view.KeyEvent.KEYCODE_DPAD_LEFT && code != android.view.KeyEvent.KEYCODE_DPAD_RIGHT) {
-            if (event.getAction() == android.view.KeyEvent.ACTION_DOWN
-                    && (code == android.view.KeyEvent.KEYCODE_DPAD_UP || code == android.view.KeyEvent.KEYCODE_DPAD_DOWN)) pendingFocus = null;
-            return false;
-        }
+        boolean horizontal = code == android.view.KeyEvent.KEYCODE_DPAD_LEFT || code == android.view.KeyEvent.KEYCODE_DPAD_RIGHT;
+        boolean vertical = code == android.view.KeyEvent.KEYCODE_DPAD_UP || code == android.view.KeyEvent.KEYCODE_DPAD_DOWN;
+        if (!horizontal && !vertical) return false;
         int position = -1;
         if (pendingFocus != null) for (int i = 0; i < items.size(); i++)
             if (pendingFocus.equals(key.apply(items.get(i)))) { position = i; break; }
@@ -91,10 +92,21 @@ final class HomeAppGrid<T> extends RecyclerView {
             View cell = focused == null ? null : findContainingItemView(focused);
             if (cell != null) position = getChildAdapterPosition(cell);
         }
-        if (position < 0 || position >= items.size()) return false; // Footer/header keep their own navigation.
-        if (event.getAction() == android.view.KeyEvent.ACTION_DOWN && !event.isCanceled()) {
-            int next = AppGridNavigation.horizontal(position, items.size(), code == android.view.KeyEvent.KEYCODE_DPAD_RIGHT);
-            if (next != position) focusKey(key.apply(items.get(next)));
+        if (position == items.size() && footer != null && vertical) {
+            if (event.getAction() == android.view.KeyEvent.ACTION_DOWN && code == android.view.KeyEvent.KEYCODE_DPAD_UP && !items.isEmpty())
+                focusKey(key.apply(items.get(items.size() - 1)));
+            return true;
+        }
+        if (position < 0 || position >= items.size()) return false;
+        if (event.getAction() != android.view.KeyEvent.ACTION_DOWN || event.isCanceled()) return true;
+        int next = horizontal ? AppGridNavigation.horizontal(position, items.size(), code == android.view.KeyEvent.KEYCODE_DPAD_RIGHT)
+                : AppGridNavigation.vertical(position, items.size(), manager.getSpanCount(), code == android.view.KeyEvent.KEYCODE_DPAD_DOWN);
+        if (next < 0) {
+            pendingFocus = null;
+            if (upFromApps != null) upFromApps.run();
+        } else if (next != position) focusKey(key.apply(items.get(next)));
+        else if (code == android.view.KeyEvent.KEYCODE_DPAD_DOWN && footer != null && footer.isShown() && footer.hasFocusable()) {
+            pendingFocus = null; footer.requestFocus();
         }
         return true;
     }

@@ -2,6 +2,15 @@ package com.sadique.launcher;
 import org.junit.Test;
 import static org.junit.Assert.*;
 public class AppGridNavigationTest {
+    @Test public void upReachesToolbarOnlyFromFirstRowAndDownStaysInPartialLastRow() {
+        assertEquals(-1, AppGridNavigation.vertical(3, 10, 4, false));
+        assertEquals(0, AppGridNavigation.vertical(4, 10, 4, false));
+        assertEquals(3, AppGridNavigation.vertical(7, 10, 4, false));
+        assertEquals(9, AppGridNavigation.vertical(7, 10, 4, true));
+        assertEquals(8, AppGridNavigation.vertical(8, 10, 4, true));
+        assertEquals(9, AppGridNavigation.vertical(9, 10, 4, true));
+        assertEquals(-1, AppGridNavigation.vertical(0, 0, 4, false));
+    }
     @Test public void horizontalTravelCrossesRowsInBothDirections() {
         assertEquals(4, AppGridNavigation.horizontal(3, 10, true));
         assertEquals(3, AppGridNavigation.horizontal(4, 10, false));

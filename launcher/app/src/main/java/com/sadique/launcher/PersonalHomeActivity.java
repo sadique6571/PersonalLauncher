@@ -65,7 +65,7 @@ public final class PersonalHomeActivity extends Activity {
     private final ExecutorService appWorker = Executors.newSingleThreadExecutor();
     private SharedPreferences prefs;
     private LinearLayout page, header, actions, clockLayout, appBody;    private HomeAppGrid<App> grid;
-    private LinearLayout categoryTabs;
+    private android.widget.ImageButton searchButton;
     private String selectedCategory = "";
     private android.os.Parcelable gridState;
     private int profileEpoch;
@@ -284,7 +284,7 @@ public final class PersonalHomeActivity extends Activity {
         return view;
     }
 
-    private void iconAction(String title, int resource, Runnable action) {
+    private android.widget.ImageButton iconAction(String title, int resource, Runnable action) {
         android.widget.ImageButton icon = new android.widget.ImageButton(this);
         icon.setImageResource(resource);
         icon.setColorFilter(TEXT);
@@ -296,9 +296,32 @@ public final class PersonalHomeActivity extends Activity {
         icon.setFocusable(true);
         icon.setOnFocusChangeListener((v, focus) -> v.setBackground(surface(focus)));
         icon.setOnClickListener(v -> action.run());
+        icon.setOnKeyListener((v, code, event) -> toolbarKey(v, event));
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(tv ? 48 : 44), dp(tv ? 48 : 44));
         p.setMargins(dp(2), 0, dp(2), 0);
         actions.addView(icon, p);
+        return icon;
+    }
+
+    private boolean toolbarKey(View focused, KeyEvent event) {
+        int code = event.getKeyCode();
+        if (code != KeyEvent.KEYCODE_DPAD_LEFT && code != KeyEvent.KEYCODE_DPAD_RIGHT
+                && code != KeyEvent.KEYCODE_DPAD_UP && code != KeyEvent.KEYCODE_DPAD_DOWN) return false;
+        if (event.getAction() != KeyEvent.ACTION_DOWN || event.isCanceled()) return true;
+        if (code == KeyEvent.KEYCODE_DPAD_DOWN) {
+            if (grid != null) grid.focusKey(focusedPkg);
+        } else if (code != KeyEvent.KEYCODE_DPAD_UP) {
+            java.util.List<View> buttons = new java.util.ArrayList<>();
+            for (int i = 0; i < actions.getChildCount(); i++)
+                if (actions.getChildAt(i) instanceof android.widget.ImageButton) buttons.add(actions.getChildAt(i));
+            int index = buttons.indexOf(focused);
+            if (index >= 0) {
+                int next = Math.max(0, Math.min(buttons.size() - 1, index + (code == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1)));
+                if (grid != null) grid.cancelPendingFocus();
+                buttons.get(next).requestFocus();
+            }
+        }
+        return true;
     }
 
     private void buildHome() {
@@ -358,7 +381,7 @@ public final class PersonalHomeActivity extends Activity {
         avatar.setScaleType(ImageView.ScaleType.CENTER_CROP);
         avatar.setBackground(avatarSurface(false));
         avatar.setClipToOutline(true);
-        avatar.setFocusable(true);
+        avatar.setFocusable(false);
         avatar.setOnClickListener(v -> LauncherPin.require(this, this::editProfile));
         avatar.setOnFocusChangeListener((v, focus) -> v.setBackground(avatarSurface(focus)));
         header.addView(avatar, new LinearLayout.LayoutParams(dp(48), dp(48)));
@@ -378,7 +401,7 @@ public final class PersonalHomeActivity extends Activity {
         networkStatus = text("", 13, MUTED);
         networkStatus.setGravity(Gravity.CENTER_VERTICAL | Gravity.CENTER);
         networkStatus.setCompoundDrawablePadding(dp(5));
-        networkStatus.setFocusable(true);
+        networkStatus.setFocusable(false);
         networkStatus.setOnFocusChangeListener((v, focus) -> {
             if (focus) v.setBackground(surface(true));
             else v.setBackgroundColor(Color.TRANSPARENT);
@@ -393,7 +416,7 @@ public final class PersonalHomeActivity extends Activity {
         homeWeather.setGravity(Gravity.CENTER);
         homeWeather.setPadding(dp(10), dp(8), dp(10), dp(8));
         actions.addView(homeWeather, 0, new LinearLayout.LayoutParams(-2, dp(44)));
-        iconAction(getString(R.string.h_search), R.drawable.ic_search, this::searchApps);
+        searchButton = iconAction(getString(R.string.h_search), R.drawable.ic_search, this::searchApps);
         iconAction(getString(R.string.h_notifications), R.drawable.ic_notifications, this::showNotifications);
         iconAction("Settings", R.drawable.ic_settings, this::showSettings);
         if (tv) {
@@ -479,6 +502,7 @@ public final class PersonalHomeActivity extends Activity {
         appHeading.setPadding(dp(4), dp(8), 0, dp(12));
         grid = new HomeAppGrid<>(this, app -> app.info.activityInfo.packageName,
                 (app, width) -> createAppTile(app, width, carriedApp != null && app.info.activityInfo.packageName.equals(carriedApp.info.activityInfo.packageName)));
+        grid.setUpFromApps(() -> { if (searchButton != null) searchButton.requestFocus(); });
         grid.setClipChildren(false);
         grid.setClipToPadding(false);
         appBody = new LinearLayout(this);
@@ -513,13 +537,6 @@ public final class PersonalHomeActivity extends Activity {
         scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
         page.addView(scroll, new LinearLayout.LayoutParams(-1, -2));
         page.addView(appHeading);
-        TvHorizontalShelf categoryScroll = new TvHorizontalShelf(this);
-        categoryScroll.setHorizontalScrollBarEnabled(false);
-        categoryTabs = new LinearLayout(this);
-        categoryTabs.setPadding(0, 0, 0, dp(5));
-        categoryScroll.addView(categoryTabs);
-        page.addView(categoryScroll, new LinearLayout.LayoutParams(-1, -2));
-        refreshCategories();
         page.addView(appBody, new LinearLayout.LayoutParams(-1, 0, 1));
         // Focus-glow tracker: keep the wallpaper glow on the focused tile no matter
         // which scroller moved.
@@ -954,33 +971,11 @@ public final class PersonalHomeActivity extends Activity {
         if (searchRefresh != null) searchRefresh.run();
     }
 
-    private void refreshCategories() {
-        if (categoryTabs == null) return;
-        categoryTabs.removeAllViews();
-        List<String> names = new HomeLibraryStore(this).categories();
-        ((View) categoryTabs.getParent()).setVisibility(names.isEmpty() ? View.GONE : View.VISIBLE);
-        for (String category : names) {
-            Button chip = button(category, () -> {
-                selectedCategory = category.equals(selectedCategory) ? "" : category;
-                gridState = null;
-                if (cachedApps != null) renderApps(cachedApps);
-                refreshCategories();
-                int selected = names.indexOf(category);
-                categoryTabs.post(() -> { if (selected >= 0 && selected < categoryTabs.getChildCount()) categoryTabs.getChildAt(selected).requestFocus(); });
-            });
-            chip.setTextSize(12); chip.setPadding(dp(12), dp(3), dp(12), dp(3));
-            chip.setMinimumHeight(dp(36)); chip.setMinHeight(dp(36));
-            chip.setBackground(surface(category.equals(selectedCategory)));
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-2, dp(40)); params.setMargins(dp(3), 0, dp(3), 0);
-            categoryTabs.addView(chip, params);
-        }
-    }
-
     private void chooseCategoryFilter() {
         List<String> names = new HomeLibraryStore(this).categories(); names.add(0, getString(R.string.h_all_apps));
         new AlertDialog.Builder(this).setTitle(R.string.h_categories).setItems(names.toArray(new String[0]), (dialog, which) -> {
             selectedCategory = which == 0 ? "" : names.get(which); gridState = null;
-            refreshCategories(); if (cachedApps != null) renderApps(cachedApps);
+            if (cachedApps != null) renderApps(cachedApps);
         }).show();
     }
 
@@ -994,7 +989,7 @@ public final class PersonalHomeActivity extends Activity {
         visible.removeIf(a -> hidden.contains(a.info.activityInfo.packageName));
         moveOrder = new ArrayList<>();
         for (App a : visible) moveOrder.add(a.info.activityInfo.packageName);
-        selectedCategory = ""; refreshCategories();
+        selectedCategory = "";
         carriedApp = app;
         renderMoveGrid();
         Toast.makeText(this, "Arrows move · OK places · Back cancels", Toast.LENGTH_LONG).show();
@@ -1086,7 +1081,7 @@ public final class PersonalHomeActivity extends Activity {
             }
             return true;
         }
-        if (grid != null && grid.horizontalKey(event)) return true;
+        if (grid != null && grid.navigateKey(event)) return true;
         return super.dispatchKeyEvent(event);
     }
 
@@ -1162,7 +1157,7 @@ public final class PersonalHomeActivity extends Activity {
             new AlertDialog.Builder(this).setTitle(app.name).setItems(new String[]{"App info", "Hide from launcher", "Move app", getString(R.string.h_category)}, (dialog, which) -> {
                 if (which == 0) launch(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + app.info.activityInfo.packageName)));
                 else if (which == 2) startMoveMode(app);
-                else if (which == 3) HomeLibraryUi.category(this, app.info.activityInfo.packageName, () -> { refreshCategories(); if (cachedApps != null) renderApps(cachedApps); });
+                else if (which == 3) HomeLibraryUi.category(this, app.info.activityInfo.packageName, () -> { if (cachedApps != null) renderApps(cachedApps); });
                 else {
                     Set<String> hidden = new HashSet<>(prefs.getStringSet("hidden_apps", Collections.emptySet()));
                     hidden.add(app.info.activityInfo.packageName);
