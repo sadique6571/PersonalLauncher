@@ -3,6 +3,9 @@ package com.sadique.launcher;
 import android.accessibilityservice.AccessibilityService;
 import android.app.Activity;
 import android.content.Context;
+import android.content.BroadcastReceiver;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
@@ -10,6 +13,8 @@ import android.graphics.drawable.GradientDrawable;
 import android.media.AudioManager;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Build;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.WindowManager;
 import android.widget.ImageView;
@@ -26,9 +31,53 @@ final class VolumeSlider {
     private static SeekBar slider;
     private static TextView level;
     private static final Runnable HIDE = VolumeSlider::hide;
+    private static final java.util.Set<AccessibilityService> SERVICES = new java.util.LinkedHashSet<>();
+    private static AccessibilityService observerOwner;
+    private static BroadcastReceiver receiver;
     private VolumeSlider() { }
 
+    /** Firmware can apply a volume key without delivering it to the key filter. Observe the actual
+     * stream change as well; both enabled helpers share one receiver and one window. */
+    static void observe(AccessibilityService service) {
+        SERVICES.add(service);
+        if (receiver != null) return;
+        AudioManager audio = service.getSystemService(AudioManager.class);
+        if (audio == null) return;
+        int[] previous = {audio.getStreamVolume(AudioManager.STREAM_MUSIC)};
+        BroadcastReceiver changes = new BroadcastReceiver() {
+            @Override public void onReceive(Context context, Intent intent) {
+                if (!"android.media.VOLUME_CHANGED_ACTION".equals(intent.getAction())) return;
+                int value = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+                if (value == previous[0]) return;
+                previous[0] = value;
+                Log.d("PersonalVolume", "stream changed: " + value);
+                show(service, audio);
+            }
+        };
+        try {
+            IntentFilter filter = new IntentFilter("android.media.VOLUME_CHANGED_ACTION");
+            // Read AudioManager, not broadcast extras. Privileged vendor audio processes may be senders.
+            if (Build.VERSION.SDK_INT >= 33) service.registerReceiver(changes, filter, Context.RECEIVER_EXPORTED);
+            else service.registerReceiver(changes, filter);
+            observerOwner = service; receiver = changes;
+            Log.d("PersonalVolume", "volume observer connected: " + service.getClass().getSimpleName());
+        } catch (RuntimeException unavailable) {
+            Log.w("PersonalVolume", "Volume observer unavailable", unavailable);
+        }
+    }
+
+    static void release(AccessibilityService service) {
+        SERVICES.remove(service);
+        hide(service);
+        if (observerOwner != service) return;
+        try { service.unregisterReceiver(receiver); }
+        catch (RuntimeException detached) { /* Android may already have removed the service. */ }
+        observerOwner = null; receiver = null;
+        if (!SERVICES.isEmpty()) observe(SERVICES.iterator().next());
+    }
+
     static boolean show(Context context, AudioManager audio) {
+        if (observerOwner != null) context = observerOwner;
         if (!(context instanceof AccessibilityService) && !(context instanceof Activity)) return false;
         try {
             if (owner != context) hide();
@@ -71,7 +120,10 @@ final class VolumeSlider {
                 window.addView(panel, position);
             }
             update(audio); scheduleHide(); return true;
-        } catch (RuntimeException unavailable) { hide(); return false; }
+        } catch (RuntimeException unavailable) {
+            Log.w("PersonalVolume", "Volume slider window unavailable", unavailable);
+            hide(); return false;
+        }
     }
     private static void update(AudioManager audio) {
         int max = Math.max(1, audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC));

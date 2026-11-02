@@ -183,7 +183,7 @@ public class HomeKeyService extends AccessibilityService {
         }
         if (gamepads != null) gamepads.stop();
         if (consumeVolumeKeys || volumeKeyFilter) VolumeKeys.stop();
-        VolumeSlider.hide(this);
+        VolumeSlider.release(this);
         super.onDestroy();
     }
 
@@ -226,6 +226,8 @@ public class HomeKeyService extends AccessibilityService {
         settingsKeycodes = config.settingsKeycodes;
         consumeVolumeKeys = config.consumeVolumeKeys;
         volumeKeyFilter = config.keyFilter;
+        VolumeSlider.observe(this);
+        android.util.Log.d("PersonalVolume", "HomeKeyService keyFilter=" + volumeKeyFilter + " compatibility=" + consumeVolumeKeys);
         appKeys = RemoteKeys.parseAppKeys(config.appKeys);
         appScancodes = RemoteKeys.parseAppScancodes(config.appKeys);
         RemoteKeys.applyKeyFilter(this, config.keyFilter);

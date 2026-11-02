@@ -29,9 +29,11 @@ public final class LandscapeView extends FrameLayout {
     private final SharedPreferences prefs;
     private final ConnectivityManager connectivity;
     private final ImageView photo;
-    private final TextView clock, date, wifi, weather, city, status, details;
+    private final TextView clock, date, wifi, weather, city, status, details, weatherStatus;
     private ExecutorService worker;
-    private boolean running, registered, photoBusy, weatherBusy, hasPhoto;
+    private ExecutorService weatherWorker;
+    private boolean running, registered, photoBusy, weatherBusy, hasPhoto, networkOnline;
+    private String lastWeather;
     private int displayedPhoto = -1;
     private int generation, photoIndex = (int) (System.currentTimeMillis() / 60_000);
 
@@ -58,7 +60,6 @@ public final class LandscapeView extends FrameLayout {
         @Override public void run() {
             if (!running) return;
             requestWeather();
-            handler.postDelayed(this, 15 * 60_000L);
         }
     };
 
@@ -105,6 +106,8 @@ public final class LandscapeView extends FrameLayout {
         weather.setText("Loading weather…");
         conditions.addView(city);
         conditions.addView(weather);
+        weatherStatus = label(12); weatherStatus.setGravity(Gravity.START);
+        conditions.addView(weatherStatus);
         LayoutParams weatherPosition = new LayoutParams(-1, -2, Gravity.BOTTOM | Gravity.START);
         weatherPosition.setMargins(dp(24), 0, dp(24), dp(44));
         addView(conditions, weatherPosition);
@@ -137,6 +140,8 @@ public final class LandscapeView extends FrameLayout {
         generation++;
         photoBusy = weatherBusy = false;
         worker = Executors.newFixedThreadPool(2);
+        weatherWorker = Executors.newSingleThreadExecutor();
+        networkOnline = false;
         city.setText(prefs.getString("weather_city", LandscapeModel.CITY));
         if (connectivity != null) {
             try { connectivity.registerDefaultNetworkCallback(networkCallback); registered = true; }
@@ -154,6 +159,7 @@ public final class LandscapeView extends FrameLayout {
             registered = false;
         }
         if (worker != null) worker.shutdownNow();
+        if (weatherWorker != null) weatherWorker.shutdownNow();
         photo.setImageDrawable(null);
         hasPhoto = false;
     }
@@ -181,14 +187,20 @@ public final class LandscapeView extends FrameLayout {
         if (!connected) {
             photo.setImageDrawable(null); hasPhoto = false;
             status.setText("Offline · landscapes need internet");
-            weather.setText("Weather unavailable · no internet");
+            if (lastWeather == null) weather.setText("Weather unavailable · no internet");
+            weatherStatus.setText("Offline · waiting to refresh");
         }
     }
 
     private void networkChanged() {
         if (!running) return;
         updateNetwork();
-        if (online() && !hasPhoto) { requestPhoto(); requestWeather(); }
+        boolean connected = online();
+        boolean recovered = connected && !networkOnline;
+        networkOnline = connected;
+        if (connected && !hasPhoto) requestPhoto();
+        // Weather recovery must not depend on whether a landscape has already loaded.
+        if (recovered) requestWeather();
     }
     private void updateClock() {
         Calendar now = Calendar.getInstance();
@@ -269,22 +281,39 @@ public final class LandscapeView extends FrameLayout {
     }
 
     private void requestWeather() {
-        if (!running || weatherBusy || !online()) return;
+        if (!running || weatherBusy) return;
+        handler.removeCallbacks(weatherTick);
+        if (!online()) { handler.postDelayed(weatherTick, 60_000L); return; }
         weatherBusy = true;
+        weatherStatus.setText("Updating weather…");
+        city.setText(prefs.getString("weather_city", LandscapeModel.CITY));
         int request = generation;
         boolean fahrenheit = prefs.getBoolean("weather_fahrenheit", false);
-        worker.execute(() -> {
-            String result;
+        // Photo downloads cannot delay weather refreshes on a slow connection.
+        weatherWorker.execute(() -> {
+            String result = null;
             try {
                 double lat = Double.parseDouble(prefs.getString("weather_lat", Double.toString(LandscapeModel.LATITUDE)));
                 double lon = Double.parseDouble(prefs.getString("weather_lon", Double.toString(LandscapeModel.LONGITUDE)));
                 result = LandscapeModel.parseWeather(OnlineContent.json(LandscapeModel.weatherUrl(lat, lon, fahrenheit)), fahrenheit);
-            } catch (Exception unavailable) { result = "Weather unavailable · retrying later"; }
+            } catch (Exception unavailable) {
+                android.util.Log.w("PersonalWeather", "Screensaver weather refresh failed", unavailable);
+            }
             String value = result;
             handler.post(() -> {
                 if (!running || request != generation) return;
                 weatherBusy = false;
-                if (online()) weather.setText(value);
+                boolean success = value != null && online();
+                if (success) {
+                    lastWeather = value;
+                    weather.setText(value);
+                    weatherStatus.setText("Updated " + new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new java.util.Date()));
+                } else {
+                    if (lastWeather == null) weather.setText("Weather unavailable");
+                    weatherStatus.setText(online() ? "Update failed · retrying in 1 minute" : "Offline · waiting to refresh");
+                }
+                handler.removeCallbacks(weatherTick);
+                handler.postDelayed(weatherTick, success ? 15 * 60_000L : 60_000L);
             });
         });
     }

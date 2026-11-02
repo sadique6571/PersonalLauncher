@@ -11,7 +11,7 @@ import android.widget.Toast;
 import java.util.Collections;
 import java.util.List;
 
-/** The bell opens notification alerts only. Access setup is separate from the alert list. */
+/** The bell opens alerts with an always-available notification access shortcut. */
 final class HomeNotificationsUi {
     private HomeNotificationsUi() { }
     static boolean approved(Activity host) {
@@ -22,13 +22,6 @@ final class HomeNotificationsUi {
         return false;
     }
     static AlertDialog show(Activity host) {
-        if (!approved(host)) {
-            return new AlertDialog.Builder(host).setTitle(R.string.h_access_title).setMessage(R.string.h_notification_access_hint)
-                    .setPositiveButton(R.string.h_open_access, (d, which) -> {
-                        try { host.startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); }
-                        catch (RuntimeException unavailable) { Toast.makeText(host, R.string.h_unavailable, Toast.LENGTH_LONG).show(); }
-                    }).setNegativeButton(android.R.string.cancel, null).show();
-        }
         LinearLayout rows = HomeLibraryUi.rows(host);
         AlertDialog panel = GlassSettings.panel(host, host.getString(R.string.h_notifications), rows);
         boolean[] initial = {true};
@@ -36,9 +29,18 @@ final class HomeNotificationsUi {
             if (host.isDestroyed() || !panel.isShowing()) return;
             View oldFocus = rows.findFocus(); Object focusedKey = oldFocus == null ? null : oldFocus.getTag();
             rows.removeAllViews();
+            View access = GlassSettings.row(host, host.getString(R.string.h_access_title),
+                    host.getString(R.string.h_open_access), R.drawable.ic_settings,
+                    GlassSettings.themeAccent(host), () -> {
+                        try { host.startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); panel.dismiss(); }
+                        catch (RuntimeException unavailable) { Toast.makeText(host, R.string.h_unavailable, Toast.LENGTH_LONG).show(); }
+                    });
+            access.setTag("notification_access"); rows.addView(access);
+            if (!approved(host)) rows.addView(GlassSettings.label(host,
+                    host.getString(R.string.h_notification_access_hint), 13, 0xffb5cadd));
             List<HomeNotificationService.Entry> entries = HomeNotificationService.snapshot(); Collections.reverse(entries);
             if (entries.isEmpty()) rows.addView(GlassSettings.label(host, host.getString(R.string.h_notifications_empty), 14, 0xffb5cadd));
-            View restore = null, first = null;
+            View restore = "notification_access".equals(focusedKey) ? access : null, first = access;
             for (HomeNotificationService.Entry entry : entries) {
                 View row = GlassSettings.row(host, entry.title, entry.text, R.drawable.ic_notifications,
                         GlassSettings.themeAccent(host), () -> {
@@ -50,7 +52,7 @@ final class HomeNotificationsUi {
                 if (first == null) first = row;
                 if (entry.key.equals(focusedKey)) restore = row;
             }
-            // Preserve focus on updates; do not steal it from the close button.
+            // Preserve focus on updates; do not steal it from the header settings button.
             if (initial[0] && first != null) first.requestFocus();
             else if (oldFocus != null) { if (restore != null) restore.requestFocus(); else if (first != null) first.requestFocus(); }
             initial[0] = false;

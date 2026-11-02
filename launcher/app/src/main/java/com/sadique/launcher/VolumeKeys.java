@@ -41,6 +41,10 @@ final class VolumeKeys {
         process(context, event, consume, false);
     }
     private static void process(Context context, KeyEvent event, boolean consume, boolean initialStep) {
+        android.util.Log.d("PersonalVolume", context.getClass().getSimpleName()
+                + " key=" + event.getKeyCode() + " scan=" + event.getScanCode()
+                + " action=" + event.getAction() + " repeat=" + event.getRepeatCount()
+                + " initialStep=" + initialStep);
         if (repeater == null) {
             handler = new Handler(Looper.getMainLooper());
             repeater = new Repeater(new Timer() {
@@ -50,6 +54,7 @@ final class VolumeKeys {
         }
         AudioManager audio = context.getSystemService(AudioManager.class);
         if (audio == null || audio.isVolumeFixed()) { stop(); return; }
+        if (event.getAction() == KeyEvent.ACTION_DOWN && !event.isCanceled()) VolumeSlider.show(context, audio);
         repeater.event(event.getDeviceId(), event.getKeyCode(), event.getDownTime(), event.getEventTime(),
                 event.getAction(), event.getRepeatCount(), event.isCanceled(), consume, initialStep,
                 () -> {
