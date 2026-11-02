@@ -18,6 +18,7 @@ import android.util.Log;
 import android.view.Gravity;
 import android.view.WindowManager;
 import android.widget.ImageView;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
@@ -84,8 +85,9 @@ final class VolumeSlider {
             if (panel == null) {
                 owner = context;
                 window = context.getSystemService(WindowManager.class);
-                panel = new LinearLayout(context); panel.setGravity(Gravity.CENTER_VERTICAL);
-                panel.setPadding(dp(context, 18), dp(context, 12), dp(context, 18), dp(context, 12));
+                panel = new LinearLayout(context); panel.setOrientation(LinearLayout.VERTICAL);
+                panel.setGravity(Gravity.CENTER_HORIZONTAL);
+                panel.setPadding(dp(context, 12), dp(context, 16), dp(context, 12), dp(context, 12));
                 int accent = GlassSettings.themeAccent(context);
                 GradientDrawable background = new GradientDrawable(); background.setColor(0xf21a293c);
                 background.setCornerRadius(dp(context, 18)); background.setStroke(dp(context, 1), accent);
@@ -96,10 +98,14 @@ final class VolumeSlider {
                 slider = new SeekBar(context); slider.setContentDescription(context.getString(R.string.h_sound));
                 slider.setFocusable(false); slider.setProgressTintList(ColorStateList.valueOf(accent));
                 slider.setThumbTintList(ColorStateList.valueOf(Color.WHITE));
-                panel.addView(slider, new LinearLayout.LayoutParams(0, dp(context, 36), 1));
+                FrameLayout track = new FrameLayout(context);
+                track.setClipChildren(false); track.setClipToPadding(false);
+                slider.setRotation(-90);
+                track.addView(slider, new FrameLayout.LayoutParams(dp(context, 180), dp(context, 44), Gravity.CENTER));
+                panel.addView(track, new LinearLayout.LayoutParams(dp(context, 44), dp(context, 180)));
                 level = new TextView(context); level.setTextColor(Color.WHITE); level.setTextSize(16);
-                level.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-                panel.addView(level, new LinearLayout.LayoutParams(dp(context, 58), -1));
+                level.setGravity(Gravity.CENTER);
+                panel.addView(level, new LinearLayout.LayoutParams(-1, dp(context, 28)));
                 slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
                     public void onProgressChanged(SeekBar bar, int value, boolean fromUser) {
                         if (!fromUser) return;
@@ -110,12 +116,12 @@ final class VolumeSlider {
                     public void onStartTrackingTouch(SeekBar bar) { HANDLER.removeCallbacks(HIDE); }
                     public void onStopTrackingTouch(SeekBar bar) { scheduleHide(); }
                 });
-                WindowManager.LayoutParams position = new WindowManager.LayoutParams(dp(context, 360), -2,
+                WindowManager.LayoutParams position = new WindowManager.LayoutParams(dp(context, 80), -2,
                         context instanceof AccessibilityService ? WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
                                 : WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
                         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                         PixelFormat.TRANSLUCENT);
-                position.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL; position.y = dp(context, 30);
+                position.gravity = Gravity.RIGHT | Gravity.CENTER_VERTICAL; position.x = dp(context, 20);
                 if (context instanceof Activity) position.token = ((Activity) context).getWindow().getDecorView().getWindowToken();
                 window.addView(panel, position);
             }
