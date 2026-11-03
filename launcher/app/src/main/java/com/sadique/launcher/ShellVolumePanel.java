@@ -15,6 +15,7 @@ import java.lang.reflect.Proxy;
 final class ShellVolumePanel implements AutoCloseable {
     private final VolumePanelSession<IBinder> session;
     private final ShellVolumeChannel channel;
+    private volatile boolean restoreFailed;
 
     ShellVolumePanel() throws Exception {
         Class<?> serviceManager = Class.forName("android.os.ServiceManager");
@@ -85,9 +86,10 @@ final class ShellVolumePanel implements AutoCloseable {
         System.out.println("Launcher volume panel active: stock media-popup flag suppressed; warnings forwarded.");
     }
     void signal() { channel.signal(); }
+    boolean restoreFailed() { return restoreFailed; }
     @Override public void close() {
-        try { session.close(); }
-        catch (Exception error) { System.err.println("Could not restore volume controller; reboot restores SystemUI registration."); error.printStackTrace(System.err); }
+        try { session.close(); restoreFailed = false; }
+        catch (Exception error) { restoreFailed = true; System.err.println("Could not restore volume controller; reboot restores SystemUI registration."); error.printStackTrace(System.err); }
         channel.close();
     }
 }

@@ -37,6 +37,7 @@
             <action android:name="android.settings.BLUETOOTH_SETTINGS" />
         </intent>
         <provider android:authorities="android.media.tv" />
+        <provider android:authorities="com.android.tv.settings.accessories.sliceprovider" />
         <!-- The standard settings handlers, so package visibility doesn't hide them and send the pills to a vendor fallback by mistake. -->
         <intent>
             <action android:name="android.settings.SETTINGS" />

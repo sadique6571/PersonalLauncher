@@ -67,6 +67,8 @@ public class InputKeyService extends AccessibilityService {
 
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
+        if (event.getKeyCode() == KeyEvent.KEYCODE_VOLUME_MUTE && event.getAction() == KeyEvent.ACTION_DOWN
+                && event.getRepeatCount() == 0 && !event.isCanceled()) VolumeSlider.nativeMute(this);
         if (consumeVolumeKeys && VolumeKeys.handle(this, event)) return true;
         if (volumeKeyFilter && VolumeKeys.control(this, event)) return true;
         // A scancode entry is more specific than any keycode, so it goes first.

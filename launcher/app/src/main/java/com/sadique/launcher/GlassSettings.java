@@ -59,7 +59,12 @@ final class GlassSettings {
         int tier = MemoryProfile.effectiveTier(context, context.getSharedPreferences("personal_home", 0));
         if (android.os.Build.VERSION.SDK_INT >= 31 && tier != MemoryProfile.TIER_LIGHT) {
             dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
-            dialog.getWindow().getAttributes().setBlurBehindRadius(40);
+            android.view.WindowManager.LayoutParams attrs = dialog.getWindow().getAttributes();
+            attrs.setBlurBehindRadius(40); dialog.getWindow().setAttributes(attrs);
+        } else if (android.os.Build.VERSION.SDK_INT >= 31) {
+            dialog.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
+            android.view.WindowManager.LayoutParams attrs = dialog.getWindow().getAttributes();
+            attrs.setBlurBehindRadius(0); dialog.getWindow().setAttributes(attrs);
         }
     }
     static TextView label(Activity host, String text, int size, int color) {
@@ -80,8 +85,9 @@ final class GlassSettings {
         row.setPadding(dp(host, 12), dp(host, 7), dp(host, 12), dp(host, 7));
         row.setMinimumHeight(dp(host, 49)); row.setFocusable(true); row.setFocusableInTouchMode(true); row.setClickable(true);
         row.setBackground(background(host, false));
-        row.setOnFocusChangeListener((v, focus) -> row.setBackground(background(host, focus)));
+        row.setOnFocusChangeListener((v, focus) -> row.setBackground(background(host, focus || row.isSelected())));
         ImageView symbol = new ImageView(host); symbol.setImageResource(icon); symbol.setColorFilter(tint);
+        if (tint == themeAccent(host)) symbol.setTag("theme_accent");
         row.addView(symbol, new LinearLayout.LayoutParams(dp(host, 24), dp(host, 24)));
         LinearLayout copy = new LinearLayout(host); copy.setOrientation(LinearLayout.VERTICAL);
         copy.setPadding(dp(host, 13), 0, dp(host, 6), 0);
@@ -103,6 +109,7 @@ final class GlassSettings {
         card.setBackground(background(host, false));
         card.setOnFocusChangeListener((v, focus) -> card.setBackground(background(host, focus)));
         ImageView symbol = new ImageView(host); symbol.setImageResource(icon); symbol.setColorFilter(tint);
+        if (tint == themeAccent(host)) symbol.setTag("theme_accent");
         card.addView(symbol, new LinearLayout.LayoutParams(dp(host, 34), dp(host, 34)));
         TextView heading = label(host, title, 13, Color.WHITE); heading.setGravity(Gravity.CENTER);
         heading.setPadding(0, dp(host, 8), 0, 0);
@@ -208,6 +215,8 @@ final class GlassSettings {
         return current.dialog;
     }
     private static void focusRows(LinearLayout rows) {
+        for (int i = 0; i < rows.getChildCount(); i++)
+            if (rows.getChildAt(i).isSelected() && rows.getChildAt(i).isFocusable()) { rows.getChildAt(i).requestFocus(); return; }
         for (int i = 0; i < rows.getChildCount(); i++) if (rows.getChildAt(i).isFocusable()) { rows.getChildAt(i).requestFocus(); break; }
     }
     private static void back(Panel current) {
@@ -220,7 +229,41 @@ final class GlassSettings {
         options(host, title, names, hints, null, selected);
     }
 
+    static void choices(Activity host, String title, String[] names, java.util.function.IntSupplier current,
+            java.util.function.IntConsumer selected) {
+        options(host, title, names, null, null, selected, current);
+    }
+
+    /** Retheme the visible page and saved parent pages without losing focus or scroll position. */
+    static void refresh(Activity host) {
+        java.lang.ref.WeakReference<Panel> reference = PANELS.get(host);
+        Panel state = reference == null ? null : reference.get();
+        if (state == null || !state.dialog.isShowing()) return;
+        refreshViews(host, state.content);
+        for (Page page : state.pages) refreshViews(host, page.root);
+        applyBlur(state.dialog);
+    }
+    private static void refreshViews(Activity host, View view) {
+        if (view.isFocusable() && view.getBackground() instanceof GradientDrawable)
+            view.setBackground(background(host, view.isFocused() || view.isSelected()));
+        if (view instanceof TextView) {
+            TextView text = (TextView) view;
+            int style = text.getTypeface() == null ? Typeface.NORMAL : text.getTypeface().getStyle();
+            applyAppFont(host, text); text.setTypeface(text.getTypeface(), style);
+        }
+        if (view instanceof ImageView && "theme_accent".equals(view.getTag()))
+            ((ImageView) view).setColorFilter(themeAccent(host));
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) refreshViews(host, group.getChildAt(i));
+        }
+    }
+
     static void options(Activity host, String title, String[] names, String[] hints, int[] icons, java.util.function.IntConsumer selected) {
+        options(host, title, names, hints, icons, selected, null);
+    }
+    private static void options(Activity host, String title, String[] names, String[] hints, int[] icons,
+            java.util.function.IntConsumer selected, java.util.function.IntSupplier current) {
         LinearLayout rows = new LinearLayout(host); rows.setOrientation(LinearLayout.VERTICAL);
         AlertDialog dialog = panel(host, title, rows);
         boolean navigation = hints != null || title.equals("Online landscape screensaver");
@@ -228,15 +271,20 @@ final class GlassSettings {
             final int index = i;
             String hint = (hints != null && i < hints.length) ? hints[i] : null;
             int icon = (icons != null && i < icons.length) ? icons[i] : R.drawable.ic_settings;
-            View option = row(host, names[i], hint, icon, themeAccent(host), () -> {});
+            int checked = current == null ? -1 : current.getAsInt();
+            String caption = names[i].replace("  ✓", "") + (i == checked ? "  ✓" : "");
+            View option = row(host, caption, hint, icon, themeAccent(host), () -> {});
+            option.setSelected(i == checked);
             option.setOnClickListener(v -> {
                 v.requestFocus();
                 selected.accept(index);
                 if (!navigation) {
+                    int checkedNow = current == null ? index : current.getAsInt();
                     for (int j = 0; j < rows.getChildCount(); j++) {
                         LinearLayout copy = (LinearLayout) ((LinearLayout) rows.getChildAt(j)).getChildAt(1);
-                        ((TextView) copy.getChildAt(0)).setText(names[j].replace("  ✓", "") + (j == index ? "  ✓" : ""));
-                        rows.getChildAt(j).setBackground(background(host, j == index));
+                        ((TextView) copy.getChildAt(0)).setText(names[j].replace("  ✓", "") + (j == checkedNow ? "  ✓" : ""));
+                        View choice = rows.getChildAt(j); choice.setSelected(j == checkedNow);
+                        choice.setBackground(background(host, choice.isFocused() || choice.isSelected()));
                     }
                 }
             });
