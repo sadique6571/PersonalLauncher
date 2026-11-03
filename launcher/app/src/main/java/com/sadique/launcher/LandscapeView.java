@@ -108,19 +108,22 @@ public final class LandscapeView extends FrameLayout {
         conditions.addView(weather);
         weatherStatus = label(12); weatherStatus.setGravity(Gravity.START);
         conditions.addView(weatherStatus);
-        LayoutParams weatherPosition = new LayoutParams(-1, -2, Gravity.BOTTOM | Gravity.START);
-        weatherPosition.setMargins(dp(24), 0, dp(24), dp(88));
+        int availableWidth = Math.max(dp(240), getResources().getDisplayMetrics().widthPixels - dp(48));
+        int weatherWidth = Math.min(dp(320), Math.round(availableWidth * .42f));
+        LayoutParams weatherPosition = new LayoutParams(weatherWidth, -2, Gravity.BOTTOM | Gravity.START);
+        weatherPosition.setMargins(dp(24), 0, 0, dp(24));
         addView(conditions, weatherPosition);
         status = label(12);
         status.setText("Connecting to online landscapes…");
-        LayoutParams statusPosition = new LayoutParams(-1, -2, Gravity.BOTTOM);
-        statusPosition.setMargins(dp(24), 0, dp(24), dp(16));
+        status.setGravity(Gravity.START);
+        LayoutParams statusPosition = new LayoutParams(weatherWidth, -2, Gravity.TOP | Gravity.START);
+        statusPosition.setMargins(dp(24), dp(24), 0, 0);
         addView(status, statusPosition);
         // Wallpaper details caption at the bottom (user 2026-11-01).
         details = label(13);
-        details.setGravity(Gravity.CENTER); details.setMaxLines(2);
-        LayoutParams detailsPosition = new LayoutParams(-1, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-        detailsPosition.setMargins(dp(24), 0, dp(24), dp(40));
+        details.setGravity(Gravity.END); details.setMaxLines(2);
+        LayoutParams detailsPosition = new LayoutParams(availableWidth - weatherWidth - dp(24), -2, Gravity.BOTTOM | Gravity.END);
+        detailsPosition.setMargins(0, 0, dp(24), dp(24));
         addView(details, detailsPosition);
     }
 
@@ -211,13 +214,9 @@ public final class LandscapeView extends FrameLayout {
         date.setText(new SimpleDateFormat("EEEE, d MMMM yyyy", Locale.getDefault()).format(now.getTime()));
     }
 
-    /** Fresh photo per request: picsum serves a different real photo per unique seed,
-     *  so nothing is disk-cached — every rotation downloads a new photo (still bounded
-     *  to 6 MB with timeouts, see OnlineContent). Endless new photos. (User 2026-10-31.)
-     */
+    /** Rotate reviewed landscapes with matching scene captions; retain bounded online reads. */
     private byte[] freshPhotoBytes(int seed) throws java.io.IOException {
-        String url = "https://picsum.photos/seed/pl" + seed + "/1920/1080";
-        return OnlineContent.get(url, 6 * 1024 * 1024);
+        return OnlineContent.get(LandscapeModel.landscapePhotoUrl(seed), 6 * 1024 * 1024);
     }
 
     /** Fixed clock/date style (2026-11-01): white with black outline + drop shadow,
@@ -239,26 +238,23 @@ public final class LandscapeView extends FrameLayout {
         worker.execute(() -> {
             Bitmap result = null;
             int selectedPhoto = -1;
-            String caption = "Photo details unavailable";
+            String caption = "";
             for (int attempt = 0; attempt < 3 && result == null && !Thread.currentThread().isInterrupted(); attempt++) {
-              int candidate = firstPhoto + attempt;
+              int candidate = LandscapeModel.landscapeIndex(firstPhoto + attempt);
               if (candidate == previousPhoto) continue;
               try {
                 byte[] bytes = freshPhotoBytes(candidate);
                 BitmapFactory.Options bounds = new BitmapFactory.Options();
                 bounds.inJustDecodeBounds = true;
                 BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
-                if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw new java.io.IOException("Unsupported photo");
+                if (!LandscapeModel.isLandscape(bounds.outWidth,bounds.outHeight)) throw new java.io.IOException("Photo is not a landscape");
                 bounds.inJustDecodeBounds = false;
                 bounds.inSampleSize = 1;
                 while (Math.max(bounds.outWidth, bounds.outHeight) / bounds.inSampleSize > 1920) bounds.inSampleSize *= 2;
                 result = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
                 selectedPhoto = candidate;
                 if (result != null) {
-                    try {
-                        caption = LandscapeModel.photoCaption(OnlineContent.json(
-                                "https://picsum.photos/seed/pl" + candidate + "/info"));
-                    } catch (Exception unavailable) { /* A credit lookup must not discard a loaded image. */ }
+                    caption = LandscapeModel.landscapeCaption(candidate);
                 }
               } catch (Exception unavailable) { /* Try another landscape instead of retaining one failed source forever. */ }
             }

@@ -4,12 +4,32 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class LandscapeModelTest {
-    @Test public void photoCaptionUsesActualMetadataWithoutInventingALocation() throws Exception {
-        String caption = LandscapeModel.photoCaption("{\"author\":\"Test Photographer\",\"width\":2400,\"height\":1600}");
-        assertEquals("Photo by Test Photographer · 2400 × 1600 · Lorem Picsum", caption);
+    @Test public void screensaverScenesHaveDistinctPhotosAndMatchingDescriptions() {
+        java.util.Set<String> urls=new java.util.HashSet<>();
+        for (int i=0;i<LandscapeModel.landscapeCount();i++) {
+            String url=LandscapeModel.landscapePhotoUrl(i);
+            assertTrue(url.startsWith("https://images.unsplash.com/photo-"));
+            assertTrue(urls.add(url));
+            String caption=LandscapeModel.landscapeCaption(i);
+            assertFalse(caption.isEmpty());
+            assertFalse(caption.contains("Photo by"));
+            assertFalse(caption.contains("Picsum"));
+            assertFalse(caption.contains("1920"));
+        }
+        assertEquals("Boathouse on a mountain lake",LandscapeModel.landscapeCaption(1));
     }
-    @Test public void missingPhotoMetadataHasNoNumberOrMadeUpLocation() throws Exception {
-        assertEquals("Photo · Lorem Picsum", LandscapeModel.photoCaption("{\"id\":\"123\"}"));
+    @Test public void screensaverRotationWrapsBothDirections() {
+        int count=LandscapeModel.landscapeCount();
+        assertEquals(LandscapeModel.landscapePhotoUrl(0),LandscapeModel.landscapePhotoUrl(count));
+        assertEquals(LandscapeModel.landscapePhotoUrl(count-1),LandscapeModel.landscapePhotoUrl(-1));
+        assertEquals(LandscapeModel.landscapeCaption(count-1),LandscapeModel.landscapeCaption(-1));
+    }
+    @Test public void portraitSquareAndInvalidImagesAreRejected() {
+        assertTrue(LandscapeModel.isLandscape(1920,1080));
+        assertFalse(LandscapeModel.isLandscape(1080,1920));
+        assertFalse(LandscapeModel.isLandscape(1080,1080));
+        assertFalse(LandscapeModel.isLandscape(0,0));
+        assertFalse(LandscapeModel.isLandscape(1920,-1));
     }
     @Test public void photoSeedsAreUniqueAndAlwaysUseHttps() {
         // Bing daily wallpaper API

@@ -2251,16 +2251,12 @@ public final class PersonalHomeActivity extends Activity {
 
     @Override public void onTrimMemory(int level) {
         super.onTrimMemory(level);
-        // Release rebuildable resources under memory pressure.
-        // TRIM_MEMORY_UI_HIDDEN and above: we're in the background.
-        if (level >= TRIM_MEMORY_UI_HIDDEN) {
-            // Clear online wallpaper (reloadable from cache/network).
+        // UI_HIDDEN is the ordinary trip to another app, not memory pressure.
+        // Keep the displayed online photo warm so Home does not flash the built-in
+        // background and download the photo again on every return.
+        if (MemoryTrimPolicy.shouldRelease(level, resumed)) {
             if (sky != null) sky.releaseTransient();
             trimAppIcons();
-        }
-        // TRIM_MEMORY_RUNNING_CRITICAL: also drop the crossfade buffer.
-        if (level >= TRIM_MEMORY_RUNNING_CRITICAL) {
-            if (sky != null) sky.releaseTransient();
         }
     }
 
@@ -2274,7 +2270,10 @@ public final class PersonalHomeActivity extends Activity {
         private float smoothDay = -1f;
 
         /** Releases transient bitmaps (online photos, crossfade buffer) under memory pressure. */
-        void releaseTransient() {            // Don't recycle backdrop — it's the built-in wallpaper, still used in onDraw.
+        void releaseTransient() {
+            handler.removeCallbacks(crossfadeStep);
+            crossfade = 1f;
+            // Don't recycle backdrop — it's the built-in wallpaper, still used in onDraw.
             // Only clear the reloadable online variants.
             onlineNext = null;
             // Keep onlineWallpaper if it's currently displayed; it will be re-fetched on demand.

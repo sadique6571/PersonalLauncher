@@ -4,6 +4,29 @@ package com.sadique.launcher;
 final class LandscapeModel {
     static final String CITY = "Okara, Pakistan";
     static final double LATITUDE = 30.81, LONGITUDE = 73.45;
+    /** Visually reviewed nature landscapes; each caption describes that exact photo. */
+    private static final String[][] LANDSCAPES = {
+        {"1501785888041-af3ef285b470", "Turquoise lake beneath mountain cliffs"},
+        {"1470770841072-f978cf4d019e", "Boathouse on a mountain lake"},
+        {"1441974231531-c6227db76b6e", "Sunlight along a forest trail"},
+        {"1507525428034-b723cf961d3e", "Waves on a sunlit sandy beach"},
+        {"1506905925346-21bda4d32df4", "Snowy mountain peaks above the clouds"},
+        {"1469474968028-56623f02e42e", "Sunlit rocky ridge above wooded valleys"},
+        {"1470071459604-3b5ec3a7fe05", "Misty green valley beneath a golden sky"},
+        {"1509316785289-025f5b846b35", "Red rock mesas in the desert"},
+        {"1473448912268-2022ce9509d8", "Forest lake beneath mountain peaks"},
+        {"1506744038136-46273834b3fb", "River through a mountain valley"},
+        {"1464822759023-fed622ff2c3b", "Snowy mountain range and pine forest"}
+    };
+
+    static int landscapeCount() { return LANDSCAPES.length; }
+    static int landscapeIndex(int index) { return Math.floorMod(index,LANDSCAPES.length); }
+    static String landscapePhotoUrl(int index) {
+        return "https://images.unsplash.com/photo-"+LANDSCAPES[landscapeIndex(index)][0]
+                +"?fit=max&w=1920&h=1080&q=85&fm=jpg";
+    }
+    static String landscapeCaption(int index) { return LANDSCAPES[landscapeIndex(index)][1]; }
+    static boolean isLandscape(int width,int height) { return height>0 && width>height; }
     static String photoUrl(int index) {
         // Bing daily wallpaper: changes every day automatically.
         // idx=0 is today, 1=yesterday... up to 7 days back. (User 2026-10-31.)
@@ -32,16 +55,6 @@ final class LandscapeModel {
         return "https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon
                 + "&current=temperature_2m,weather_code&temperature_unit=" + (fahrenheit ? "fahrenheit" : "celsius")
                 + "&timezone=auto";
-    }
-
-    /** Picsum supplies a photographer and original dimensions, but no location or scene title. */
-    static String photoCaption(String body) throws org.json.JSONException {
-        org.json.JSONObject info = new org.json.JSONObject(body);
-        String author = HomeLibraryModel.title(info.optString("author", ""));
-        int width = info.optInt("width", 0), height = info.optInt("height", 0);
-        String credit = author.isEmpty() ? "Photo" : "Photo by " + author;
-        if (width > 0 && height > 0) credit += " · " + width + " × " + height;
-        return credit + " · Lorem Picsum";
     }
 
     static String condition(int code) {
