@@ -24,7 +24,7 @@ final class PairingRelay implements AutoCloseable {
                     client.setSoTimeout(0); target.setSoTimeout(0);
                 }
                 workers.execute(() -> copy(client,target)); copy(target,client);
-            } catch (IOException ended) { close(); }
+            } catch (IOException | RuntimeException ended) { close(); }
         });
     }
     int port() { return listener.getLocalPort(); }

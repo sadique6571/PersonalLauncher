@@ -9,3 +9,7 @@
 # Public Conscrypt APIs used by libadb's supported TLS pairing path; no hidden-API bypass.
 -keep class org.conscrypt.OpenSSLProvider { public <init>(...); }
 -keep class org.conscrypt.Conscrypt { public static *** exportKeyingMaterial(...); }
+# Conscrypt 2.5's platform-socket adapters reference private legacy framework parameter
+# classes omitted from the public SDK. Our TLS provider is bundled; no API bypass is used.
+-dontwarn com.android.org.conscrypt.SSLParametersImpl
+-dontwarn org.apache.harmony.xnet.provider.jsse.SSLParametersImpl
