@@ -49,7 +49,13 @@ final class VolumeAutoStart {
         state(c,"Waiting for startup/network readiness");
         MAIN.postDelayed(() -> WORK.execute(() -> {
             try { start(c,generation); synchronized(VolumeAutoStart.class) { done=true; } }
-            catch (Exception | LinkageError error) { if (generation==GENERATION.get()) state(c,"Auto-start needs attention · open wireless debugging and approve your network, then Start now"); }
+            catch (Exception | LinkageError error) {
+                if (generation==GENERATION.get()) {
+                    String stage=status(c);
+                    android.util.Log.w("PersonalVolume","Auto-start failed at "+stage+" ("+error.getClass().getSimpleName()+")");
+                    state(c,"Auto-start failed at "+stage+" ("+error.getClass().getSimpleName()+")");
+                }
+            }
             finally { BUSY.set(false); }
         }),force?0:10000);
     }
@@ -94,20 +100,32 @@ final class VolumeAutoStart {
         if (!Settings.Global.putInt(c.getContentResolver(),"adb_wifi_enabled",1)) throw new IOException("Wireless debugging request refused");
         for (int attempt=0;attempt<2;attempt++) {
             check(c,generation,true);
-            try (Manager manager=new Manager(c)) {
+            try {
                 state(c,"Finding this TV's current connection port");
-                int port=LocalAdbPort.discover(c); check(c,generation,true);
-                try (PairingRelay tls=new PairingRelay(port,true)) {
-                if (!manager.connect("127.0.0.1",tls.port())) throw new IOException("Local TLS connection failed");
-                check(c,generation,true); state(c,"Starting volume helper");
-                String script;
-                try (InputStream input=c.getAssets().open("fast-volume-bridge.sh")) { script=read(input,32768); }
-                String encoded=Base64.encodeToString(script.getBytes(StandardCharsets.UTF_8),Base64.NO_WRAP);
-                String command=VolumeStartupCommand.build(encoded,c.getApplicationInfo().sourceDir);
-                String result=shell(manager,command);
-                if (!result.contains("PLV_AUTO_START_OK")) throw new IOException("Helper did not confirm readiness");
-                state(c,"Started · automatic startup enabled"); return;
+                java.util.List<Integer> ports=LocalAdbPort.discover(c); check(c,generation,true);
+                Exception last=null;
+                for (int port:ports) {
+                    check(c,generation,true);
+                    try (Manager manager=new Manager(c)) {
+                        state(c,"Connecting to a discovered local TLS endpoint");
+                        try (PairingRelay tls=new PairingRelay(port,true)) {
+                            if (!manager.connect("127.0.0.1",tls.port())) throw new IOException("Local TLS connection failed");
+                            check(c,generation,true); state(c,"Starting volume helper");
+                            String script;
+                            try (InputStream input=c.getAssets().open("fast-volume-bridge.sh")) { script=read(input,32768); }
+                            String encoded=Base64.encodeToString(script.getBytes(StandardCharsets.UTF_8),Base64.NO_WRAP);
+                            String command=VolumeStartupCommand.build(encoded,c.getApplicationInfo().sourceDir);
+                            String result=shell(manager,command);
+                            if (!result.contains("PLV_AUTO_START_OK")) throw new IOException("Helper did not confirm readiness");
+                            state(c,"Started · automatic startup enabled"); return;
+                        }
+                    } catch (Exception failure) {
+                        last=failure;
+                        android.util.Log.w("PersonalVolume","Local endpoint failed at "+status(c)+" ("+failure.getClass().getSimpleName()+"); trying next discovered endpoint");
+                    }
                 }
+                if (last!=null) throw last;
+                throw new IOException("No usable local TLS endpoint");
             } catch (Exception failure) {
                 if (attempt==1) throw failure;
                 Thread.sleep(3000);
