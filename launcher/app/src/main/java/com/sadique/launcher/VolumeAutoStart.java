@@ -115,7 +115,7 @@ final class VolumeAutoStart {
                             try (InputStream input=c.getAssets().open("fast-volume-bridge.sh")) { script=read(input,32768); }
                             String encoded=Base64.encodeToString(script.getBytes(StandardCharsets.UTF_8),Base64.NO_WRAP);
                             String command=VolumeStartupCommand.build(encoded,c.getApplicationInfo().sourceDir);
-                            shell(manager,command);
+                            shell(c,manager,command);
                             state(c,"Started · automatic startup enabled"); return;
                         }
                     } catch (Exception failure) {
@@ -131,9 +131,15 @@ final class VolumeAutoStart {
             }
         }
     }
-    private static void shell(Manager manager,String command) throws Exception {
+    private static void shell(Context c,Manager manager,String command) throws Exception {
         ScheduledFuture<?> deadline=LIMITS.schedule(() -> { try { manager.disconnect(); } catch (IOException ignored) { } },20,TimeUnit.SECONDS);
-        try (AdbStream stream=manager.openStream("shell:"+command); InputStream input=stream.openInputStream()) { VolumeStartupResponse.awaitReady(input,32768); }
+        state(c,"Opening volume startup shell");
+        try (AdbStream stream=manager.openStream("shell:"+command); InputStream input=stream.openInputStream()) {
+            state(c,"Waiting for helper readiness confirmation");
+            VolumeStartupResponse.awaitReady(input,32768);
+            state(c,"Helper confirmed; closing startup channel");
+            android.util.Log.d("PersonalVolume","Automatic helper readiness confirmed");
+        }
         finally { deadline.cancel(false); }
     }
     private static String read(InputStream input,int limit) throws IOException {
