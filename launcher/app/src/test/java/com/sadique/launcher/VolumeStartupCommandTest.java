@@ -15,7 +15,7 @@ public class VolumeStartupCommandTest {
         String command=VolumeStartupCommand.build("YWJj","/data/app/example/base.apk");
         assertTrue(command.indexOf(" stop")<command.indexOf(" && cp "));
         assertTrue(command.indexOf(" && cp ")<command.indexOf(" start auto 50 launcher"));
-        assertTrue(command.endsWith(" && echo PLV_AUTO_START_OK"));
+        assertTrue(command.endsWith(" && echo PLV_AUTO_START_OK && read -r plv_ack"));
         assertFalse(command.contains("tcpip:"));
     }
     @Test public void untrustedScriptEncodingAndApkLocationsAreRefused() {
