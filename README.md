@@ -3,7 +3,7 @@
 **Personal Launcher by Sadique Sadiq** — a clean, fast home-screen launcher for Android TV / Google TV.
 
 - Package: `com.sadique.launcher`
-- Version: 6.7
+- Version: 6.8
 - Plain Java, classic Android Views, `minSdk` 26. Internet permission is used for online screensaver photos, weather and city lookup.
 - Day/night Home wallpaper, compact toolbar, configurable app grid, quick settings and editable name and photo.
 
@@ -28,8 +28,8 @@ button opens Google's normal search/install screen for new apps. The mic button 
 Assistant; supported speech-to-text activities can also return a phrase into local app search. The launcher
 does not record audio or request microphone permission. Availability depends on the installed system service.
 
-Quick settings contains an inline media-volume slider. Brightness controls, their special permission,
-and the Home-window brightness override have been removed; brightness follows the device setting.
+The quick panel provides Wi-Fi, Bluetooth, inputs, display and sound controls. Its top-right gear opens
+TV system settings. Media volume is controlled with the remote.
 Settings pages share one panel with Back navigation, restoring the previous row focus and scroll position, and stay open when a local option changes.
 The panel position is configured before showing it, without a slide/reposition animation.
 
@@ -61,28 +61,29 @@ Optional banner rows directly below the clock showing posters from the TV Watch 
 
 ## Online landscape screensaver
 
-Open the top Screensaver icon for a preview. Every 30 seconds it requests a fresh wide nature photo
-from Wikimedia Commons. Previously shown source IDs and identical downloaded image hashes are recorded
-in a private database and skipped across sessions and reboots. Photos themselves are not disk-cached.
-The feed uses public-domain/CC0 images that do not require attribution, checks nature metadata and
-wide dimensions, and shows the source scene description without photographer, resolution or provider labels.
-If a new image cannot be retrieved, the current image stays visible while the next request retries.
+Every 30 seconds the screensaver requests a fresh seed from the original Picsum image endpoint.
+All photo subjects and original orientations are accepted; the provider returns a screen-filling
+1920×1080 crop. Downloaded image hashes are recorded privately to reject exact repeats across
+sessions/reboots. The provider has a finite collection, so a fresh seed cannot guarantee a never-seen
+photo on every request; up to three attempts are made before retaining the current image and retrying.
+Screensaver images are not stored on disk.
 
-Weather is at the bottom left, the scene caption at the bottom right and network status at the top right.
-Clock/date placement is configurable. City, Celsius/Fahrenheit and the Home idle timeout are in
-**Settings → System → Screensaver & weather**. Weather defaults to **Okara, Pakistan** and uses Open-Meteo.
+Photographer, resolution and provider labels are hidden. Picsum does not supply scene descriptions,
+so the app does not invent them. Weather sits at bottom-left and shows “Unavailable” on failure or
+offline, without refresh timestamps. Clock/date placement is configurable.
 
-Home uses Bing's daily image. It checks the daily metadata periodically while Home is visible and
-downloads a replacement only when the daily image changes or the previous bitmap was released.
-The online image remains warm on normal Home returns; real memory pressure or a process restart can
-require another download.
+Home uses Bing's daily image and retains one private, atomic snapshot for the first frame after an
+activity/process restart. The cached image is restored before drawing; an online Home never draws the
+built-in wallpaper as an interim fallback. The small local profile photo is also decoded before Home
+is built. Bing metadata checks refresh the daily photo without forcing another download on each Home return.
 
-For Android's system-managed screensaver, open **Set automatic screensaver** and select
-**Online Landscapes · Personal Launcher**. Any remote key exits the system dream. Home idle startup
-defaults to Off and does not cover another app's playback.
+For Android's system-managed screensaver, open **Settings → System → Screensaver & weather →
+Set automatic screensaver** and select **Online Landscapes · Personal Launcher**. City, temperature
+units and Home idle startup are in the same menu. Weather defaults to **Okara, Pakistan**.
+The Home idle timeout defaults to Off and does not cover another app's playback.
 
-Online sources: `commons.wikimedia.org`, `thumb.wikimedia.org`, `upload.wikimedia.org`,
-`www.bing.com`, `api.open-meteo.com`, `geocoding-api.open-meteo.com`.
+Online sources: `picsum.photos`, `fastly.picsum.photos`, `www.bing.com`,
+`api.open-meteo.com`, `geocoding-api.open-meteo.com`, `wttr.in`.
 
 ## Performance
 

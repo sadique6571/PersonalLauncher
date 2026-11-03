@@ -173,8 +173,8 @@ public final class PersonalHomeActivity extends Activity {
         lastLight = appearanceDaylight() >= .5f;
         focusedPkg = prefs.getString("home_focus_pkg", null);
         if (state != null) gridState = state.getParcelable("home_grid_state");
-        buildHome();
         loadAvatar();
+        buildHome();
         loadWallpaper();
         if (!prefs.getBoolean("setup", false)) handler.post(() -> editProfile());
         else { handleHomeAction(getIntent()); handler.post(() -> maybeOfferDefaultHome()); }
@@ -1988,11 +1988,8 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void loadAvatar() {
-        int epoch = profileEpoch; File file = profileAsset("personal-avatar.png");
-        worker.execute(() -> {
-            Bitmap image = ProfileAssets.load(this, file, true);
-            handler.post(() -> { if (!isDestroyed() && epoch == profileEpoch) { avatarBitmap = image; refreshProfile(); } });
-        });
+        // The bounded local avatar must be ready before Home binds its first frame.
+        avatarBitmap = ProfileAssets.load(this, profileAsset("personal-avatar.png"), true);
     }
 
     /** Export settings to JSON via document picker. Excludes secrets. */
@@ -2293,13 +2290,15 @@ public final class PersonalHomeActivity extends Activity {
          * (User 2026-11-01.)
          */
         void adoptWallpapers(SkyClock old) {
-            backdrop = old.backdrop;
-            onlineWallpaper = old.onlineWallpaper;
-            onlineNext = old.onlineNext;
-            onlineIndex = old.onlineIndex;
-            onlineImageUrl = old.onlineImageUrl;
-            onlineCheckedAt = old.onlineCheckedAt;
-            crossfade = old.crossfade;
+            if (old.backdrop != null) backdrop = old.backdrop;
+            if (old.onlineWallpaper != null || old.onlineNext != null) {
+                onlineWallpaper = old.onlineWallpaper;
+                onlineNext = old.onlineNext;
+                onlineIndex = old.onlineIndex;
+                onlineImageUrl = old.onlineImageUrl;
+                onlineCheckedAt = old.onlineCheckedAt;
+                crossfade = old.crossfade;
+            }
             old.backdrop = null;
             old.onlineWallpaper = null;
             old.onlineNext = null;
@@ -2328,8 +2327,11 @@ public final class PersonalHomeActivity extends Activity {
         SkyClock() {
             super(PersonalHomeActivity.this);
             setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+            // A restored photo must exist before this View's first frame, including process restarts.
+            if (sky == null || (sky.onlineWallpaper == null && sky.onlineNext == null)) restoreBingSnapshot();
             worker.execute(() -> {
-                Bitmap bmp = BitmapFactory.decodeResource(getResources(), R.drawable.personal_wallpaper);
+                Bitmap bmp = prefs.getInt("wallpaper_source", 0) == 1 ? null
+                        : BitmapFactory.decodeResource(getResources(), R.drawable.personal_wallpaper);
                 Bitmap fav = null;
                 try {
                     java.io.File f = profileAsset("favorite_wallpaper.jpg");
@@ -2338,6 +2340,34 @@ public final class PersonalHomeActivity extends Activity {
                 Bitmap bg = bmp, fg = fav;
                 handler.post(() -> { backdrop = bg; favoriteWallpaper = fg; invalidate(); adaptTextColors(); });
             });
+        }
+
+        private java.io.File bingSnapshotFile() { return new java.io.File(getFilesDir(), "home_bing_snapshot.bin"); }
+
+        private Bitmap decodeBingPhoto(byte[] bytes) {
+            try {
+                BitmapFactory.Options options = new BitmapFactory.Options();
+                options.inJustDecodeBounds = true;
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
+                if (options.outWidth <= 0 || options.outHeight <= 0) return null;
+                android.util.DisplayMetrics metrics = getResources().getDisplayMetrics();
+                options.inSampleSize = WallpaperSize.sampleSize(options.outWidth, options.outHeight, metrics.widthPixels, metrics.heightPixels);
+                if (!WallpaperSize.accepted(options.outWidth / options.inSampleSize, options.outHeight / options.inSampleSize)) return null;
+                int[] scale = WallpaperSize.coverScale(options.outWidth / options.inSampleSize, options.outHeight / options.inSampleSize, metrics.widthPixels, metrics.heightPixels);
+                if (scale != null) { options.inScaled = true; options.inDensity = scale[0]; options.inTargetDensity = scale[1]; }
+                options.inJustDecodeBounds = false;
+                return BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
+            } catch (RuntimeException | OutOfMemoryError unavailable) { return null; }
+        }
+
+        private void restoreBingSnapshot() {
+            if (prefs.getInt("wallpaper_source", 0) != 1 || onlineWallpaper != null || onlineNext != null) return;
+            HomeWallpaperCache.Entry saved = HomeWallpaperCache.read(bingSnapshotFile());
+            if (saved == null) return;
+            Bitmap restored = decodeBingPhoto(saved.image);
+            if (restored == null) return;
+            onlineWallpaper = restored; onlineImageUrl = saved.url; onlineCheckedAt = saved.checkedAt;
+            onlineIndex = 0; crossfade = 1f;
         }
 
         void reloadFavorite() {
@@ -2357,7 +2387,7 @@ public final class PersonalHomeActivity extends Activity {
             String mode = prefs.getString("wallpaper_mode", "mountains");
             int source = prefs.getInt("wallpaper_source", 0);
             Bitmap picture = mode.equals("custom") && customWallpaper != null ? customWallpaper : backdrop;
-            if (source == 1 && onlineWallpaper != null) picture = onlineWallpaper;
+            if (source == 1) picture = onlineWallpaper != null ? onlineWallpaper : onlineNext;
             if (source == 2 && favoriteWallpaper != null) picture = favoriteWallpaper;
             if (mode.equals("solid")) picture = null;
             return picture;
@@ -2382,6 +2412,7 @@ public final class PersonalHomeActivity extends Activity {
         /** Keep Bing's daily image; periodically check metadata so a new day works while Home stays open. */
         void loadOnlinePhoto(int index) {
             if (onlineLoading) return;
+            restoreBingSnapshot();
             if (index == onlineIndex && (onlineWallpaper != null || onlineNext != null)
                     && !LandscapeModel.bingCheckDue(onlineCheckedAt, System.currentTimeMillis())) return;
             onlineLoading = true;
@@ -2407,7 +2438,11 @@ public final class PersonalHomeActivity extends Activity {
                     checked = true;
                     if (!imageUrl.equals(previousUrl) || !hasCurrentPhoto) {
                         byte[] bytes = OnlineContent.get(imageUrl, 6 * 1024 * 1024);
-                        bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                        bmp = decodeBingPhoto(bytes);
+                        if (bmp != null) {
+                            try { HomeWallpaperCache.write(bingSnapshotFile(), imageUrl, System.currentTimeMillis(), bytes); }
+                            catch (java.io.IOException unavailable) { android.util.Log.w("PersonalWallpaper", "Could not persist the last Home photo", unavailable); }
+                        }
                     }
                 } catch (Exception ignored) {}
                 Bitmap loaded = bmp;
@@ -2422,6 +2457,10 @@ public final class PersonalHomeActivity extends Activity {
                     }
                     if (loaded == null) return;
                     onlineImageUrl = newUrl;
+                    if (onlineWallpaper == null) {
+                        onlineWallpaper = loaded; crossfade = 1f;
+                        invalidate(); adaptTextColors(); return;
+                    }
                     if (onlineNext != null && onlineNext != onlineWallpaper) onlineNext.recycle();
                     onlineNext = loaded;
                     crossfade = 0f;
@@ -2433,6 +2472,7 @@ public final class PersonalHomeActivity extends Activity {
 
         private final Runnable crossfadeStep = new Runnable() {
             @Override public void run() {
+                if (onlineNext == null) { crossfade = 1f; return; }
                 crossfade += 0.06f;
                 if (crossfade >= 1f) {
                     crossfade = 1f;
@@ -2473,7 +2513,7 @@ public final class PersonalHomeActivity extends Activity {
             boolean onlineSource = source == 1;
             Bitmap picture = mode.equals("custom") && customWallpaper != null ? customWallpaper : backdrop;
             // Online wallpaper overrides when enabled and a photo is loaded.
-            if (onlineSource && onlineWallpaper != null) picture = onlineWallpaper;
+            if (onlineSource) picture = onlineWallpaper != null ? onlineWallpaper : onlineNext;
             // Favorite wallpaper.
             if (source == 2 && favoriteWallpaper != null) picture = favoriteWallpaper;
             float y = clockY >= 0 ? clockY : dp(150);

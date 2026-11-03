@@ -29,11 +29,10 @@ public final class LandscapeView extends FrameLayout {
     private final SharedPreferences prefs;
     private final ConnectivityManager connectivity;
     private final ImageView photo;
-    private final TextView clock, date, wifi, weather, city, status, details, weatherStatus;
+    private final TextView clock, date, wifi, weather, city, status, details;
     private ExecutorService worker;
     private ExecutorService weatherWorker;
     private boolean running, registered, photoBusy, weatherBusy, hasPhoto, networkOnline;
-    private String lastWeather;
     private int generation;
     private final java.util.Random photoRandom = new java.util.Random();
 
@@ -104,11 +103,9 @@ public final class LandscapeView extends FrameLayout {
         weather = label(24);
         weather.setGravity(Gravity.START);
         weather.setMaxLines(2);
-        weather.setText("Loading weather…");
+        weather.setText("Unavailable");
         conditions.addView(city);
         conditions.addView(weather);
-        weatherStatus = label(12); weatherStatus.setGravity(Gravity.START);
-        conditions.addView(weatherStatus);
         int availableWidth = Math.max(dp(240), getResources().getDisplayMetrics().widthPixels - dp(48));
         int weatherWidth = Math.min(dp(320), Math.round(availableWidth * .42f));
         LayoutParams weatherPosition = new LayoutParams(weatherWidth, -2, Gravity.BOTTOM | Gravity.START);
@@ -194,9 +191,8 @@ public final class LandscapeView extends FrameLayout {
             photo.animate().cancel();
             photo.setImageDrawable(null); hasPhoto = false;
             details.setText("");
-            status.setText("Offline · landscapes need internet");
-            if (lastWeather == null) weather.setText("Weather unavailable · no internet");
-            weatherStatus.setText("Offline · waiting to refresh");
+            status.setText("Offline · photos need internet");
+            weather.setText("Unavailable");
         }
     }
 
@@ -235,34 +231,29 @@ public final class LandscapeView extends FrameLayout {
         int seed = photoRandom.nextInt();
         worker.execute(() -> {
             Bitmap result = null;
-            String caption = "";
-            int downloads = 0;
             try (LandscapeHistory history = new LandscapeHistory(getContext())) {
-                for (int attempt = 0; attempt < 3 && result == null && downloads < 3 && !Thread.currentThread().isInterrupted(); attempt++) {
+                for (int attempt = 0; attempt < 3 && result == null && !Thread.currentThread().isInterrupted(); attempt++) {
+                    LandscapeFeed.Scene scene = LandscapeFeed.photo(seed + attempt, System.nanoTime());
                     try {
-                        String body = new String(OnlineContent.get(LandscapeFeed.queryUrl(seed + attempt, System.nanoTime()), 256 * 1024), java.nio.charset.StandardCharsets.UTF_8);
-                        for (LandscapeFeed.Scene scene : LandscapeFeed.scenes(body, history::contains)) {
-                            if (downloads >= 3 || Thread.currentThread().isInterrupted()) break;
-                            downloads++;
-                            try {
-                                byte[] bytes = OnlineContent.get(scene.url, 6 * 1024 * 1024);
-                                BitmapFactory.Options bounds = new BitmapFactory.Options();
-                                bounds.inJustDecodeBounds = true;
-                                BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
-                                if (!LandscapeModel.isLandscape(bounds.outWidth, bounds.outHeight)) continue;
-                                bounds.inJustDecodeBounds = false; bounds.inSampleSize = 1;
-                                while (Math.max(bounds.outWidth, bounds.outHeight) / bounds.inSampleSize > 1920) bounds.inSampleSize *= 2;
-                                Bitmap decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
-                                if (decoded == null) continue;
-                                if (!history.remember(scene.id, bytes)) { decoded.recycle(); continue; }
-                                result = decoded; caption = scene.caption; break;
-                            } catch (Exception unavailable) { /* Try another unseen source image. */ }
-                        }
-                    } catch (Exception unavailable) { /* Try a different nature query. */ }
+                        byte[] bytes = OnlineContent.get(scene.url, 6 * 1024 * 1024);
+                        BitmapFactory.Options bounds = new BitmapFactory.Options();
+                        bounds.inJustDecodeBounds = true;
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
+                        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) continue;
+                        bounds.inJustDecodeBounds = false; bounds.inSampleSize = 1;
+                        while (Math.max(bounds.outWidth, bounds.outHeight) / bounds.inSampleSize > 1920) bounds.inSampleSize *= 2;
+                        Bitmap decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
+                        if (decoded == null) continue;
+                        if (!history.remember(scene.id, bytes)) { decoded.recycle(); continue; }
+                        result = decoded;
+                    } catch (Exception unavailable) {
+                        android.util.Log.w("PersonalLandscape", "Picsum image/history failed", unavailable);
+                    }
                 }
-            } catch (Exception unavailable) { /* Never show an untracked repeat if history is unavailable. */ }
+            } catch (Exception unavailable) {
+                android.util.Log.w("PersonalLandscape", "Photo history unavailable", unavailable);
+            }
             Bitmap image = result;
-            String photoCaption = caption;
             handler.post(() -> {
                 if (!running || request != generation) { if (image != null) image.recycle(); return; }
                 photoBusy = false;
@@ -271,7 +262,7 @@ public final class LandscapeView extends FrameLayout {
                     photo.animate().alpha(0f).setDuration(250).withEndAction(() -> {
                         if (!running || request != generation || !online()) { image.recycle(); return; }
                         photo.setImageBitmap(image);
-                        details.setText(photoCaption);
+                        details.setText("");
                         photo.animate().alpha(1f).setDuration(500).start();
                     }).start();
                     hasPhoto = true;
@@ -280,7 +271,7 @@ public final class LandscapeView extends FrameLayout {
                     adaptClockColors();
                 } else {
                     if (image != null) image.recycle();
-                    status.setText("New landscape unavailable · retrying automatically");
+                    status.setText("New photo unavailable · retrying automatically");
                     handler.removeCallbacks(photoRetry);
                     handler.postDelayed(photoRetry, 15_000);
                 }
@@ -291,9 +282,8 @@ public final class LandscapeView extends FrameLayout {
     private void requestWeather() {
         if (!running || weatherBusy) return;
         handler.removeCallbacks(weatherTick);
-        if (!online()) { handler.postDelayed(weatherTick, 60_000L); return; }
+        if (!online()) { weather.setText("Unavailable"); handler.postDelayed(weatherTick, 60_000L); return; }
         weatherBusy = true;
-        weatherStatus.setText("Updating weather…");
         city.setText(prefs.getString("weather_city", LandscapeModel.CITY));
         int request = generation;
         boolean fahrenheit = prefs.getBoolean("weather_fahrenheit", false);
@@ -313,12 +303,9 @@ public final class LandscapeView extends FrameLayout {
                 weatherBusy = false;
                 boolean success = value != null && online();
                 if (success) {
-                    lastWeather = value;
                     weather.setText(value);
-                    weatherStatus.setText("Updated " + new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new java.util.Date()));
                 } else {
-                    if (lastWeather == null) weather.setText("Weather unavailable");
-                    weatherStatus.setText(online() ? "Update failed · retrying in 1 minute" : "Offline · waiting to refresh");
+                    weather.setText("Unavailable");
                 }
                 handler.removeCallbacks(weatherTick);
                 handler.postDelayed(weatherTick, success ? 15 * 60_000L : 60_000L);
