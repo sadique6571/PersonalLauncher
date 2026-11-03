@@ -43,9 +43,11 @@ with open(sys.argv[-1],newline='') as stream:
     for line in stream:
         print(line, end='', flush=True)
 """)
-        self.fake("cmd", """import os,sys,time
+        self.fake("cmd", "raise SystemExit('Direct AudioService adjustment is ineffective on the TV')\n")
+        self.fake("input", """import os,sys,time
+assert sys.argv[1] == 'keyevent' and sys.argv[2] in ['24','25'],sys.argv
 with open(os.environ['FAKE_AUDIO_LOG'], 'a') as out:
-    out.write(str(time.monotonic()) + ' ' + sys.argv[-1] + '\\n')
+    out.write(str(time.monotonic()) + ' ' + ('raise' if sys.argv[2]=='24' else 'lower') + '\\n')
 if os.environ.get('FAKE_AUDIO_FAIL') == '1': sys.exit(1)
 """)
         self.fake("settings", """import os,sys
@@ -65,7 +67,7 @@ if a[:4] == ['shell','-tt','getevent','-lt']:
     with open(a[4],newline='') as source:
         for line in source: print(line,end='',flush=True)
 elif a[:3] == ['shell','test','-r']: sys.exit(0 if os.access(a[3],os.R_OK) else 1)
-elif a[:2] in [['shell','cmd'],['shell','settings']]:
+elif a[:2] in [['shell','input'],['shell','settings']]:
     program=str(pathlib.Path(__file__).parent/a[1])
     os.execv(program,[program]+a[2:])
 else: raise SystemExit('Unexpected adb arguments: '+repr(a))
@@ -197,7 +199,7 @@ else: raise SystemExit('Unexpected adb arguments: '+repr(a))
         time.sleep(.2)
         self.assertEqual(len(self.steps()), count)
 
-    def test_audio_service_failure_stops_repeating(self):
+    def test_key_injection_failure_stops_repeating(self):
         self.stop()
         self.env["FAKE_AUDIO_FAIL"] = "1"
         self.run_bridge("start", str(self.device))
@@ -205,7 +207,7 @@ else: raise SystemExit('Unexpected adb arguments: '+repr(a))
         self.wait_for_steps()
         time.sleep(.3)
         self.assertEqual(len(self.steps()), 1)
-        self.assertIn("AudioService adjustment failed", (self.root / "state/bridge.log").read_text())
+        self.assertIn("Native volume key injection failed", (self.root / "state/bridge.log").read_text())
 
     def test_host_transport_forces_terminal_and_uses_adb_audio(self):
         self.stop()
@@ -219,7 +221,7 @@ else: raise SystemExit('Unexpected adb arguments: '+repr(a))
         self.assertEqual(len(self.steps()), count)
         calls = (self.root / "adb.log").read_text()
         self.assertIn("shell -tt getevent -lt", calls)
-        self.assertIn("shell cmd media_session volume --stream 3 --adj raise", calls)
+        self.assertIn("shell input keyevent 24", calls)
         self.assertIn("running", self.run_bridge("status-adb").stdout)
         self.run_bridge("stop-adb")
 

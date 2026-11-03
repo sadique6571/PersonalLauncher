@@ -2,11 +2,15 @@
 
 This is an optional diagnostic for a TV where the launcher key helpers are required for Home and
 Settings, but held volume stops repeating while they run. It is not an APK fix and has not yet been
-validated on the physical Haier TV. It uses the same shell AudioService command verified on that TV.
+validated end to end on the physical Haier TV. It uses native volume-key injection, which the user
+verified changes both the queried level (16 to 17) and the screen display. Direct AudioService
+`--adj` and `--set` commands returned success but left the level unchanged and are no longer used.
 
 The bridge reads only the selected input device and reacts to volume DOWN/UP events. The original tap
-remains native; a held press adds one AudioService adjustment every 150 ms after a 400 ms delay. Release
-stops the loop. A lost release has a 30-second repeat limit. Other keys are ignored and raw input events
+remains native; after a 400 ms hold delay, the loop injects paired Volume Up/Down events (24/25),
+waiting 150 ms between completed calls. Actual repeat speed also depends on the TV's input-command
+startup time. Release stops further paired presses after any in-flight call completes, so a key is
+not left down mid-pair. A lost release has a 30-second repeat limit. Other keys are ignored and raw input events
 are not stored. If hardware repeat events appear, the added loop stops rather than doubling them.
 Input is passed through an anonymous shell pipe, so the bridge does not create a named FIFO. This
 avoids the `mkfifo: Permission denied` error reported by the TV in `/data/local/tmp`.
@@ -39,7 +43,7 @@ adb shell sh /data/local/tmp/volume-hold-bridge.sh stop
 
 The shell process remains running until stopped, killed by Android, or the TV reboots. It does not need
 a continuously connected ADB client once started. A reboot does not start it again. If a device refuses
-shell input reads or the AudioService command, stop rather than changing permissions or rooting it.
+shell input reads or native key injection, stop rather than changing permissions or rooting it.
 
 ## Termux / host mode
 
@@ -52,7 +56,7 @@ sh volume-hold-bridge.sh stop-adb
 ```
 
 Stop any TV-side bridge before starting host mode. This uses `adb shell -tt getevent` to force a
-terminal for live event output and uses `adb shell cmd media_session volume` for repeat adjustments.
+terminal for live event output and uses `adb shell input keyevent 24/25` for repeat adjustments.
 Keep Termux and the ADB connection running for this test; it is a temporary diagnostic, not a permanent
 launcher fix. It requires only the existing adb/shell tools and stores no raw input events.
 

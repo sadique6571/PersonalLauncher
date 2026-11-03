@@ -52,7 +52,7 @@ repeat_volume() {
     deadline=$(( $(date +%s) + ${PLV_MAX_HOLD_SECONDS:-30} ))
     while [ "$(date +%s)" -lt "$deadline" ]; do
         adjust_volume "$direction" > /dev/null 2>&1 || {
-            printf 'AudioService adjustment failed; repeat stopped.\n' >&2
+            printf 'Native volume key injection failed; repeat stopped.\n' >&2
             exit 1
         }
         sleep "${PLV_REPEAT_INTERVAL:-0.15}"
@@ -60,10 +60,11 @@ repeat_volume() {
 }
 
 adjust_volume() {
+    case "$1" in raise) key=24 ;; lower) key=25 ;; *) return 1 ;; esac
     if [ "$TRANSPORT" = adb ]; then
-        adb shell cmd media_session volume --stream 3 --adj "$1"
+        adb shell input keyevent "$key"
     else
-        cmd media_session volume --stream 3 --adj "$1"
+        input keyevent "$key"
     fi
 }
 
@@ -131,7 +132,7 @@ watch_events() {
 case "${1:-status}" in
     start)
         device=${2:-/dev/input/event1}
-        if [ "$TRANSPORT" = adb ]; then programs='adb nohup'; else programs='getevent cmd nohup'; fi
+        if [ "$TRANSPORT" = adb ]; then programs='adb nohup'; else programs='getevent input nohup'; fi
         for program in $programs; do
             command -v "$program" > /dev/null 2>&1 || { printf 'Missing command: %s\n' "$program"; exit 1; }
         done
