@@ -299,6 +299,8 @@ public class HomeKeyService extends AccessibilityService {
                 && event.getKeyCode() != KeyEvent.KEYCODE_POWER && event.getKeyCode() != KeyEvent.KEYCODE_WAKEUP) {
             powerOnUntil = 0;
         }
+        if (event.getKeyCode() == KeyEvent.KEYCODE_VOLUME_MUTE && event.getAction() == KeyEvent.ACTION_DOWN
+                && event.getRepeatCount() == 0 && !event.isCanceled()) VolumeSlider.nativeMute(this);
         if (consumeVolumeKeys && VolumeKeys.handle(this, event)) return true;
         if (volumeKeyFilter && VolumeKeys.control(this, event)) return true;
         // A scancode entry is more specific than any keycode, so it goes first.

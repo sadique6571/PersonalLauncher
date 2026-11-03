@@ -39,12 +39,23 @@ repeat=int(sys.argv[main+3]); assert 50<=repeat<=1000
 (root/'requested-repeat').write_text(str(repeat))
 (root/'requested-panel').write_text(sys.argv[main+4])
 if os.environ.get('FAST_TEST_PANEL_FAIL')=='1' and sys.argv[main+4]=='launcher': raise SystemExit('controller unavailable')
+graceful=ready.parent/'graceful-stop'
+if os.environ.get('FAST_TEST_LEGACY')!='1': graceful.write_bytes(b'1')
 ready.write_bytes(b'1')
 def end(*args):
+    if args: (root/'sigterm').write_text('yes')
     ready.unlink(missing_ok=True)
     raise SystemExit(0)
 signal.signal(signal.SIGTERM,end)
-while True: time.sleep(.05)
+while True:
+    if (ready.parent/'stop-request').exists() and os.environ.get('FAST_TEST_IGNORE_STOP')!='1':
+        if os.environ.get('FAST_TEST_RESTORE_FAIL')=='1':
+            (ready.parent/'restore-failed').write_text('failed')
+        else:
+            (root/'controller-restored').write_text('yes')
+        graceful.unlink(missing_ok=True)
+        end()
+    time.sleep(.05)
 """)
         (self.root / "old.sh").write_text("""case "$1" in
 stop) printf 'stop\\n' >> "$FAST_TEST_ROOT/order.log" ;;
@@ -69,7 +80,18 @@ esac
         self.assertIn("Fast helper running", result.stdout)
 
     def tearDown(self):
-        self.run_wrapper("stop")
+        result=self.run_wrapper("stop")
+        if result.returncode != 0:
+            # Test stub only: production wrapper deliberately refuses force-kill during cleanup.
+            pid_path=self.root/'state/pid'
+            if pid_path.exists():
+                import signal
+                try: os.kill(int(pid_path.read_text()),signal.SIGTERM)
+                except ProcessLookupError: pass
+                deadline=time.monotonic()+2
+                while time.monotonic()<deadline:
+                    if (self.root/'sigterm').exists() and not (self.root/'state/ready').exists(): break
+                    time.sleep(.01)
         self.temp.cleanup()
 
     def test_ready_pid_lifecycle_and_old_bridge_order(self):
@@ -82,6 +104,8 @@ esac
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertFalse((self.root/'state/pid').exists())
         self.assertFalse((self.root/'state/ready').exists())
+        self.assertEqual((self.root/'controller-restored').read_text(),'yes')
+        self.assertFalse((self.root/'sigterm').exists())
 
     def test_duplicate_start_does_not_launch_second_runtime(self):
         self.start()
@@ -144,10 +168,43 @@ esac
         self.assertIn('Keeping fast volume repeats',result.stdout)
         self.assertEqual((self.root/'requested-panel').read_text(),'system')
         self.assertIn('Panel: system',self.run_wrapper('status').stdout)
+        self.assertIn('controller unavailable',(self.root/'state/launcher-error.log').read_text())
 
     def test_invalid_panel_refused_before_stopping_running_helper(self):
         self.assertNotEqual(self.run_wrapper('start',str(self.device),'50','bad').returncode,0)
         self.assertFalse((self.root/'order.log').exists())
+
+    def test_legacy_system_helper_can_still_stop(self):
+        self.env['FAST_TEST_LEGACY']='1'
+        self.start()
+        result=self.run_wrapper('stop')
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertTrue((self.root/'sigterm').exists())
+
+    def test_legacy_launcher_helper_is_not_killed(self):
+        self.env['FAST_TEST_LEGACY']='1'
+        self.assertEqual(self.run_wrapper('start',str(self.device),'50','launcher').returncode,0)
+        result=self.run_wrapper('stop')
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('Reboot once',result.stdout)
+        self.assertFalse((self.root/'sigterm').exists())
+
+    def test_stalled_cleanup_is_not_force_killed(self):
+        self.env['FAST_TEST_IGNORE_STOP']='1'
+        self.start()
+        result=self.run_wrapper('stop')
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('not force-killed',result.stdout)
+        self.assertTrue((self.root/'state/stop-request').exists())
+        self.assertFalse((self.root/'sigterm').exists())
+
+    def test_failed_controller_restore_is_reported(self):
+        self.env['FAST_TEST_RESTORE_FAIL']='1'
+        self.start()
+        result=self.run_wrapper('stop')
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('restoration failed',result.stdout)
+        self.assertTrue((self.root/'state/restore-failed').exists())
 
 
 if __name__ == '__main__': unittest.main()

@@ -31,9 +31,10 @@ final class FastVolumeController {
         this.pressed = pressed;
     }
     synchronized void down(int key) {
-        if ((key != 24 && key != 25) || held == key) return;
+        if ((key != 24 && key != 25 && key != 164) || held == key) return;
         stop(); held = key; deadline = clock.now() + MAX_HOLD_MS;
         pressed.run(); // Show the panel on physical DOWN, before the hold timer or volume broadcast.
+        if (key == 164) return; // Native mute tap passes through; never synthesize held mute toggles.
         long press = generation;
         pending = timer.post(() -> tick(press), HOLD_MS);
     }
@@ -63,14 +64,16 @@ final class FastVolumeController {
                 String type = words[i], code = words[i + 1], value = words[i + 2];
                 if ("EV_MSC".equals(type) && "MSC_SCAN".equals(code)) {
                     scan = "000c0080".equalsIgnoreCase(value) ? 24
-                            : "000c0081".equalsIgnoreCase(value) ? 25 : -1;
+                            : "000c0081".equalsIgnoreCase(value) ? 25
+                            : "000c00e2".equalsIgnoreCase(value) ? 164 : -1;
                     return;
                 }
                 if ("EV_SYN".equals(type) && "SYN_REPORT".equals(code)) { scan = 0; return; }
                 if (!"EV_KEY".equals(type)) continue;
                 int key = "KEY_VOLUMEUP".equals(code) ? 24 : "KEY_VOLUMEDOWN".equals(code) ? 25
+                        : "KEY_MUTE".equals(code) || "KEY_VOLUMEMUTE".equals(code) ? 164
                         : "KEY_UNKNOWN".equals(code) ? scan : -1;
-                if (key == 24 || key == 25) {
+                if (key == 24 || key == 25 || key == 164) {
                     if ("DOWN".equals(value)) controller.down(key);
                     else if ("UP".equals(value)) controller.up(key);
                     else if ("REPEAT".equals(value)) controller.stop();

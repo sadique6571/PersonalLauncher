@@ -1,62 +1,112 @@
 package com.sadique.launcher;
 
 import android.annotation.SuppressLint;
-import android.net.LocalSocket;
-import android.net.LocalSocketAddress;
+import android.content.AttributionSource;
+import android.os.Binder;
+import android.os.Build;
+import android.os.Bundle;
 import android.os.IBinder;
+import android.os.Parcel;
 import android.os.SystemClock;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** One authenticated local connection. No broadcasts or per-step processes. */
-@SuppressLint({"PrivateApi", "DiscouragedPrivateApi"})
+/** Uses the same external-provider acquisition path as adb's content command, then direct Binder IPC. */
+// Only loaded by the standalone shell runtime, never by the installed target-SDK app.
+@SuppressLint({"PrivateApi", "DiscouragedPrivateApi", "SoonBlockedPrivateApi"})
 final class ShellVolumeChannel implements AutoCloseable {
-    private final LocalSocket socket = new LocalSocket();
+    private static final String AUTHORITY = "com.sadique.launcher.theme";
     private final ExecutorService sender = Executors.newSingleThreadExecutor();
-    private final DataOutputStream output;
-    private final VolumePanelUpdates updates;
+    private final IBinder token = new Binder();
+    private final IBinder.DeathRecipient death = this::close;
+    private Object activity;
+    private Class<?> activityType;
+    private IBinder endpoint;
+    private VolumePanelUpdates updates;
+    private boolean acquired;
     private volatile boolean closed;
 
     ShellVolumeChannel() throws Exception {
         try {
-            // Verify the listener belongs to the installed launcher, not a socket-name impostor.
-            IBinder binder = (IBinder) Class.forName("android.os.ServiceManager")
-                    .getMethod("getService", String.class).invoke(null, "package");
-            Object pm = Class.forName("android.content.pm.IPackageManager$Stub")
-                    .getMethod("asInterface", IBinder.class).invoke(null, binder);
-            Class<?> type = Class.forName("android.content.pm.IPackageManager");
-            Method uid;
-            Object flags;
-            try { uid = type.getMethod("getPackageUid", String.class, long.class, int.class); flags = 0L; }
-            catch (NoSuchMethodException older) { uid = type.getMethod("getPackageUid", String.class, int.class, int.class); flags = 0; }
-            int expectedUid = (Integer) uid.invoke(pm, "com.sadique.launcher", flags, 0);
-            if (expectedUid < 10000) throw new IOException("Installed launcher UID unavailable");
-            socket.connect(new LocalSocketAddress(VolumePanelSocket.NAME));
-            socket.setSoTimeout(1500);
-            if (socket.getPeerCredentials().getUid() != expectedUid) throw new IOException("Panel socket owner mismatch");
-            int magic = new DataInputStream(socket.getInputStream()).readInt();
-            if (magic != VolumePanelSocket.MAGIC) throw new IOException("Panel protocol mismatch; update launcher APK");
-            output = new DataOutputStream(socket.getOutputStream());
-            updates = new VolumePanelUpdates(sender::execute, sentAt -> {
-                try { output.writeLong(sentAt); output.flush(); }
-                catch (IOException lost) { System.err.println("Direct panel channel lost: " + lost); close(); }
-            });
-            System.out.println("Direct launcher panel channel connected.");
+            activity = Class.forName("android.app.ActivityManager").getMethod("getService").invoke(null);
+            activityType = Class.forName("android.app.IActivityManager");
+            Object holder;
+            try {
+                holder = activityType.getMethod("getContentProviderExternal", String.class, int.class, IBinder.class, String.class)
+                        .invoke(activity, AUTHORITY, 0, token, "personal-launcher-volume");
+            } catch (NoSuchMethodException older) {
+                holder = activityType.getMethod("getContentProviderExternal", String.class, int.class, IBinder.class)
+                        .invoke(activity, AUTHORITY, 0, token);
+            }
+            if (holder == null) throw new IOException("Launcher theme provider is unavailable");
+            acquired = true;
+            Object provider = holder.getClass().getField("provider").get(holder);
+            Class<?> providerType = Class.forName("android.content.IContentProvider");
+            Bundle response;
+            if (Build.VERSION.SDK_INT >= 31) {
+                AttributionSource source = new AttributionSource.Builder(2000).setPackageName("com.android.shell").build();
+                Method call = providerType.getMethod("call", AttributionSource.class, String.class, String.class, String.class, Bundle.class);
+                response = (Bundle) call.invoke(provider, source, AUTHORITY, VolumePanelBinder.METHOD, null, null);
+            } else {
+                try {
+                    response = (Bundle) providerType.getMethod("call", String.class, String.class, String.class, String.class, Bundle.class)
+                            .invoke(provider, "com.android.shell", AUTHORITY, VolumePanelBinder.METHOD, null, null);
+                } catch (NoSuchMethodException older) {
+                    response = (Bundle) providerType.getMethod("call", String.class, String.class, String.class, Bundle.class)
+                            .invoke(provider, "com.android.shell", VolumePanelBinder.METHOD, null, null);
+                }
+            }
+            if (response == null || response.getInt("protocol") != VolumePanelBinder.PROTOCOL) {
+                throw new IOException("Update the installed launcher APK: panel Binder protocol is unavailable");
+            }
+            endpoint = response.getBinder("panel");
+            if (endpoint == null) throw new IOException("Enable the launcher accessibility helpers before starting panel mode");
+            if (!VolumePanelBinder.DESCRIPTOR.equals(endpoint.getInterfaceDescriptor())) throw new IOException("Panel Binder descriptor mismatch");
+            updates = new VolumePanelUpdates(sender::execute, this::send);
+            endpoint.linkToDeath(death, 0);
+            send(0); // Readiness check only: no volume popup until a real press/change.
+            if (closed) throw new IOException("Panel Binder endpoint is not active");
+            System.out.println("Direct launcher panel Binder connected through the theme provider.");
         } catch (Exception unavailable) {
-            sender.shutdownNow();
-            try { socket.close(); } catch (IOException ignored) { }
-            throw new IOException("Direct panel unavailable: install the matching launcher APK and enable its accessibility helpers", unavailable);
+            close();
+            throw new IOException("Direct panel Binder unavailable", unavailable);
         }
     }
-    void signal() { updates.offer(SystemClock.uptimeMillis()); }
-    boolean isOpen() { return !closed; }
-    @Override public void close() {
+    private void send(long sentAt) {
+        if (closed) return;
+        Parcel data = Parcel.obtain(), reply = Parcel.obtain();
+        try {
+            data.writeInterfaceToken(VolumePanelBinder.DESCRIPTOR);
+            data.writeLong(sentAt);
+            if (!endpoint.transact(IBinder.FIRST_CALL_TRANSACTION, data, reply, 0)) throw new IOException("Panel Binder rejected request");
+            reply.readException();
+            if (reply.readInt() != 1) throw new IOException("Panel accessibility helper is not active");
+        } catch (Exception lost) {
+            if (!closed) System.err.println("Direct panel Binder lost: " + lost);
+            close();
+        } finally { data.recycle(); reply.recycle(); }
+    }
+    void signal() { VolumePanelUpdates pending = updates; if (pending != null) pending.offer(SystemClock.uptimeMillis()); }
+    boolean isOpen() { return !closed && endpoint != null && endpoint.isBinderAlive(); }
+    @Override public synchronized void close() {
+        if (closed) return;
         closed = true;
-        updates.close(); sender.shutdownNow();
-        try { socket.close(); } catch (IOException ignored) { }
+        if (updates != null) updates.close();
+        sender.shutdownNow();
+        if (endpoint != null) try { endpoint.unlinkToDeath(death, 0); } catch (RuntimeException alreadyRemoved) { }
+        if (acquired) {
+            acquired = false;
+            try {
+                try {
+                    activityType.getMethod("removeContentProviderExternalAsUser", String.class, IBinder.class, int.class)
+                            .invoke(activity, AUTHORITY, token, 0);
+                } catch (NoSuchMethodException older) {
+                    activityType.getMethod("removeContentProviderExternal", String.class, IBinder.class)
+                            .invoke(activity, AUTHORITY, token);
+                }
+            } catch (ReflectiveOperationException failure) { System.err.println("Could not release panel provider: " + failure); }
+        }
     }
 }

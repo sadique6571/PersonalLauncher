@@ -145,34 +145,86 @@ helper runs; restart the helper to adopt the new stock controller. A forced kill
 if needed. The option is session-only and is not configured to restart at boot.
 The 50ms repeat, one-point steps and 300ms hold threshold are unchanged.
 
-### Immediate panel updates (5.9 and later)
+### Direct Binder updates (6.0 and later)
 
-Panel suppression alone leaves the old installed launcher's overlay dependent on
-Android's queued `VOLUME_CHANGED_ACTION` broadcast. If volume races ahead before
-the overlay appears, update **both the installed launcher APK and the copied shell
-payload** to 5.9 or later. Updating only the classpath payload cannot change the
-installed observer/UI code.
+The 5.9 local-socket channel was denied by firmware on the tested Haier TV:
+`LocalSocketImpl.connectLocal: Permission denied`. Do not repeat APK installs or
+accessibility toggles to diagnose that transport denial. The existing protected
+provider remained reachable with `adb shell content call` (an unknown method
+returning `null` verifies provider acquisition, not panel readiness).
 
-The accessibility helper now owns a local Unix-domain socket while it is connected.
-It accepts only shell UID 2000. The shell helper checks the listener's UID against
-the installed launcher and verifies a versioned handshake before suppressing the
-stock panel. This is local IPC, with no Internet permission or TCP listener.
+Version 6.0 replaces that socket with direct Binder IPC. The shell helper acquires
+`com.sadique.launcher.theme` through the same external-provider API used by Android's
+`content` command. A versioned `volume_panel_v1` call returns a panel Binder only
+while an accessibility helper owns the overlay. Acquisition and every panel
+request explicitly enforce shell UID 2000. No manifest permission or exported
+component is added, and there is no socket listener. The external provider handle
+is released on channel close. If the app dies or its accessibility helper becomes
+unavailable, subsequent volume callbacks retain the stock popup flag.
 
-A physical volume DOWN signals the panel immediately, before the 300ms hold timer;
-AudioService callbacks signal subsequent actual volume changes. The injector and
-its 50ms repeat timing are unchanged. Both sides coalesce pending updates so only
-the newest signal is rendered, rather than building a held-key backlog. Stale
-signals are dropped. The UI reads the current volume, reuses its hidden window,
-and ignores redundant queued volume broadcasts while direct signals are fresh.
-If the direct channel disconnects, subsequent volume callbacks retain the stock
-popup flag. Normal helper stop still restores the stock controller.
+Both the installed launcher APK and the copied helper payload must update to 6.0.
+The existing 50ms minimum, one-point step, 300ms hold threshold, Home and Settings
+configuration are unchanged. Physical DOWN signals before the hold timer;
+AudioService callbacks signal subsequent changes. Pending updates are coalesced
+and stale signals dropped. The actual current volume is read and the hidden
+window is reused. Queued volume broadcasts remain a fallback.
 
-For timing evidence while pressing the real remote:
+For on-TV timing evidence:
 
 ```sh
 adb shell 'logcat -d -v time -s PersonalVolume | tail -n 80'
 ```
 
-`direct panel UI applied, age=Nms` measures signal-to-UI-application delay, not a
-physical display-frame measurement. No on-TV latency guarantee is inferred from
-unit tests or from the requested 50ms repeat wait.
+`direct panel UI applied, age=Nms` measures the newest signal's age when UI state
+is applied, not a display-frame measurement or the time since the first held-key
+press. Real Netflix/app response still requires a physical remote test.
+
+### Stop without losing the stock controller
+
+A SIGTERM sent to Android `app_process` cannot be relied on to run Java shutdown
+hooks. The new wrapper writes a `stop-request` marker when a helper advertises
+`graceful-stop`. The helper exits its input-reader loop, cancels repeats, restores
+the saved stock controller, releases its provider handle and then exits. The
+wrapper waits for completion and does not force-kill a stuck cleanup. Restoration
+failures are logged and reported as stop failures.
+
+For migration, an old system-mode helper can still be terminated normally. An old
+launcher-mode helper without the stop protocol is refused; reboot once rather
+than killing the active controller. A forced kill or power loss still cannot run
+cleanup; reboot restores stock SystemUI registration. A failed launcher startup
+is preserved in `launcher-error.log` even when the fast system-mode fallback
+starts and replaces `bridge.log`.
+
+### Combined 6.0 UI and settings fixes
+
+The overlay is a 44dp wide vertical filled track with no surrounding card or thumb.
+Fill rises from the bottom, shrinks on volume down, and is empty while media is
+muted. The saved media index is not overwritten by muting. Native mute DOWN only
+signals the panel: the helper never injects repeated mute toggles. The mute-change
+broadcast is also observed, including changes without a volume-index change.
+
+On API 33+, icons come from `getAudioDevicesForAttributes(USAGE_MEDIA)`, not the
+paired-device list. Reported wired/USB/BLE headsets have a headphone glyph;
+reported BLE speakers have a speaker glyph. A2DP does not identify whether the
+remote device is a speaker or headphones, so it uses a generic Bluetooth-audio
+glyph without requesting Bluetooth permissions. Unsupported route queries use a
+neutral volume glyph. Output icons are cached between updates and device changes
+invalidate the route cache.
+
+Search and bell have their own rounded toolbar background. Tile preference
+changes explicitly rebind the app grid even when its items are unchanged. Chooser
+checks read the saved setting, and their default values match the values used by
+the Home views. Theme/font/glass changes also retheme saved settings pages while
+retaining focus and scroll position.
+
+The Bluetooth tile launches the verified accessories slice without treating a
+failed provider metadata lookup as a missing page. The TV SliceActivity is
+protected by WRITE_SECURE_SETTINGS; the launcher already declares this development
+permission, which the installation step grants with:
+
+```sh
+adb shell pm grant com.sadique.launcher android.permission.WRITE_SECURE_SETTINGS
+```
+
+No new permission is added to the launcher. The specific firmware page, mute key,
+active-route icons and Netflix response must be verified with the real remote.

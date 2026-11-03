@@ -10,6 +10,10 @@ READY="$STATE/ready"
 REPEAT_FILE="$STATE/repeat-ms"
 PANEL_FILE="$STATE/panel"
 LOG="$STATE/bridge.log"
+GRACEFUL="$STATE/graceful-stop"
+STOP_REQUEST="$STATE/stop-request"
+RESTORE_FAILED="$STATE/restore-failed"
+LAST_ERROR="$STATE/launcher-error.log"
 
 running() {
     [ -r "$PID_FILE" ] || return 1
@@ -22,12 +26,24 @@ running() {
 
 stop_fast() {
     if running; then
-        kill "$pid" || return 1
+        if [ -f "$GRACEFUL" ]; then
+            : > "$STOP_REQUEST" || return 1
+        elif [ "$(cat "$PANEL_FILE" 2>/dev/null)" = launcher ]; then
+            printf 'Legacy launcher-panel helper cannot restore through this stop protocol. Reboot once before updating it.\n'
+            return 1
+        else
+            kill "$pid" || return 1
+        fi
         attempts=0
         while running && [ "$attempts" -lt 50 ]; do sleep 0.1; attempts=$((attempts + 1)); done
-        if running; then printf 'Fast helper is still stopping.\n'; return 1; fi
+        if running; then printf 'Fast helper did not finish cleanup; it was not force-killed.\n'; return 1; fi
+        if [ -f "$RESTORE_FAILED" ]; then
+            printf 'Volume controller restoration failed; see bridge.log. Reboot before launcher-panel mode.\n'
+            cat "$LOG"
+            return 1
+        fi
     fi
-    rm -f "$PID_FILE" "$READY" "$REPEAT_FILE" "$PANEL_FILE"
+    rm -f "$PID_FILE" "$READY" "$REPEAT_FILE" "$PANEL_FILE" "$GRACEFUL" "$STOP_REQUEST" "$RESTORE_FAILED"
 }
 
 case "${1:-status}" in
@@ -62,7 +78,8 @@ case "${1:-status}" in
             [ "$attempts" -lt 30 ] || { printf 'Old bridge is still stopping; fast helper was not started.\n'; exit 1; }
         fi
         chmod 0444 "$PAYLOAD" || exit 1
-        rm -f "$READY" "$PID_FILE"
+        rm -f "$READY" "$PID_FILE" "$STOP_REQUEST" "$GRACEFUL" "$RESTORE_FAILED"
+        if [ "$panel" = launcher ]; then rm -f "$LAST_ERROR"; fi
         : > "$LOG"
         printf '%s\n' "$repeat_ms" > "$REPEAT_FILE"
         printf '%s\n' "$panel" > "$PANEL_FILE"
@@ -74,6 +91,7 @@ case "${1:-status}" in
             sleep 0.1; attempts=$((attempts + 1))
         done
         printf 'Fast helper failed to become ready.\n'; cat "$LOG"
+        if [ "$panel" = launcher ]; then cp "$LOG" "$LAST_ERROR"; fi
         if stop_fast; then
             if [ "$panel" = launcher ]; then
                 printf 'Keeping fast volume repeats with the stock panel; launcher-panel startup failed.\n'
@@ -93,6 +111,7 @@ case "${1:-status}" in
     status)
         if running && [ -f "$READY" ]; then printf 'Fast helper running (PID %s), repeat wait %sms.\n' "$pid" "$(cat "$REPEAT_FILE" 2>/dev/null)"
             printf 'Panel: %s.\n' "$(cat "$PANEL_FILE" 2>/dev/null)"
+            if [ -f "$LAST_ERROR" ]; then printf 'Previous launcher-panel failure saved in %s.\n' "$LAST_ERROR"; fi
         else printf 'Fast helper is not ready/running.\n'; [ ! -f "$LOG" ] || cat "$LOG"; fi
         ;;
     *) printf 'Usage: sh fast-volume-bridge.sh start [device] [repeat-ms: 50..1000] [system|launcher] | status | stop\n'; exit 1 ;;

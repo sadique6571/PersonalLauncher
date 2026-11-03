@@ -284,6 +284,12 @@ public final class PersonalHomeActivity extends Activity {
         return view;
     }
 
+    private GradientDrawable toolbarSurface(boolean focused) {
+        GradientDrawable shape = surface(focused);
+        shape.setCornerRadius(dp(16));
+        return shape;
+    }
+
     private android.widget.ImageButton iconAction(String title, int resource, Runnable action) {
         android.widget.ImageButton icon = new android.widget.ImageButton(this);
         icon.setImageResource(resource);
@@ -292,9 +298,10 @@ public final class PersonalHomeActivity extends Activity {
         icon.setTooltipText(title);
         icon.setPadding(dp(11), dp(11), dp(11), dp(11));
         icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        icon.setBackground(surface(false));
+        icon.setBackground(toolbarSurface(false));
+        icon.setClipToOutline(true);
         icon.setFocusable(true);
-        icon.setOnFocusChangeListener((v, focus) -> v.setBackground(surface(focus)));
+        icon.setOnFocusChangeListener((v, focus) -> v.setBackground(toolbarSurface(focus)));
         icon.setOnClickListener(v -> action.run());
         icon.setOnKeyListener((v, code, event) -> toolbarKey(v, event));
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(tv ? 48 : 44), dp(tv ? 48 : 44));
@@ -1057,6 +1064,8 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getKeyCode() == KeyEvent.KEYCODE_VOLUME_MUTE && event.getAction() == KeyEvent.ACTION_DOWN
+                && event.getRepeatCount() == 0 && !event.isCanceled()) VolumeSlider.nativeMute(this);
         if (VolumeKeys.direction(event.getKeyCode()) != 0
                 && !PassiveHomeService.enabled(this) && VolumeKeys.control(this, event)) return true;
         if (event.getAction() == KeyEvent.ACTION_DOWN) playNavSound(event.getKeyCode());
@@ -1531,7 +1540,7 @@ public final class PersonalHomeActivity extends Activity {
                 prefs.edit().putInt("tile_spacing", which).apply(); refreshApps();
             }),
             () -> chooseSetting("Tile corners", new String[]{"Sharp", "Rounded", "Round"}, which -> {
-                prefs.edit().putInt("tile_corners", which).apply(); refreshApps();
+                prefs.edit().putInt("tile_corners", which).apply(); buildHomeSoon();
             }),
             () -> chooseSetting("Logo size", new String[]{"Small", "Normal", "Large"}, which -> {
                 prefs.edit().putInt("logo_size", which).apply();
@@ -1747,10 +1756,10 @@ public final class PersonalHomeActivity extends Activity {
 
     /** Applies the current light/dark text scheme to every wallpaper-backed label. */
     private void chooseSetting(String title, String[] options, java.util.function.IntConsumer selected) {
-        String[] shown = options.clone();
-        int current = settingCurrentIndex(title);
-        if (current >= 0 && current < shown.length) shown[current] += "  ✓";
-        GlassSettings.options(this, title, shown, null, selected);
+        GlassSettings.choices(this, title, options, () -> settingCurrentIndex(title), which -> {
+            selected.accept(which);
+            GlassSettings.refresh(this);
+        });
     }
 
     /** Index of the currently applied option for a settings chooser (-1 when none applies). (User 2026-11-01.) */
@@ -1764,17 +1773,17 @@ public final class PersonalHomeActivity extends Activity {
                 return v == 0 ? 0 : v - 1;
             }
             case "Tile size": return prefs.getBoolean("large_tiles", false) ? 1 : 0;
-            case "Tile spacing": return prefs.getInt("tile_spacing", 0);
-            case "Tile corners": return prefs.getInt("tile_corners", 0);
+            case "Tile spacing": return prefs.getInt("tile_spacing", 1);
+            case "Tile corners": return prefs.getInt("tile_corners", 1);
             case "Logo size": return Math.max(0, Math.min(2, prefs.getInt("logo_size", 1)));
             case "Focused app title size": return indexOf(new int[]{24, 32, 40, 48}, prefs.getInt("focus_title_size", tv ? 32 : 26));
-            case "Focus border": return prefs.getInt("focus_border", 0);
+            case "Focus border": return prefs.getInt("focus_border", 1);
             case "App entrance": return prefs.getBoolean("app_entrance", true) ? 1 : 0;
             case "Clock size": return indexOf(tv ? new int[]{42, 52, 62} : new int[]{36, 44, 52}, prefs.getInt("clock_size", tv ? 52 : 44));
             case "Clock style": return prefs.getInt("clock_style", 0);
             case "Clock font": return prefs.getInt("clock_font", 0);
             case "Time format": return prefs.getBoolean("time_24h", false) ? 1 : 0;
-            case "Clock alignment": return prefs.getInt("clock_align", 0);
+            case "Clock alignment": return prefs.getInt("clock_align", 1);
             case "Clock seconds": return prefs.getBoolean("clock_seconds", false) ? 1 : 0;
             case "Clock glow": return prefs.getBoolean("clock_glow", false) ? 1 : 0;
             case "Clock shadow": return prefs.getBoolean("clock_shadow", true) ? 1 : 0;
@@ -1805,7 +1814,8 @@ public final class PersonalHomeActivity extends Activity {
 
     private void refreshApps() {
         appHeading.setText("Your apps");
-        if (cachedApps != null) renderApps(cachedApps); else loadApps();
+        if (cachedApps != null) { renderApps(cachedApps); grid.rebind(); } else loadApps();
+        // Style preferences can change while app identities/content remain unchanged.
         if (continueWatching != null) continueWatching.reload();
     }
 

@@ -80,6 +80,9 @@ public final class ShellVolumeBridge {
         ShellVolumePanel panel = launcherPanel ? new ShellVolumePanel() : null;
         Process reader = new ProcessBuilder("getevent", "-lt", device).redirectErrorStream(true).start();
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        File stopRequest = new File(ready.getParentFile(), "stop-request");
+        File graceful = new File(ready.getParentFile(), "graceful-stop");
+        File restoreFailure = new File(ready.getParentFile(), "restore-failed");
         java.util.concurrent.atomic.AtomicBoolean failed = new java.util.concurrent.atomic.AtomicBoolean();
         FastVolumeController controller = new FastVolumeController(SystemClock::uptimeMillis,
                 (task, delay) -> {
@@ -87,13 +90,20 @@ public final class ShellVolumeBridge {
                     return () -> future.cancel(false);
                 }, injector, error -> { failed.set(true); error.printStackTrace(System.err); reader.destroy(); }, repeatMs,
                 () -> { if (panel != null) panel.signal(); });
+        // Android SIGTERM need not execute Java shutdown hooks. Exit through the reader/finally
+        // path when the wrapper requests stop, so the saved volume controller is restored first.
+        scheduler.scheduleWithFixedDelay(() -> {
+            if (stopRequest.exists()) { controller.stop(); reader.destroy(); }
+        }, 100, 100, TimeUnit.MILLISECONDS);
         Thread shutdown = new Thread(() -> {
             controller.stop(); reader.destroy(); scheduler.shutdownNow(); ready.delete();
             if (panel != null) panel.close();
+            graceful.delete();
         }, "volume-helper-stop");
         Runtime.getRuntime().addShutdownHook(shutdown);
         try (BufferedReader events = new BufferedReader(new InputStreamReader(reader.getInputStream(), StandardCharsets.UTF_8))) {
             if (panel != null) panel.install();
+            try (FileOutputStream marker = new FileOutputStream(graceful)) { marker.write(1); }
             try (FileOutputStream marker = new FileOutputStream(ready)) { marker.write(1); }
             System.out.println("Fast volume helper ready: hold=300ms, requested repeat=" + repeatMs + "ms, step=1, one persistent injector.");
             FastVolumeController.Parser parser = new FastVolumeController.Parser(controller);
@@ -105,6 +115,10 @@ public final class ShellVolumeBridge {
         } finally {
             controller.stop(); reader.destroy(); scheduler.shutdownNow(); ready.delete();
             if (panel != null) panel.close();
+            if (panel != null && panel.restoreFailed()) {
+                try (FileOutputStream marker = new FileOutputStream(restoreFailure)) { marker.write(1); }
+            }
+            graceful.delete(); stopRequest.delete();
             try { Runtime.getRuntime().removeShutdownHook(shutdown); }
             catch (IllegalStateException shuttingDown) { /* Shutdown hook is already doing the same cleanup. */ }
         }

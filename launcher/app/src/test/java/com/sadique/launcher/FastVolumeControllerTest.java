@@ -100,4 +100,17 @@ public class FastVolumeControllerTest {
     @Test(expected=IllegalArgumentException.class) public void repeatWaitAboveOneSecondIsRejected() {
         new FastVolumeController(() -> now, (task, delay) -> () -> {}, keys::add, errors::add, 1001);
     }
+
+    @Test public void heldMuteNeverSynthesizesRepeatedToggles() {
+        bluetooth("000c00e2", "DOWN"); advance(5000);
+        bluetooth("000c00e2", "UP");
+        assertTrue(keys.isEmpty());
+    }
+    @Test public void muteCancelsAnExistingVolumeHold() {
+        controller.down(24); advance(310);
+        int before = keys.size();
+        parser.line("EV_KEY KEY_MUTE DOWN"); advance(1000);
+        parser.line("EV_KEY KEY_MUTE UP");
+        assertEquals(before, keys.size());
+    }
 }

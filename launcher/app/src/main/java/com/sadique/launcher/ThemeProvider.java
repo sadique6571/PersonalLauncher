@@ -5,6 +5,7 @@ import android.content.ContentValues;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
+import android.os.Bundle;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -20,6 +21,15 @@ import java.io.FileNotFoundException;
  *   content delete --uri content://com.sadique.launcher.theme/wallpapers      (every image in the collection)
  */
 public class ThemeProvider extends ContentProvider {
+
+    @Override public Bundle call(String method, String arg, Bundle extras) {
+        if (!VolumePanelBinder.METHOD.equals(method)) return super.call(method, arg, extras);
+        VolumePanelBinder.enforceShell();
+        Bundle result = new Bundle();
+        result.putInt("protocol", VolumePanelBinder.PROTOCOL);
+        result.putBinder("panel", VolumePanelBinder.endpoint());
+        return result;
+    }
 
     private File file(Uri uri) throws FileNotFoundException {
         String path = ThemeFiles.path(uri.getPathSegments());
