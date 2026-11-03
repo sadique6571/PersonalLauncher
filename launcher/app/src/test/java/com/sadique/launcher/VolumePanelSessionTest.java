@@ -49,4 +49,12 @@ public class VolumePanelSessionTest {
         assertEquals(0,VolumePanelSession.flags(3,0));
         assertEquals(0x8005,VolumePanelSession.flags(4,0x8005));
     }
+    @Test public void shutdownBeforeInstallCannotRegisterAfterCleanup() throws Exception {
+        Audio audio = new Audio();
+        VolumePanelSession<String> session = new VolumePanelSession<>(audio,"stock","relay");
+        session.close();
+        try { session.install(); fail("must refuse registration after cleanup"); }
+        catch (IllegalStateException expected) { }
+        assertEquals("stock",audio.current); assertEquals(0,audio.writes);
+    }
 }
