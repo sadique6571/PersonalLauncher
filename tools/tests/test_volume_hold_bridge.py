@@ -24,7 +24,8 @@ class VolumeBridgeTest(unittest.TestCase):
                         PLV_STATE_DIR=str(self.root / "state"), PLV_REPEAT_DELAY="0.15",
                         PLV_PROC_ROOT=str(self.root / "proc"),
                         PLV_REPEAT_INTERVAL="0.06", PLV_MAX_HOLD_SECONDS="2",
-                        FAKE_AUDIO_LOG=str(self.audio), FAKE_SETTINGS_LOG=str(self.settings))
+                        FAKE_AUDIO_LOG=str(self.audio), FAKE_SETTINGS_LOG=str(self.settings),
+                        FAKE_ADB_LOG=str(self.root / "adb.log"))
         # The managed host exposes outer /proc PIDs inside a nested PID namespace. Supply only
         # our fake process identity records; real signal/lifecycle behaviour is still exercised.
         self.fake("nohup", """import os,sys,signal,pathlib
@@ -38,7 +39,7 @@ os.execvp(sys.argv[1],sys.argv[1:])
 p=pathlib.Path(os.environ['PLV_PROC_ROOT'])/str(os.getpid())
 p.mkdir(parents=True,exist_ok=True)
 (p/'cmdline').write_bytes(b'\\0'.join(x.encode() for x in ['getevent']+sys.argv[1:])+b'\\0')
-with open(sys.argv[-1]) as stream:
+with open(sys.argv[-1],newline='') as stream:
     for line in stream:
         print(line, end='', flush=True)
 """)
@@ -54,6 +55,21 @@ print(os.environ.get('FAKE_HELPERS', 'com.sadique.launcher/com.sadique.launcher.
 """)
         # The actual TV denied mkfifo in /data/local/tmp. The bridge must never call it.
         self.fake("mkfifo", "raise SystemExit('mkfifo: Permission denied')\n")
+        self.fake("adb", """import os,sys,pathlib
+a=sys.argv[1:]
+with open(os.environ['FAKE_ADB_LOG'],'a') as out: out.write(' '.join(a)+'\\n')
+if a[:4] == ['shell','-tt','getevent','-lt']:
+    p=pathlib.Path(os.environ['PLV_PROC_ROOT'])/str(os.getpid())
+    p.mkdir(parents=True,exist_ok=True)
+    (p/'cmdline').write_bytes(b'\\0'.join(x.encode() for x in ['adb']+a)+b'\\0')
+    with open(a[4],newline='') as source:
+        for line in source: print(line,end='',flush=True)
+elif a[:3] == ['shell','test','-r']: sys.exit(0 if os.access(a[3],os.R_OK) else 1)
+elif a[:2] in [['shell','cmd'],['shell','settings']]:
+    program=str(pathlib.Path(__file__).parent/a[1])
+    os.execv(program,[program]+a[2:])
+else: raise SystemExit('Unexpected adb arguments: '+repr(a))
+""")
         self.run_bridge("start", str(self.device))
 
     def fake(self, name, body):
@@ -69,7 +85,8 @@ print(os.environ.get('FAKE_HELPERS', 'com.sadique.launcher/com.sadique.launcher.
         return result
 
     def event(self, key, action):
-        os.write(self.input, f"[ 123.000] /dev/input/event1: EV_KEY {key} {action}\n".encode())
+        # Android getevent pads labels to 20 columns; PTY output can also end in CRLF.
+        os.write(self.input, f"[ 123.000] /dev/input/event1: EV_KEY       {key:<20} {action:<20}\r\n".encode())
 
     def steps(self):
         return self.audio.read_text().splitlines() if self.audio.exists() else []
@@ -183,6 +200,28 @@ print(os.environ.get('FAKE_HELPERS', 'com.sadique.launcher/com.sadique.launcher.
         time.sleep(.3)
         self.assertEqual(len(self.steps()), 1)
         self.assertIn("AudioService adjustment failed", (self.root / "state/bridge.log").read_text())
+
+    def test_host_transport_forces_terminal_and_uses_adb_audio(self):
+        self.stop()
+        self.run_bridge("start-adb", str(self.device))
+        self.event("KEY_VOLUMEUP", "DOWN")
+        self.wait_for_steps(2)
+        self.event("KEY_VOLUMEUP", "UP")
+        time.sleep(.15)
+        count = len(self.steps())
+        time.sleep(.2)
+        self.assertEqual(len(self.steps()), count)
+        calls = (self.root / "adb.log").read_text()
+        self.assertIn("shell -tt getevent -lt", calls)
+        self.assertIn("shell cmd media_session volume --stream 3 --adj raise", calls)
+        self.assertIn("running", self.run_bridge("status-adb").stdout)
+        self.run_bridge("stop-adb")
+
+    def test_unpadded_labels_also_work(self):
+        line = "[ 123.000] /dev/input/event1: EV_KEY KEY_VOLUMEUP DOWN"
+        os.write(self.input, (line + "\n").encode())
+        self.wait_for_steps()
+        self.event("KEY_VOLUMEUP", "UP")
 
     def test_stale_pid_never_kills_an_unrelated_process(self):
         self.stop()

@@ -3,7 +3,16 @@
 # sh /data/local/tmp/volume-hold-bridge.sh start [input-device]
 # sh /data/local/tmp/volume-hold-bridge.sh status|stop
 
-STATE=${PLV_STATE_DIR:-/data/local/tmp/personal-launcher-volume}
+case "${1:-}" in
+    start-adb|stop-adb|status-adb)
+        PLV_TRANSPORT=adb
+        export PLV_TRANSPORT
+        set -- "${1%-adb}" "${2:-/dev/input/event1}"
+        ;;
+esac
+TRANSPORT=${PLV_TRANSPORT:-local}
+if [ "$TRANSPORT" = adb ]; then state_base=${TMPDIR:-.}; else state_base=${TMPDIR:-/data/local/tmp}; fi
+STATE=${PLV_STATE_DIR:-$state_base/personal-launcher-volume}
 SCRIPT=$(readlink -f "$0") || exit 1
 LOCK="$STATE/lock"
 PID_FILE="$LOCK/pid"
@@ -42,12 +51,20 @@ repeat_volume() {
     sleep "${PLV_REPEAT_DELAY:-0.4}"
     deadline=$(( $(date +%s) + ${PLV_MAX_HOLD_SECONDS:-30} ))
     while [ "$(date +%s)" -lt "$deadline" ]; do
-        cmd media_session volume --stream 3 --adj "$direction" > /dev/null 2>&1 || {
+        adjust_volume "$direction" > /dev/null 2>&1 || {
             printf 'AudioService adjustment failed; repeat stopped.\n' >&2
             exit 1
         }
         sleep "${PLV_REPEAT_INTERVAL:-0.15}"
     done
+}
+
+adjust_volume() {
+    if [ "$TRANSPORT" = adb ]; then
+        adb shell cmd media_session volume --stream 3 --adj "$1"
+    else
+        cmd media_session volume --stream 3 --adj "$1"
+    fi
 }
 
 parse_events() {
@@ -69,14 +86,15 @@ parse_events() {
     }
     trap 'exit 0' TERM INT HUP
     trap stop_repeat EXIT
+    printf 'event parser ready\n'
     while IFS= read -r event; do
         case "$event" in
-            *EV_KEY*KEY_VOLUMEUP*DOWN) begin_repeat raise ;;
-            *EV_KEY*KEY_VOLUMEDOWN*DOWN) begin_repeat lower ;;
-            *EV_KEY*KEY_VOLUMEUP*UP) [ "$held" = raise ] && stop_repeat ;;
-            *EV_KEY*KEY_VOLUMEDOWN*UP) [ "$held" = lower ] && stop_repeat ;;
+            *EV_KEY*KEY_VOLUMEUP*DOWN*) begin_repeat raise ;;
+            *EV_KEY*KEY_VOLUMEDOWN*DOWN*) begin_repeat lower ;;
+            *EV_KEY*KEY_VOLUMEUP*UP*) [ "$held" = raise ] && stop_repeat ;;
+            *EV_KEY*KEY_VOLUMEDOWN*UP*) [ "$held" = lower ] && stop_repeat ;;
             # If the driver supplies native repeats, do not add another repeat loop.
-            *EV_KEY*KEY_VOLUMEUP*REPEAT|*EV_KEY*KEY_VOLUMEDOWN*REPEAT) stop_repeat ;;
+            *EV_KEY*KEY_VOLUMEUP*REPEAT*|*EV_KEY*KEY_VOLUMEDOWN*REPEAT*) stop_repeat ;;
         esac
     done
 }
@@ -97,12 +115,18 @@ watch_events() {
 case "${1:-status}" in
     start)
         device=${2:-/dev/input/event1}
-        [ -r "$device" ] || { printf 'Cannot read input device: %s\n' "$device"; exit 1; }
-        for program in getevent cmd nohup; do
+        if [ "$TRANSPORT" = adb ]; then programs='adb nohup'; else programs='getevent cmd nohup'; fi
+        for program in $programs; do
             command -v "$program" > /dev/null 2>&1 || { printf 'Missing command: %s\n' "$program"; exit 1; }
         done
+        if [ "$TRANSPORT" = adb ]; then
+            adb shell test -r "$device" || { printf 'Cannot read TV input device: %s\n' "$device"; exit 1; }
+            helpers=$(adb shell settings get secure enabled_accessibility_services)
+        else
+            [ -r "$device" ] || { printf 'Cannot read input device: %s\n' "$device"; exit 1; }
+            helpers=$(settings get secure enabled_accessibility_services)
+        fi
         # Refuse to add repeats without the original key helpers; their disabled mode already repeats.
-        helpers=$(settings get secure enabled_accessibility_services)
         case "$helpers" in
             *com.sadique.launcher.HomeKeyService*|*com.sadique.launcher/.HomeKeyService*|*com.sadique.launcher.InputKeyService*|*com.sadique.launcher/.InputKeyService*) ;;
             *) printf 'Original launcher key helpers are not enabled; refusing duplicate repeats.\n'; exit 1 ;;
@@ -129,6 +153,7 @@ case "${1:-status}" in
     --watch) watch_events "$2" ;;
     --reader)
         printf '%s\n' "$$" > "$READER_PID"
+        if [ "$TRANSPORT" = adb ]; then exec adb shell -tt getevent -lt "$2"; fi
         exec getevent -lt "$2"
         ;;
     --parse) parse_events ;;
@@ -140,5 +165,5 @@ case "${1:-status}" in
     status)
         if running; then printf 'Bridge running (PID %s).\n' "$pid"; else printf 'Bridge is not running.\n'; fi
         ;;
-    *) printf 'Usage: sh %s start [input-device] | status | stop\n' "$SCRIPT"; exit 1 ;;
+    *) printf 'Usage: sh %s start|start-adb [input-device] | status|status-adb | stop|stop-adb\n' "$SCRIPT"; exit 1 ;;
 esac
