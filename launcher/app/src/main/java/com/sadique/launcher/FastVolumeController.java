@@ -55,9 +55,16 @@ final class FastVolumeController {
 
     /** Single-device getevent frames: an MSC usage is valid only until the next SYN_REPORT. */
     static final class Parser {
-        private final FastVolumeController controller;
+        interface Sink { void down(int key); void up(int key); void unknownUp(); void stop(); }
+        private final Sink sink;
         private int scan; // 0=no usage, -1=unrelated usage, otherwise mapped volume key.
-        Parser(FastVolumeController controller) { this.controller = controller; }
+        Parser(FastVolumeController controller) { this(new Sink() {
+            public void down(int key) { controller.down(key); }
+            public void up(int key) { controller.up(key); }
+            public void unknownUp() { controller.unknownUp(); }
+            public void stop() { controller.stop(); }
+        }); }
+        Parser(Sink sink) { this.sink = sink; }
         void line(String line) {
             String[] words = line.trim().split("\\s+");
             for (int i = 0; i + 2 < words.length; i++) {
@@ -74,11 +81,11 @@ final class FastVolumeController {
                         : "KEY_MUTE".equals(code) || "KEY_VOLUMEMUTE".equals(code) ? 164
                         : "KEY_UNKNOWN".equals(code) ? scan : -1;
                 if (key == 24 || key == 25 || key == 164) {
-                    if ("DOWN".equals(value)) controller.down(key);
-                    else if ("UP".equals(value)) controller.up(key);
-                    else if ("REPEAT".equals(value)) controller.stop();
-                } else if (key == 0 && "UP".equals(value)) controller.unknownUp();
-                else if (key == 0 && "REPEAT".equals(value)) controller.stop();
+                    if ("DOWN".equals(value)) sink.down(key);
+                    else if ("UP".equals(value)) sink.up(key);
+                    else if ("REPEAT".equals(value)) sink.stop();
+                } else if (key == 0 && "UP".equals(value)) sink.unknownUp();
+                else if (key == 0 && "REPEAT".equals(value)) sink.stop();
                 scan = 0;
                 return;
             }

@@ -1674,9 +1674,9 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void systemMenu() {
-        String[] labels = {"Screensaver & weather", "Profile name & photo", "Avatar shape", "Header background", "Performance", "Export settings", "Import settings", "Choose default Home", "Reset layout & unhide apps"};
-        String[] hints = {"Slideshow, weather & idle timer", "Name and local profile picture", "Circle or rounded square", "Subtle panel behind header", "Light, Balanced or Full", "Save to a file", "Restore from a file", "Set this launcher as Home", "Restore the default layout"};
-        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_person, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_home_settings, R.drawable.ic_settings};
+        String[] labels = {"Screensaver & weather", "Profile name & photo", "Avatar shape", "Header background", "Performance", "Volume auto-start", "Export settings", "Import settings", "Choose default Home", "Reset layout & unhide apps"};
+        String[] hints = {"Slideshow, weather & idle timer", "Name and local profile picture", "Circle or rounded square", "Subtle panel behind header", "Light, Balanced or Full", "One-time pairing and reboot recovery", "Save to a file", "Restore from a file", "Set this launcher as Home", "Restore the default layout"};
+        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_person, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_volume, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_home_settings, R.drawable.ic_settings};
         Runnable[] choices = {
             this::screensaverSettings,
             this::editProfile,
@@ -1693,6 +1693,7 @@ public final class PersonalHomeActivity extends Activity {
                 applyPerformanceProfile();
                 buildHomeSoon();
             }),
+            () -> VolumeAutoUi.show(this),
             this::exportSettings,
             this::importSettings,
             () -> launch(new Intent(this, HomeSettingsActivity.class)),
@@ -2164,6 +2165,7 @@ public final class PersonalHomeActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         resumed = true;
+        VolumeAutoStart.request(this);
         armIdleScreensaver();
         handler.removeCallbacks(tick);
         tick.run();
