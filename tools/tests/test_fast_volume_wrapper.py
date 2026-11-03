@@ -37,6 +37,8 @@ main=sys.argv.index('com.sadique.launcher.ShellVolumeBridge')
 ready=pathlib.Path(sys.argv[main+2])
 repeat=int(sys.argv[main+3]); assert 50<=repeat<=1000
 (root/'requested-repeat').write_text(str(repeat))
+(root/'requested-panel').write_text(sys.argv[main+4])
+if os.environ.get('FAST_TEST_PANEL_FAIL')=='1' and sys.argv[main+4]=='launcher': raise SystemExit('controller unavailable')
 ready.write_bytes(b'1')
 def end(*args):
     ready.unlink(missing_ok=True)
@@ -58,7 +60,7 @@ esac
 
     def run_wrapper(self, *args):
         return subprocess.run(["sh", str(SCRIPT), *args], env=self.env,
-                              capture_output=True, text=True, timeout=10)
+                              capture_output=True, text=True, timeout=16)
 
     def start(self, repeat=None):
         args=["start",str(self.device)]+([] if repeat is None else [str(repeat)])
@@ -127,6 +129,25 @@ esac
         self.assertNotEqual(self.run_wrapper('start',str(self.device),'100').returncode,0)
         self.assertIn('50ms',self.run_wrapper('status').stdout)
         self.assertEqual((self.root/'order.log').read_text().splitlines().count('start'),1)
+
+    def test_launcher_panel_option_reaches_runtime_and_status(self):
+        result=self.run_wrapper('start',str(self.device),'50','launcher')
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertEqual((self.root/'requested-panel').read_text(),'launcher')
+        self.assertIn('launcher',self.run_wrapper('status').stdout)
+        self.assertNotEqual(self.run_wrapper('start',str(self.device),'50','system').returncode,0)
+
+    def test_failed_launcher_mode_keeps_fast_repeats_with_stock_panel(self):
+        self.env['FAST_TEST_PANEL_FAIL']='1'
+        result=self.run_wrapper('start',str(self.device),'50','launcher')
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn('Keeping fast volume repeats',result.stdout)
+        self.assertEqual((self.root/'requested-panel').read_text(),'system')
+        self.assertIn('Panel: system',self.run_wrapper('status').stdout)
+
+    def test_invalid_panel_refused_before_stopping_running_helper(self):
+        self.assertNotEqual(self.run_wrapper('start',str(self.device),'50','bad').returncode,0)
+        self.assertFalse((self.root/'order.log').exists())
 
 
 if __name__ == '__main__': unittest.main()
