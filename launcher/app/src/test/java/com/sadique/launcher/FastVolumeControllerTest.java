@@ -37,10 +37,10 @@ public class FastVolumeControllerTest {
         controller.down(24); advance(180); controller.up(24); advance(1000);
         assertTrue(keys.isEmpty());
     }
-    @Test public void startsAt300msAndAddsOnePointEvery10ms() {
+    @Test public void startsAt300msAndAddsOnePointEvery50ms() {
         controller.down(24); advance(299); assertTrue(keys.isEmpty());
         advance(1); assertEquals(1, keys.size());
-        advance(30); assertEquals(4, keys.size());
+        advance(150); assertEquals(4, keys.size());
         assertTrue(keys.stream().allMatch(k -> k == 24));
     }
     @Test public void releaseCancelsAllFutureSteps() {
@@ -86,5 +86,18 @@ public class FastVolumeControllerTest {
     }
     @Test public void otherKeyCodesCannotStartRepeat() {
         controller.down(83); advance(1000); assertTrue(keys.isEmpty());
+    }
+    @Test public void configuredRepeatWaitIsUsedWithoutChangingHoldThreshold() {
+        FastVolumeController slower = new FastVolumeController(() -> now, (task, delay) -> {
+            Task next = new Task(now + delay, task); tasks.add(next); return () -> next.cancelled = true;
+        }, keys::add, errors::add, 100);
+        slower.down(24); advance(300); assertEquals(1, keys.size());
+        advance(99); assertEquals(1, keys.size()); advance(1); assertEquals(2, keys.size());
+    }
+    @Test(expected=IllegalArgumentException.class) public void repeatWaitBelow50msIsRejected() {
+        new FastVolumeController(() -> now, (task, delay) -> () -> {}, keys::add, errors::add, 49);
+    }
+    @Test(expected=IllegalArgumentException.class) public void repeatWaitAboveOneSecondIsRejected() {
+        new FastVolumeController(() -> now, (task, delay) -> () -> {}, keys::add, errors::add, 1001);
     }
 }

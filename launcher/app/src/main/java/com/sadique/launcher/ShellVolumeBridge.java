@@ -61,15 +61,19 @@ public final class ShellVolumeBridge {
             System.err.println("Run this helper with adb shell app_process (shell UID required).");
             System.exit(2); return;
         }
-        if (args.length != 2 || !args[0].matches("/dev/input/event[0-9]+")) {
-            System.err.println("Arguments: /dev/input/eventN readiness-file");
+        if ((args.length != 2 && args.length != 3) || !args[0].matches("/dev/input/event[0-9]+")) {
+            System.err.println("Arguments: /dev/input/eventN readiness-file [repeat-ms: 50..1000]");
             System.exit(2); return;
         }
-        try { run(args[0], new File(args[1])); }
+        try {
+            long repeatMs = args.length == 3 ? Long.parseLong(args[2]) : FastVolumeController.REPEAT_MS;
+            if (repeatMs < 50 || repeatMs > 1000) throw new IllegalArgumentException("Repeat wait must be 50..1000 ms");
+            run(args[0], new File(args[1]), repeatMs);
+        }
         catch (Exception error) { error.printStackTrace(System.err); System.exit(1); }
     }
 
-    private static void run(String device, File ready) throws Exception {
+    private static void run(String device, File ready, long repeatMs) throws Exception {
         NativeInjector injector = new NativeInjector();
         Process reader = new ProcessBuilder("getevent", "-lt", device).redirectErrorStream(true).start();
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
@@ -78,14 +82,14 @@ public final class ShellVolumeBridge {
                 (task, delay) -> {
                     java.util.concurrent.ScheduledFuture<?> future = scheduler.schedule(task, delay, TimeUnit.MILLISECONDS);
                     return () -> future.cancel(false);
-                }, injector, error -> { failed.set(true); error.printStackTrace(System.err); reader.destroy(); });
+                }, injector, error -> { failed.set(true); error.printStackTrace(System.err); reader.destroy(); }, repeatMs);
         Thread shutdown = new Thread(() -> {
             controller.stop(); reader.destroy(); scheduler.shutdownNow(); ready.delete();
         }, "volume-helper-stop");
         Runtime.getRuntime().addShutdownHook(shutdown);
         try (BufferedReader events = new BufferedReader(new InputStreamReader(reader.getInputStream(), StandardCharsets.UTF_8))) {
             try (FileOutputStream marker = new FileOutputStream(ready)) { marker.write(1); }
-            System.out.println("Fast volume helper ready: hold=300ms, requested repeat=10ms, step=1, one persistent injector.");
+            System.out.println("Fast volume helper ready: hold=300ms, requested repeat=" + repeatMs + "ms, step=1, one persistent injector.");
             FastVolumeController.Parser parser = new FastVolumeController.Parser(controller);
             String line;
             while (!failed.get() && (line = events.readLine()) != null) {

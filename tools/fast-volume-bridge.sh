@@ -7,6 +7,7 @@ MAIN=com.sadique.launcher.ShellVolumeBridge
 NAME=personal-launcher-volume-fast
 PID_FILE="$STATE/pid"
 READY="$STATE/ready"
+REPEAT_FILE="$STATE/repeat-ms"
 LOG="$STATE/bridge.log"
 
 running() {
@@ -25,16 +26,24 @@ stop_fast() {
         while running && [ "$attempts" -lt 50 ]; do sleep 0.1; attempts=$((attempts + 1)); done
         if running; then printf 'Fast helper is still stopping.\n'; return 1; fi
     fi
-    rm -f "$PID_FILE" "$READY"
+    rm -f "$PID_FILE" "$READY" "$REPEAT_FILE"
 }
 
 case "${1:-status}" in
     start)
         [ "$(id -u)" = 2000 ] || { printf 'Run this command through adb shell.\n'; exit 1; }
+        repeat_ms=${3:-50}
+        case "$repeat_ms" in ''|*[!0-9]*) printf 'Repeat wait must be 50..1000 ms.\n'; exit 1 ;; esac
+        [ "$repeat_ms" -ge 50 ] && [ "$repeat_ms" -le 1000 ] || { printf 'Repeat wait must be 50..1000 ms.\n'; exit 1; }
         device=${2:-/dev/input/event3}
         [ -r "$device" ] && [ -r "$PAYLOAD" ] || { printf 'Missing readable input device or APK payload.\n'; exit 1; }
         mkdir -p "$STATE" || exit 1
-        if running; then printf 'Fast helper already running (PID %s).\n' "$pid"; exit 0; fi
+        if running; then
+            active_repeat=$(cat "$REPEAT_FILE" 2>/dev/null)
+            printf 'Fast helper already running (PID %s), repeat wait %s ms.\n' "$pid" "${active_repeat:-unknown}"
+            if [ "$active_repeat" != "$repeat_ms" ]; then printf 'Stop and restart to change repeat wait.\n'; exit 1; fi
+            exit 0
+        fi
         old=${PLV_OLD_BRIDGE:-/data/local/tmp/volume-hold-bridge.sh}
         if [ -f "$old" ]; then
             sh "$old" stop || exit 1
@@ -48,17 +57,19 @@ case "${1:-status}" in
         chmod 0444 "$PAYLOAD" || exit 1
         rm -f "$READY" "$PID_FILE"
         : > "$LOG"
-        CLASSPATH="$PAYLOAD" nohup app_process /system/bin --nice-name="$NAME" "$MAIN" "$device" "$READY" < /dev/null > "$LOG" 2>&1 &
+        printf '%s\n' "$repeat_ms" > "$REPEAT_FILE"
+        CLASSPATH="$PAYLOAD" nohup app_process /system/bin --nice-name="$NAME" "$MAIN" "$device" "$READY" "$repeat_ms" < /dev/null > "$LOG" 2>&1 &
         printf '%s\n' "$!" > "$PID_FILE"
         attempts=0
         while [ "$attempts" -lt 60 ]; do
-            if running && [ -f "$READY" ]; then printf 'Fast helper running (PID %s). Hold 300ms; repeat wait 10ms; step 1.\n' "$pid"; exit 0; fi
+            if running && [ -f "$READY" ]; then printf 'Fast helper running (PID %s). Hold 300ms; repeat wait %sms; step 1.\n' "$pid" "$repeat_ms"; exit 0; fi
             sleep 0.1; attempts=$((attempts + 1))
         done
         printf 'Fast helper failed to become ready.\n'; cat "$LOG"
         if stop_fast && [ -f "$old" ]; then
-            printf 'Restoring shell fallback (hold 300ms, requested wait 10ms; command time remains).\n'
-            PLV_REPEAT_DELAY=0.3 PLV_REPEAT_INTERVAL=0.01 sh "$old" start "$device"
+            repeat_seconds=$(printf '%d.%03d' "$((repeat_ms / 1000))" "$((repeat_ms % 1000))")
+            printf 'Restoring shell fallback (hold 300ms, requested wait %sms; command time remains).\n' "$repeat_ms"
+            PLV_REPEAT_DELAY=0.3 PLV_REPEAT_INTERVAL="$repeat_seconds" sh "$old" start "$device"
         fi
         exit 1
         ;;
@@ -67,8 +78,8 @@ case "${1:-status}" in
         printf 'Fast helper stopped. Home/Settings configuration is unchanged.\n'
         ;;
     status)
-        if running && [ -f "$READY" ]; then printf 'Fast helper running (PID %s).\n' "$pid"
+        if running && [ -f "$READY" ]; then printf 'Fast helper running (PID %s), repeat wait %sms.\n' "$pid" "$(cat "$REPEAT_FILE" 2>/dev/null)"
         else printf 'Fast helper is not ready/running.\n'; [ ! -f "$LOG" ] || cat "$LOG"; fi
         ;;
-    *) printf 'Usage: sh fast-volume-bridge.sh start [device] | status | stop\n'; exit 1 ;;
+    *) printf 'Usage: sh fast-volume-bridge.sh start [device] [repeat-ms: 50..1000] | status | stop\n'; exit 1 ;;
 esac

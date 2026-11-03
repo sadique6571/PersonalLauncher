@@ -2,7 +2,7 @@ package com.sadique.launcher;
 
 /** Timer/state logic shared by the shell injector and plain JVM regression tests. */
 final class FastVolumeController {
-    static final long HOLD_MS = 300, REPEAT_MS = 10, MAX_HOLD_MS = 30_000;
+    static final long HOLD_MS = 300, REPEAT_MS = 50, MAX_HOLD_MS = 30_000;
     interface Clock { long now(); }
     interface Cancel { void cancel(); }
     interface Timer { Cancel post(Runnable task, long delay); }
@@ -12,12 +12,18 @@ final class FastVolumeController {
     private final Timer timer;
     private final Injector injector;
     private final Errors errors;
+    private final long repeatMs;
     private Cancel pending;
     private long generation, deadline;
     private int held;
 
     FastVolumeController(Clock clock, Timer timer, Injector injector, Errors errors) {
+        this(clock, timer, injector, errors, REPEAT_MS);
+    }
+    FastVolumeController(Clock clock, Timer timer, Injector injector, Errors errors, long repeatMs) {
+        if (repeatMs < 50 || repeatMs > 1000) throw new IllegalArgumentException("Repeat wait must be 50..1000 ms");
         this.clock = clock; this.timer = timer; this.injector = injector; this.errors = errors;
+        this.repeatMs = repeatMs;
     }
     synchronized void down(int key) {
         if ((key != 24 && key != 25) || held == key) return;
@@ -37,7 +43,7 @@ final class FastVolumeController {
         if (clock.now() >= deadline) { stop(); return; }
         try { injector.pair(held); }
         catch (Exception failure) { stop(); errors.failed(failure); return; }
-        if (held != 0 && generation == press) pending = timer.post(() -> tick(press), REPEAT_MS);
+        if (held != 0 && generation == press) pending = timer.post(() -> tick(press), repeatMs);
     }
 
     /** Single-device getevent frames: an MSC usage is valid only until the next SYN_REPORT. */
