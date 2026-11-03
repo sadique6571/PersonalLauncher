@@ -61,20 +61,23 @@ public final class ShellVolumeBridge {
             System.err.println("Run this helper with adb shell app_process (shell UID required).");
             System.exit(2); return;
         }
-        if ((args.length != 2 && args.length != 3) || !args[0].matches("/dev/input/event[0-9]+")) {
-            System.err.println("Arguments: /dev/input/eventN readiness-file [repeat-ms: 50..1000]");
+        if (args.length < 2 || args.length > 4 || !args[0].matches("/dev/input/event[0-9]+")) {
+            System.err.println("Arguments: /dev/input/eventN readiness-file [repeat-ms: 50..1000] [system|launcher]");
             System.exit(2); return;
         }
         try {
-            long repeatMs = args.length == 3 ? Long.parseLong(args[2]) : FastVolumeController.REPEAT_MS;
+            long repeatMs = args.length >= 3 ? Long.parseLong(args[2]) : FastVolumeController.REPEAT_MS;
             if (repeatMs < 50 || repeatMs > 1000) throw new IllegalArgumentException("Repeat wait must be 50..1000 ms");
-            run(args[0], new File(args[1]), repeatMs);
+            String panel = args.length == 4 ? args[3] : "system";
+            if (!panel.equals("system") && !panel.equals("launcher")) throw new IllegalArgumentException("Panel must be system or launcher");
+            run(args[0], new File(args[1]), repeatMs, panel.equals("launcher"));
         }
         catch (Exception error) { error.printStackTrace(System.err); System.exit(1); }
     }
 
-    private static void run(String device, File ready, long repeatMs) throws Exception {
+    private static void run(String device, File ready, long repeatMs, boolean launcherPanel) throws Exception {
         NativeInjector injector = new NativeInjector();
+        ShellVolumePanel panel = launcherPanel ? new ShellVolumePanel() : null;
         Process reader = new ProcessBuilder("getevent", "-lt", device).redirectErrorStream(true).start();
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         java.util.concurrent.atomic.AtomicBoolean failed = new java.util.concurrent.atomic.AtomicBoolean();
@@ -85,9 +88,11 @@ public final class ShellVolumeBridge {
                 }, injector, error -> { failed.set(true); error.printStackTrace(System.err); reader.destroy(); }, repeatMs);
         Thread shutdown = new Thread(() -> {
             controller.stop(); reader.destroy(); scheduler.shutdownNow(); ready.delete();
+            if (panel != null) panel.close();
         }, "volume-helper-stop");
         Runtime.getRuntime().addShutdownHook(shutdown);
         try (BufferedReader events = new BufferedReader(new InputStreamReader(reader.getInputStream(), StandardCharsets.UTF_8))) {
+            if (panel != null) panel.install();
             try (FileOutputStream marker = new FileOutputStream(ready)) { marker.write(1); }
             System.out.println("Fast volume helper ready: hold=300ms, requested repeat=" + repeatMs + "ms, step=1, one persistent injector.");
             FastVolumeController.Parser parser = new FastVolumeController.Parser(controller);
@@ -98,6 +103,7 @@ public final class ShellVolumeBridge {
             }
         } finally {
             controller.stop(); reader.destroy(); scheduler.shutdownNow(); ready.delete();
+            if (panel != null) panel.close();
             try { Runtime.getRuntime().removeShutdownHook(shutdown); }
             catch (IllegalStateException shuttingDown) { /* Shutdown hook is already doing the same cleanup. */ }
         }

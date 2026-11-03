@@ -107,3 +107,40 @@ adb shell 'sh /data/local/tmp/fast-volume-bridge.sh stop && sh /data/local/tmp/f
 
 Values below 50 ms are refused before stopping the old bridge. Changing a running helper's interval
 also requires an explicit stop/start; status reports the selected wait rather than silently ignoring it.
+
+## Use only the launcher volume panel (optional)
+
+The normal `system` mode is unchanged. On firmware where `adb shell` has
+`android.permission.STATUS_BAR_SERVICE`, the `launcher` mode relays the existing
+`IVolumeController` instead of disabling SystemUI. It removes only `FLAG_SHOW_UI`
+from `STREAM_MUSIC` volume-change callbacks. Other flags, streams and callbacks
+(including safe-volume warnings) go to the saved stock controller unchanged.
+The installed launcher's enabled accessibility helpers must already show its
+right-side slider from actual volume broadcasts. This helper does not install
+or start the launcher and does not alter Home, Settings or accessibility settings.
+
+With the updated APK **copied as the classpath payload, not installed**, run:
+
+```sh
+adb shell 'sh /data/local/tmp/fast-volume-bridge.sh stop && sh /data/local/tmp/fast-volume-bridge.sh start /dev/input/event3 50 launcher'
+```
+
+A missing controller getter, absent controller, denied permission or unsupported
+protocol causes startup to fail rather than silently disabling another component.
+The wrapper prints the failure and restarts fast repeats in `system` mode; the
+working 50ms injector is retained without panel suppression. If even system-mode
+startup fails, the slower shell fallback is used. `status` reports the selected panel mode. The wrapper requires an
+explicit stop before changing panel mode.
+
+To restore the stock panel while keeping the 50ms volume helper:
+
+```sh
+adb shell 'sh /data/local/tmp/fast-volume-bridge.sh stop && sh /data/local/tmp/fast-volume-bridge.sh start /dev/input/event3 50 system'
+```
+
+Normal stop/shutdown restores the saved stock controller, unless a newer controller
+has registered in the meantime. A SystemUI restart can restore its popup while the
+helper runs; restart the helper to adopt the new stock controller. A forced kill
+(e.g. `kill -9`) cannot run Java cleanup: reboot the TV to restore stock registration
+if needed. The option is session-only and is not configured to restart at boot.
+The 50ms repeat, one-point steps and 300ms hold threshold are unchanged.
