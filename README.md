@@ -162,3 +162,9 @@ Left enters the preceding row, and the first/last item stops in place. Pending o
 tracked during held-key repeats so geometric focus search cannot jump into the header. Up/Down follow columns; Up from the first row goes directly to Search. Only Search, the bell and
 Settings are in the toolbar focus path, and Down returns to apps. Decorative header elements cannot
 receive focus. Continue Watching is entered deliberately with Down from the bottom app row.
+
+For firmware where the key helpers suppress held-volume repeat, an optional
+[temporary ADB volume bridge](docs/volume-hold-bridge.md) is available for controlled diagnosis.
+It leaves the launcher settings untouched and does not replace the APK's volume UI.
+That guide also documents an optional single-process injector for TVs where a shell key command
+takes too long. Its APK is used as an ADB classpath payload; the installed launcher need not change.
