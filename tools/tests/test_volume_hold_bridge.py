@@ -25,6 +25,7 @@ class VolumeBridgeTest(unittest.TestCase):
                         PLV_PROC_ROOT=str(self.root / "proc"),
                         PLV_REPEAT_INTERVAL="0.06", PLV_MAX_HOLD_SECONDS="2",
                         FAKE_AUDIO_LOG=str(self.audio), FAKE_SETTINGS_LOG=str(self.settings),
+                        FAKE_INPUT_LOG=str(self.root / "input.log"),
                         FAKE_ADB_LOG=str(self.root / "adb.log"))
         # The managed host exposes outer /proc PIDs inside a nested PID namespace. Supply only
         # our fake process identity records; real signal/lifecycle behaviour is still exercised.
@@ -45,9 +46,10 @@ with open(sys.argv[-1],newline='') as stream:
 """)
         self.fake("cmd", "raise SystemExit('Direct AudioService adjustment is ineffective on the TV')\n")
         self.fake("input", """import os,sys,time
-assert sys.argv[1] == 'keyevent' and sys.argv[2] in ['24','25'],sys.argv
+assert sys.argv[1] == 'keyevent' and sys.argv[2:] in [['24']*3,['25']*3],sys.argv
+with open(os.environ['FAKE_INPUT_LOG'],'a') as out: out.write(' '.join(sys.argv[1:])+'\\n')
 with open(os.environ['FAKE_AUDIO_LOG'], 'a') as out:
-    out.write(str(time.monotonic()) + ' ' + ('raise' if sys.argv[2]=='24' else 'lower') + '\\n')
+    out.write(''.join(str(time.monotonic()) + ' ' + ('raise' if key=='24' else 'lower') + '\\n' for key in sys.argv[2:]))
 if os.environ.get('FAKE_AUDIO_FAIL') == '1': sys.exit(1)
 """)
         self.fake("settings", """import os,sys
@@ -206,7 +208,8 @@ else: raise SystemExit('Unexpected adb arguments: '+repr(a))
         self.event("KEY_VOLUMEUP", "DOWN")
         self.wait_for_steps()
         time.sleep(.3)
-        self.assertEqual(len(self.steps()), 1)
+        self.assertEqual(len(self.steps()), 3)
+        self.assertEqual(len((self.root / "input.log").read_text().splitlines()), 1)
         self.assertIn("Native volume key injection failed", (self.root / "state/bridge.log").read_text())
 
     def test_host_transport_forces_terminal_and_uses_adb_audio(self):
@@ -221,7 +224,7 @@ else: raise SystemExit('Unexpected adb arguments: '+repr(a))
         self.assertEqual(len(self.steps()), count)
         calls = (self.root / "adb.log").read_text()
         self.assertIn("shell -tt getevent -lt", calls)
-        self.assertIn("shell input keyevent 24", calls)
+        self.assertIn("shell input keyevent 24 24 24", calls)
         self.assertIn("running", self.run_bridge("status-adb").stdout)
         self.run_bridge("stop-adb")
 
@@ -244,6 +247,23 @@ else: raise SystemExit('Unexpected adb arguments: '+repr(a))
         self.wait_for_steps(len(raised) + 1)
         self.assertTrue(self.steps()[-1].endswith("lower"))
         self.bluetooth("000c0081", "UP")
+
+    def test_held_repeats_use_one_three_key_call_in_both_directions(self):
+        self.bluetooth("000c0080", "DOWN")
+        self.wait_for_steps(3)
+        self.bluetooth("000c0080", "UP")
+        time.sleep(.15)
+        self.bluetooth("000c0081", "DOWN")
+        deadline = time.monotonic() + 2
+        while not any(s.endswith("lower") for s in self.steps()) and time.monotonic() < deadline:
+            time.sleep(.02)
+        self.bluetooth("000c0081", "UP")
+        time.sleep(.15)
+        calls = (self.root / "input.log").read_text().splitlines()
+        self.assertIn("keyevent 24 24 24", calls)
+        self.assertIn("keyevent 25 25 25", calls)
+        self.assertTrue(all(s in ["keyevent 24 24 24", "keyevent 25 25 25"] for s in calls))
+        self.assertEqual(len(self.steps()), 3 * len(calls))
 
     def test_unknown_non_volume_keys_and_stale_scan_are_ignored(self):
         self.bluetooth("000c009f", "DOWN")

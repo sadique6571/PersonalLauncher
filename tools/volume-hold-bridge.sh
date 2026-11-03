@@ -62,9 +62,9 @@ repeat_volume() {
 adjust_volume() {
     case "$1" in raise) key=24 ;; lower) key=25 ;; *) return 1 ;; esac
     if [ "$TRANSPORT" = adb ]; then
-        adb shell input keyevent "$key"
+        adb shell input keyevent "$key" "$key" "$key"
     else
-        input keyevent "$key"
+        input keyevent "$key" "$key" "$key"
     fi
 }
 
@@ -83,7 +83,7 @@ parse_events() {
         held=$1
         repeat_volume "$held" &
         worker=$!
-        printf 'held %s\n' "$held"
+        printf 'held %s (3 points per repeat)\n' "$held"
     }
     trap 'exit 0' TERM INT HUP
     trap stop_repeat EXIT
@@ -164,7 +164,7 @@ case "${1:-status}" in
             sleep 0.1
             attempts=$((attempts + 1))
         done
-        if running && reader_running; then printf 'Bridge running (PID %s). Native initial tap; held repeat after 400 ms.\n' "$pid"
+        if running && reader_running; then printf 'Bridge running (PID %s). Native tap: 1 point; held repeat: 3 points after 400 ms.\n' "$pid"
         else printf 'Bridge failed to start.\n'; cat "$LOG"; exit 1; fi
         ;;
     --watch) watch_events "$2" ;;
