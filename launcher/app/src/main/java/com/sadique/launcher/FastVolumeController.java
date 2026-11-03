@@ -13,6 +13,7 @@ final class FastVolumeController {
     private final Injector injector;
     private final Errors errors;
     private final long repeatMs;
+    private final Runnable pressed;
     private Cancel pending;
     private long generation, deadline;
     private int held;
@@ -21,13 +22,18 @@ final class FastVolumeController {
         this(clock, timer, injector, errors, REPEAT_MS);
     }
     FastVolumeController(Clock clock, Timer timer, Injector injector, Errors errors, long repeatMs) {
+        this(clock, timer, injector, errors, repeatMs, () -> { });
+    }
+    FastVolumeController(Clock clock, Timer timer, Injector injector, Errors errors, long repeatMs, Runnable pressed) {
         if (repeatMs < 50 || repeatMs > 1000) throw new IllegalArgumentException("Repeat wait must be 50..1000 ms");
         this.clock = clock; this.timer = timer; this.injector = injector; this.errors = errors;
         this.repeatMs = repeatMs;
+        this.pressed = pressed;
     }
     synchronized void down(int key) {
         if ((key != 24 && key != 25) || held == key) return;
         stop(); held = key; deadline = clock.now() + MAX_HOLD_MS;
+        pressed.run(); // Show the panel on physical DOWN, before the hold timer or volume broadcast.
         long press = generation;
         pending = timer.post(() -> tick(press), HOLD_MS);
     }

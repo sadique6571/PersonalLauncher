@@ -144,3 +144,35 @@ helper runs; restart the helper to adopt the new stock controller. A forced kill
 (e.g. `kill -9`) cannot run Java cleanup: reboot the TV to restore stock registration
 if needed. The option is session-only and is not configured to restart at boot.
 The 50ms repeat, one-point steps and 300ms hold threshold are unchanged.
+
+### Immediate panel updates (5.9 and later)
+
+Panel suppression alone leaves the old installed launcher's overlay dependent on
+Android's queued `VOLUME_CHANGED_ACTION` broadcast. If volume races ahead before
+the overlay appears, update **both the installed launcher APK and the copied shell
+payload** to 5.9 or later. Updating only the classpath payload cannot change the
+installed observer/UI code.
+
+The accessibility helper now owns a local Unix-domain socket while it is connected.
+It accepts only shell UID 2000. The shell helper checks the listener's UID against
+the installed launcher and verifies a versioned handshake before suppressing the
+stock panel. This is local IPC, with no Internet permission or TCP listener.
+
+A physical volume DOWN signals the panel immediately, before the 300ms hold timer;
+AudioService callbacks signal subsequent actual volume changes. The injector and
+its 50ms repeat timing are unchanged. Both sides coalesce pending updates so only
+the newest signal is rendered, rather than building a held-key backlog. Stale
+signals are dropped. The UI reads the current volume, reuses its hidden window,
+and ignores redundant queued volume broadcasts while direct signals are fresh.
+If the direct channel disconnects, subsequent volume callbacks retain the stock
+popup flag. Normal helper stop still restores the stock controller.
+
+For timing evidence while pressing the real remote:
+
+```sh
+adb shell 'logcat -d -v time -s PersonalVolume | tail -n 80'
+```
+
+`direct panel UI applied, age=Nms` measures signal-to-UI-application delay, not a
+physical display-frame measurement. No on-TV latency guarantee is inferred from
+unit tests or from the requested 50ms repeat wait.

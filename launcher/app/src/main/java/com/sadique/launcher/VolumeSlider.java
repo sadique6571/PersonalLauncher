@@ -14,6 +14,8 @@ import android.media.AudioManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Build;
+import android.os.SystemClock;
+import android.view.View;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.WindowManager;
@@ -35,6 +37,11 @@ final class VolumeSlider {
     private static final java.util.Set<AccessibilityService> SERVICES = new java.util.LinkedHashSet<>();
     private static AccessibilityService observerOwner;
     private static BroadcastReceiver receiver;
+    private static VolumePanelSocket direct;
+    private static long directUntil;
+    private static int observedVolume = -1;
+    private static int maximum;
+
     private VolumeSlider() { }
 
     /** Firmware can apply a volume key without delivering it to the key filter. Observe the actual
@@ -44,13 +51,28 @@ final class VolumeSlider {
         if (receiver != null) return;
         AudioManager audio = service.getSystemService(AudioManager.class);
         if (audio == null) return;
-        int[] previous = {audio.getStreamVolume(AudioManager.STREAM_MUSIC)};
+        observedVolume = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+        try {
+            direct = new VolumePanelSocket(new VolumePanelUpdates(HANDLER::post, sentAt -> {
+                long now = SystemClock.uptimeMillis();
+                if (!VolumePanelUpdates.fresh(sentAt, now) || observerOwner != service) return;
+                directUntil = now + 2000;
+                boolean first = panel == null || panel.getVisibility() != View.VISIBLE;
+                show(service, audio);
+                if (first) Log.d("PersonalVolume", "direct panel UI applied, age=" + (SystemClock.uptimeMillis() - sentAt) + "ms");
+            }));
+        } catch (java.io.IOException unavailable) {
+            Log.w("PersonalVolume", "Direct panel listener unavailable; volume broadcast fallback remains", unavailable);
+        }
         BroadcastReceiver changes = new BroadcastReceiver() {
             @Override public void onReceive(Context context, Intent intent) {
                 if (!"android.media.VOLUME_CHANGED_ACTION".equals(intent.getAction())) return;
+                if (SystemClock.uptimeMillis() < directUntil) return;
+                int stream = intent.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", AudioManager.STREAM_MUSIC);
+                if (stream != AudioManager.STREAM_MUSIC) return;
                 int value = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
-                if (value == previous[0]) return;
-                previous[0] = value;
+                if (value == observedVolume) return;
+                observedVolume = value;
                 Log.d("PersonalVolume", "stream changed: " + value);
                 show(service, audio);
             }
@@ -64,6 +86,8 @@ final class VolumeSlider {
             Log.d("PersonalVolume", "volume observer connected: " + service.getClass().getSimpleName());
         } catch (RuntimeException unavailable) {
             Log.w("PersonalVolume", "Volume observer unavailable", unavailable);
+            if (direct != null) direct.close();
+            direct = null;
         }
     }
 
@@ -73,6 +97,8 @@ final class VolumeSlider {
         if (observerOwner != service) return;
         try { service.unregisterReceiver(receiver); }
         catch (RuntimeException detached) { /* Android may already have removed the service. */ }
+        if (direct != null) direct.close();
+        direct = null; directUntil = 0;
         observerOwner = null; receiver = null;
         if (!SERVICES.isEmpty()) observe(SERVICES.iterator().next());
     }
@@ -81,7 +107,7 @@ final class VolumeSlider {
         if (observerOwner != null) context = observerOwner;
         if (!(context instanceof AccessibilityService) && !(context instanceof Activity)) return false;
         try {
-            if (owner != context) hide();
+            if (owner != context) dispose();
             if (panel == null) {
                 owner = context;
                 window = context.getSystemService(WindowManager.class);
@@ -125,25 +151,33 @@ final class VolumeSlider {
                 if (context instanceof Activity) position.token = ((Activity) context).getWindow().getDecorView().getWindowToken();
                 window.addView(panel, position);
             }
-            update(audio); scheduleHide(); return true;
+            boolean first = panel.getVisibility() != View.VISIBLE;
+            if (maximum == 0 || first) maximum = Math.max(1, audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
+            update(audio); panel.setVisibility(View.VISIBLE); scheduleHide(); return true;
         } catch (RuntimeException unavailable) {
             Log.w("PersonalVolume", "Volume slider window unavailable", unavailable);
-            hide(); return false;
+            dispose(); return false;
         }
     }
     private static void update(AudioManager audio) {
-        int max = Math.max(1, audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
+        int max = Math.max(1, maximum);
         int value = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
-        slider.setMax(max); slider.setProgress(value);
+        observedVolume = value;
+        if (slider.getMax() != max) slider.setMax(max);
+        slider.setProgress(value);
         level.setText(Math.round(value * 100f / max) + "%");
     }
     private static void scheduleHide() { HANDLER.removeCallbacks(HIDE); HANDLER.postDelayed(HIDE, 1600); }
-    static void hide(Context context) { if (owner == context) hide(); }
+    static void hide(Context context) { if (owner == context) dispose(); }
     private static void hide() {
+        HANDLER.removeCallbacks(HIDE);
+        if (panel != null) panel.setVisibility(View.INVISIBLE);
+    }
+    private static void dispose() {
         HANDLER.removeCallbacks(HIDE);
         if (panel != null && window != null) try { window.removeViewImmediate(panel); }
         catch (RuntimeException detached) { /* Window already removed by Android. */ }
-        owner = null; panel = null; window = null; slider = null; level = null;
+        owner = null; panel = null; window = null; slider = null; level = null; maximum = 0;
     }
     private static int dp(Context context, int value) {
         return Math.round(value * context.getResources().getDisplayMetrics().density);

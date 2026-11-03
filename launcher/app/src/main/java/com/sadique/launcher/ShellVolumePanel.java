@@ -14,6 +14,7 @@ import java.lang.reflect.Proxy;
 @SuppressLint({"PrivateApi", "DiscouragedPrivateApi", "SoonBlockedPrivateApi"})
 final class ShellVolumePanel implements AutoCloseable {
     private final VolumePanelSession<IBinder> session;
+    private final ShellVolumeChannel channel;
 
     ShellVolumePanel() throws Exception {
         Class<?> serviceManager = Class.forName("android.os.ServiceManager");
@@ -36,6 +37,7 @@ final class ShellVolumePanel implements AutoCloseable {
         int volumeChanged = volumeTransaction.getInt(null);
         String descriptor = original.getInterfaceDescriptor();
         if (!"android.media.IVolumeController".equals(descriptor)) throw new IllegalStateException("Unknown volume-controller protocol");
+        channel = new ShellVolumeChannel();
         Binder relay = new Binder() {
             @Override protected boolean onTransact(int code, Parcel data, Parcel reply, int transactionFlags) throws RemoteException {
                 if (code != volumeChanged) {
@@ -45,11 +47,13 @@ final class ShellVolumePanel implements AutoCloseable {
                 data.enforceInterface(descriptor);
                 int stream = data.readInt();
                 int flags = data.readInt();
+                if (stream == 3) channel.signal();
                 Parcel filtered = Parcel.obtain();
                 try {
                     filtered.writeInterfaceToken(descriptor);
                     filtered.writeInt(stream);
-                    filtered.writeInt(VolumePanelSession.flags(stream, flags));
+                    // A lost app connection must not leave the user without a volume popup.
+                    filtered.writeInt(channel.isOpen() ? VolumePanelSession.flags(stream, flags) : flags);
                     int remaining = data.dataAvail();
                     if (remaining > 0) filtered.appendFrom(data, data.dataPosition(), remaining);
                     filtered.setDataPosition(0);
@@ -80,8 +84,10 @@ final class ShellVolumePanel implements AutoCloseable {
         session.install();
         System.out.println("Launcher volume panel active: stock media-popup flag suppressed; warnings forwarded.");
     }
+    void signal() { channel.signal(); }
     @Override public void close() {
         try { session.close(); }
         catch (Exception error) { System.err.println("Could not restore volume controller; reboot restores SystemUI registration."); error.printStackTrace(System.err); }
+        channel.close();
     }
 }

@@ -85,7 +85,8 @@ public final class ShellVolumeBridge {
                 (task, delay) -> {
                     java.util.concurrent.ScheduledFuture<?> future = scheduler.schedule(task, delay, TimeUnit.MILLISECONDS);
                     return () -> future.cancel(false);
-                }, injector, error -> { failed.set(true); error.printStackTrace(System.err); reader.destroy(); }, repeatMs);
+                }, injector, error -> { failed.set(true); error.printStackTrace(System.err); reader.destroy(); }, repeatMs,
+                () -> { if (panel != null) panel.signal(); });
         Thread shutdown = new Thread(() -> {
             controller.stop(); reader.destroy(); scheduler.shutdownNow(); ready.delete();
             if (panel != null) panel.close();
