@@ -243,3 +243,41 @@ not established. This layout release preserves the existing 50ms injector and
 Binder/cleanup behavior; it does not claim to fix that unconfirmed root cause.
 The supplied log capture contained no launcher crash/ANR, which is not a claim
 that every possible settings stall has been excluded.
+
+### Opt-in reboot recovery (6.2)
+
+`Launcher settings → System → Volume auto-start` shows status and enable/disable
+controls. The option is off until one-time local pairing succeeds. It uses the
+existing WRITE_SECURE_SETTINGS grant to request wireless debugging ON after boot;
+it never runs an off/on toggle. The TV may still require its system network-trust
+confirmation. Only a successful real reboot test establishes support on that TV.
+
+One-time setup keeps the TV's **Pair device with pairing code** dialog open. From
+an already-authorized ADB client, run the following with the dialog's pairing port
+and six-digit code (not its normal connection port):
+
+```sh
+adb shell content call --uri content://com.sadique.launcher.theme --method volume_auto_setup_v1 --arg PAIR_PORT:SIX_DIGIT_CODE
+```
+
+The provider checks shell UID, starts pairing on a worker, and returns immediately.
+The code is not saved or logged. Successful pairing enables auto-start, discovers
+this TV's changing connection port via mDNS and starts the helper through loopback.
+It does not open a web server, scan port ranges, switch to a fixed TCP port, or
+connect to another device. A short-lived loopback-only relay bounds the pairing
+library's socket lifetime. The dedicated ADB RSA identity is AES-GCM encrypted by
+Android Keystore in no-backup app storage; settings exports exclude it.
+
+Startup is attempted from boot/Home/accessibility connection hooks, with bounded
+network/discovery/connection waits and limited retries. It checks the reviewed
+wrapper syntax, stops the existing helper gracefully, copies the installed APK
+as a read-only payload, and starts `auto 50 launcher`. Automatic input mode keeps
+separate getevent frame state per device and handles device removal/reconnection;
+manual `/dev/input/eventN` mode remains available. A failed setup retains manual
+ADB startup as the fallback. Disabling auto-start skips future automatic attempts
+without turning wireless debugging off or stopping the current helper.
+
+Dependencies and rationale are tracked in issue #16: pinned libadb-android,
+Conscrypt's public TLS APIs and Bouncy Castle certificate APIs. No hidden-API
+bypass is added. Real pairing, changing ports, a full reboot, Netflix volume and
+manual stop must be checked on the TV before claiming permanent operation.

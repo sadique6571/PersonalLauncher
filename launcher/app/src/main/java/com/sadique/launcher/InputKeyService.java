@@ -45,6 +45,7 @@ public class InputKeyService extends AccessibilityService {
         consumeVolumeKeys = config.consumeVolumeKeys;
         volumeKeyFilter = config.keyFilter;
         VolumeSlider.observe(this);
+        VolumeAutoStart.request(this);
         android.util.Log.d("PersonalVolume", "InputKeyService keyFilter=" + volumeKeyFilter + " compatibility=" + consumeVolumeKeys);
         appKeys = RemoteKeys.parseAppKeys(config.appKeys);
         appScancodes = RemoteKeys.parseAppScancodes(config.appKeys);

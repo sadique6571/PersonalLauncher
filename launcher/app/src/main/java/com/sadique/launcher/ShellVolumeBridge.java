@@ -61,8 +61,8 @@ public final class ShellVolumeBridge {
             System.err.println("Run this helper with adb shell app_process (shell UID required).");
             System.exit(2); return;
         }
-        if (args.length < 2 || args.length > 4 || !args[0].matches("/dev/input/event[0-9]+")) {
-            System.err.println("Arguments: /dev/input/eventN readiness-file [repeat-ms: 50..1000] [system|launcher]");
+        if (args.length < 2 || args.length > 4 || (!args[0].equals("auto") && !args[0].matches("/dev/input/event[0-9]+"))) {
+            System.err.println("Arguments: auto|/dev/input/eventN readiness-file [repeat-ms: 50..1000] [system|launcher]");
             System.exit(2); return;
         }
         try {
@@ -78,7 +78,8 @@ public final class ShellVolumeBridge {
     private static void run(String device, File ready, long repeatMs, boolean launcherPanel) throws Exception {
         NativeInjector injector = new NativeInjector();
         ShellVolumePanel panel = launcherPanel ? new ShellVolumePanel() : null;
-        Process reader = new ProcessBuilder("getevent", "-lt", device).redirectErrorStream(true).start();
+        ProcessBuilder input = device.equals("auto") ? new ProcessBuilder("getevent", "-lt") : new ProcessBuilder("getevent", "-lt", device);
+        Process reader = input.redirectErrorStream(true).start();
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         File stopRequest = new File(ready.getParentFile(), "stop-request");
         File graceful = new File(ready.getParentFile(), "graceful-stop");
@@ -107,10 +108,11 @@ public final class ShellVolumeBridge {
             try (FileOutputStream marker = new FileOutputStream(ready)) { marker.write(1); }
             System.out.println("Fast volume helper ready: hold=300ms, requested repeat=" + repeatMs + "ms, step=1, one persistent injector.");
             FastVolumeController.Parser parser = new FastVolumeController.Parser(controller);
+            VolumeInputRouter router = device.equals("auto") ? new VolumeInputRouter(controller) : null;
             String line;
             while (!failed.get() && (line = events.readLine()) != null) {
                 if (line.contains("could not") || line.contains("Permission denied")) System.err.println(line);
-                parser.line(line);
+                if (router != null) router.line(line); else parser.line(line);
             }
         } finally {
             controller.stop(); reader.destroy(); scheduler.shutdownNow(); ready.delete();

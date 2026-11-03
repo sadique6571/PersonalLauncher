@@ -55,7 +55,7 @@ case "${1:-status}" in
         panel=${4:-system}
         case "$panel" in system|launcher) ;; *) printf 'Panel must be system or launcher.\n'; exit 1 ;; esac
         device=${2:-/dev/input/event3}
-        [ -r "$device" ] && [ -r "$PAYLOAD" ] || { printf 'Missing readable input device or APK payload.\n'; exit 1; }
+        { [ "$device" = auto ] || [ -r "$device" ]; } && [ -r "$PAYLOAD" ] || { printf 'Missing readable input device or APK payload.\n'; exit 1; }
         mkdir -p "$STATE" || exit 1
         if running; then
             active_repeat=$(cat "$REPEAT_FILE" 2>/dev/null)

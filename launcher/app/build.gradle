@@ -11,8 +11,8 @@ android {
         applicationId providers.gradleProperty('launcherApplicationId').getOrElse('com.sadique.launcher')
         minSdk 26
         targetSdk 34
-        versionCode 36
-        versionName '6.1'
+        versionCode 37
+        versionName '6.2'
     }
 
     // CI may compile with the debug key; published APKs require the persistent release key.
@@ -55,8 +55,21 @@ android {
 dependencies {
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
     implementation 'androidx.dynamicanimation:dynamicanimation:1.0.0'
+    // Optional local ADB boot recovery; dependency rationale and boundaries: issue #16.
+    implementation 'com.github.MuntashirAkon:libadb-android:3.1.1'
+    implementation 'org.conscrypt:conscrypt-android:2.5.3'
+    implementation 'org.bouncycastle:bcpkix-jdk15to18:1.81'
     // Test only (never in the APK): plain JVM tests for the module card validators, src/test.
     testImplementation 'junit:junit:4.13.2'
     // Real JSON implementation for local profile/watchlist JVM tests; never packaged in the APK.
     testImplementation 'org.json:json:20240303'
 }
+
+// Package the reviewed wrapper from its single source; no copied/prebuilt helper binary.
+def volumeAssets = layout.buildDirectory.dir('generated/volumeAssets')
+tasks.register('prepareVolumeAssets', Copy) {
+    from rootProject.file('../tools/fast-volume-bridge.sh')
+    into volumeAssets
+}
+android.sourceSets.main.assets.srcDir(volumeAssets)
+tasks.named('preBuild').configure { dependsOn('prepareVolumeAssets') }

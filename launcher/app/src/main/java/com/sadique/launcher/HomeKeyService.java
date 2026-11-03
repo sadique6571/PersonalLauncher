@@ -227,6 +227,7 @@ public class HomeKeyService extends AccessibilityService {
         consumeVolumeKeys = config.consumeVolumeKeys;
         volumeKeyFilter = config.keyFilter;
         VolumeSlider.observe(this);
+        VolumeAutoStart.request(this);
         android.util.Log.d("PersonalVolume", "HomeKeyService keyFilter=" + volumeKeyFilter + " compatibility=" + consumeVolumeKeys);
         appKeys = RemoteKeys.parseAppKeys(config.appKeys);
         appScancodes = RemoteKeys.parseAppScancodes(config.appKeys);

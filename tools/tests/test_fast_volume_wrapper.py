@@ -37,6 +37,7 @@ main=sys.argv.index('com.sadique.launcher.ShellVolumeBridge')
 ready=pathlib.Path(sys.argv[main+2])
 repeat=int(sys.argv[main+3]); assert 50<=repeat<=1000
 (root/'requested-repeat').write_text(str(repeat))
+(root/'requested-device').write_text(sys.argv[main+1])
 (root/'requested-panel').write_text(sys.argv[main+4])
 if os.environ.get('FAST_TEST_PANEL_FAIL')=='1' and sys.argv[main+4]=='launcher': raise SystemExit('controller unavailable')
 graceful=ready.parent/'graceful-stop'
@@ -205,6 +206,11 @@ esac
         self.assertNotEqual(result.returncode,0)
         self.assertIn('restoration failed',result.stdout)
         self.assertTrue((self.root/'state/restore-failed').exists())
+
+    def test_auto_device_mode_does_not_require_a_fixed_event_node(self):
+        result=self.run_wrapper('start','auto','50','launcher')
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertEqual((self.root/'requested-device').read_text(),'auto')
 
 
 if __name__ == '__main__': unittest.main()
