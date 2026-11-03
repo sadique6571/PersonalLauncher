@@ -55,7 +55,7 @@ repeat_volume() {
             printf 'Native volume key injection failed; repeat stopped.\n' >&2
             exit 1
         }
-        sleep "${PLV_REPEAT_INTERVAL:-0.01}"
+        sleep "${PLV_REPEAT_INTERVAL:-0.05}"
     done
 }
 
@@ -164,7 +164,7 @@ case "${1:-status}" in
             sleep 0.1
             attempts=$((attempts + 1))
         done
-        if running && reader_running; then printf 'Bridge running (PID %s). Hold threshold: 300 ms; repeat wait: 10 ms plus command time; step: 1.\n' "$pid"
+        if running && reader_running; then printf 'Bridge running (PID %s). Hold threshold: 300 ms; repeat wait: 50 ms plus command time; step: 1.\n' "$pid"
         else printf 'Bridge failed to start.\n'; cat "$LOG"; exit 1; fi
         ;;
     --watch) watch_events "$2" ;;

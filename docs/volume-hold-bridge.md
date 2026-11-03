@@ -8,10 +8,10 @@ verified changes both the queried level (16 to 17) and the screen display. Direc
 
 The bridge reads only the selected input device and reacts to volume DOWN/UP events. The original tap
 remains native (one point); after a 300 ms hold delay, each repeat injects one paired Volume Up/Down
-press (`input keyevent 24` or `25`). The loop waits 10 ms between completed calls. A press that lasts
+press (`input keyevent 24` or `25`). The loop waits 50 ms between completed calls. A press that lasts
 longer than 300 ms can therefore receive an added repeat. Actual speed also depends on the TV's
-input-command startup time: 10 ms is the requested wait, not a guarantee of one visible step every
-10 ms. Release stops further repeats after any in-flight paired call completes, so a key is
+input-command startup time: 50 ms is the requested wait, not a guarantee of one visible step every
+50 ms. Release stops further repeats after any in-flight paired call completes, so a key is
 not left down mid-pair. A lost release has a 30-second repeat limit. Other keys are ignored and raw input events
 are not stored. If hardware repeat events appear, the added loop stops rather than doubling them.
 Input is passed through an anonymous shell pipe, so the bridge does not create a named FIFO. This
@@ -71,18 +71,20 @@ python3 -m unittest discover -s tools/tests -p 'test_volume_hold_bridge.py' -v
 ## Single-process injector
 
 The user's TV takes about 230 ms for one `cmd input keyevent`, so changing shell sleeps cannot reach
-a 10 ms step interval. The optional `ShellVolumeBridge` entry point keeps one Android runtime alive,
+a 50 ms step interval. The optional `ShellVolumeBridge` entry point keeps one Android runtime alive,
 reads the same getevent frames, and injects native DOWN/UP pairs directly through InputManager.
-It requests asynchronous injection and a 10 ms repeat wait after a 300 ms hold threshold. Single taps
+It requests asynchronous injection and a 50 ms repeat wait after a 300 ms hold threshold. Single taps
 shorter than that threshold receive only the firmware's original step. Actual TV timing still needs
-measurement; neither the 10 ms target nor Google Home-equivalent speed is guaranteed.
+measurement; neither an exact 50 ms cadence nor Google Home-equivalent speed is guaranteed.
+The user confirmed the initial 10 ms persistent version was too fast; 50 ms is now both the default
+and minimum. The repeat wait is configurable between 50 and 1000 ms at startup.
 
 The helper is compiled into the APK as a payload. Do not install or replace the working launcher to
 test it: copy the APK to `/data/local/tmp/personal-launcher-volume-fast.apk` and the wrapper to
 `/data/local/tmp/fast-volume-bridge.sh`. Run the wrapper through ADB:
 
 ```sh
-adb shell sh /data/local/tmp/fast-volume-bridge.sh start /dev/input/event3
+adb shell sh /data/local/tmp/fast-volume-bridge.sh start /dev/input/event3 50
 adb shell sh /data/local/tmp/fast-volume-bridge.sh status
 adb shell sh /data/local/tmp/fast-volume-bridge.sh stop
 ```
@@ -93,6 +95,15 @@ for class loading. The process runs as the already-authorized ADB shell UID, ope
 has no autostart and ends on stop, Android termination or reboot. Hidden input-method availability is
 checked at startup; unsupported firmware fails with an error instead of changing system settings.
 If the new helper cannot become ready, the wrapper stops it and restores the older shell bridge
-with a 300 ms hold threshold and 10 ms requested repeat wait. That fallback still has command startup
+with a 300 ms hold threshold and the selected repeat wait. That fallback still has command startup
 overhead. A later runtime failure is reported in the diagnostic log and requires checking the status.
 Diagnostics are in `/data/local/tmp/personal-launcher-volume-fast/bridge.log` and contain no raw input.
+
+Once the configurable payload is copied, a timing change needs only a restart, not another APK build:
+
+```sh
+adb shell 'sh /data/local/tmp/fast-volume-bridge.sh stop && sh /data/local/tmp/fast-volume-bridge.sh start /dev/input/event3 100'
+```
+
+Values below 50 ms are refused before stopping the old bridge. Changing a running helper's interval
+also requires an explicit stop/start; status reports the selected wait rather than silently ignoring it.

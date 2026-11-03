@@ -33,7 +33,11 @@ if os.environ.get('FAST_TEST_FAIL')=='1': raise SystemExit('unsupported runtime'
 proc=root/'proc'/str(os.getpid()); proc.mkdir(parents=True)
 (proc/'cmdline').write_bytes(b'personal-launcher-volume-fast\\0')
 assert os.environ.get('CLASSPATH')==str(root/'payload.apk')
-ready=pathlib.Path(sys.argv[-1]); ready.write_bytes(b'1')
+main=sys.argv.index('com.sadique.launcher.ShellVolumeBridge')
+ready=pathlib.Path(sys.argv[main+2])
+repeat=int(sys.argv[main+3]); assert 50<=repeat<=1000
+(root/'requested-repeat').write_text(str(repeat))
+ready.write_bytes(b'1')
 def end(*args):
     ready.unlink(missing_ok=True)
     raise SystemExit(0)
@@ -43,7 +47,7 @@ while True: time.sleep(.05)
         (self.root / "old.sh").write_text("""case "$1" in
 stop) printf 'stop\\n' >> "$FAST_TEST_ROOT/order.log" ;;
 status) printf 'Bridge is not running.\\n' ;;
-start) printf 'fallback\\n' >> "$FAST_TEST_ROOT/order.log" ;;
+start) printf 'fallback\\n' >> "$FAST_TEST_ROOT/order.log"; printf '%s\\n' "$PLV_REPEAT_INTERVAL" > "$FAST_TEST_ROOT/fallback-wait" ;;
 esac
 """)
 
@@ -56,8 +60,9 @@ esac
         return subprocess.run(["sh", str(SCRIPT), *args], env=self.env,
                               capture_output=True, text=True, timeout=10)
 
-    def start(self):
-        result = self.run_wrapper("start", str(self.device))
+    def start(self, repeat=None):
+        args=["start",str(self.device)]+([] if repeat is None else [str(repeat)])
+        result = self.run_wrapper(*args)
         self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
         self.assertIn("Fast helper running", result.stdout)
 
@@ -69,6 +74,7 @@ esac
         self.start()
         self.assertEqual((self.root/'order.log').read_text().splitlines(), ['stop','start'])
         self.assertEqual(stat.S_IMODE(self.payload.stat().st_mode), 0o444)
+        self.assertEqual((self.root/'requested-repeat').read_text(),'50')
         self.assertIn("running", self.run_wrapper("status").stdout)
         result=self.run_wrapper("stop")
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
@@ -97,6 +103,7 @@ esac
         self.assertNotEqual(result.returncode,0)
         self.assertIn('Restoring shell fallback',result.stdout)
         self.assertEqual((self.root/'order.log').read_text().splitlines(),['stop','start','fallback'])
+        self.assertEqual((self.root/'fallback-wait').read_text().strip(),'0.050')
         self.assertFalse((self.root/'state/pid').exists())
 
     def test_unrelated_pid_is_never_signalled(self):
@@ -105,6 +112,21 @@ esac
         proc=self.root/'proc'/str(os.getpid()); proc.mkdir(parents=True)
         (proc/'cmdline').write_bytes(b'python3\\0unrelated\\0')
         self.assertEqual(self.run_wrapper("stop").returncode,0)
+
+    def test_custom_repeat_is_passed_to_runtime_and_status(self):
+        self.start(100)
+        self.assertEqual((self.root/'requested-repeat').read_text(),'100')
+        self.assertIn('100ms',self.run_wrapper('status').stdout)
+
+    def test_below_minimum_repeat_is_refused_before_old_bridge_changes(self):
+        self.assertNotEqual(self.run_wrapper('start',str(self.device),'49').returncode,0)
+        self.assertFalse((self.root/'order.log').exists())
+
+    def test_changing_running_repeat_requires_explicit_restart(self):
+        self.start()
+        self.assertNotEqual(self.run_wrapper('start',str(self.device),'100').returncode,0)
+        self.assertIn('50ms',self.run_wrapper('status').stdout)
+        self.assertEqual((self.root/'order.log').read_text().splitlines().count('start'),1)
 
 
 if __name__ == '__main__': unittest.main()
