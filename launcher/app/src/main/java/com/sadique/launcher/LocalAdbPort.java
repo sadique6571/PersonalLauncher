@@ -5,14 +5,14 @@ import android.net.nsd.*;
 import java.io.IOException;
 import java.net.*;
 import java.util.ArrayDeque;
-import java.util.concurrent.*;
+import java.util.List;
 
 /** Discover only this device's current TLS endpoint, then connect through loopback. */
 final class LocalAdbPort {
-    static int discover(Context context) throws Exception {
+    static List<Integer> discover(Context context) throws Exception {
         NsdManager nsd=context.getSystemService(NsdManager.class);
         if (nsd==null) throw new IOException("Network discovery unavailable");
-        CountDownLatch found=new CountDownLatch(1); int[] port={0};
+        LocalAdbCandidates candidates=new LocalAdbCandidates();
         ArrayDeque<NsdServiceInfo> pending=new ArrayDeque<>();
         Object lock=new Object(); boolean[] resolving={false}, closed={false};
         class Resolver {
@@ -24,7 +24,7 @@ final class LocalAdbPort {
                         public void onResolveFailed(NsdServiceInfo info,int error) { done(); }
                         public void onServiceResolved(NsdServiceInfo info) {
                             synchronized(lock) {
-                                if (!closed[0] && local(info.getHost()) && info.getPort()>0) { port[0]=info.getPort(); found.countDown(); }
+                                if (!closed[0] && local(info.getHost())) candidates.add(info.getPort());
                             }
                             done();
                         }
@@ -37,7 +37,7 @@ final class LocalAdbPort {
         NsdManager.DiscoveryListener listener=new NsdManager.DiscoveryListener() {
             public void onDiscoveryStarted(String type) { }
             public void onDiscoveryStopped(String type) { }
-            public void onStartDiscoveryFailed(String type,int error) { found.countDown(); }
+            public void onStartDiscoveryFailed(String type,int error) { candidates.finish(); }
             public void onStopDiscoveryFailed(String type,int error) { }
             public void onServiceLost(NsdServiceInfo info) { }
             public void onServiceFound(NsdServiceInfo info) {
@@ -47,13 +47,11 @@ final class LocalAdbPort {
         };
         try {
             nsd.discoverServices("_adb-tls-connect._tcp.",NsdManager.PROTOCOL_DNS_SD,listener);
-            found.await(15,TimeUnit.SECONDS);
+            return candidates.await(15000,750);
         } finally {
             synchronized(lock) { closed[0]=true; pending.clear(); }
             try { nsd.stopServiceDiscovery(listener); } catch (RuntimeException ignored) { }
         }
-        if (port[0]<=0) throw new IOException("No local wireless-debugging endpoint. Check network approval on the TV.");
-        return port[0];
     }
     private static boolean local(InetAddress address) {
         if (address==null) return false;
