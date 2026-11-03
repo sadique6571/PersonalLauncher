@@ -8,6 +8,8 @@ The bridge reads only the selected input device and reacts to volume DOWN/UP eve
 remains native; a held press adds one AudioService adjustment every 150 ms after a 400 ms delay. Release
 stops the loop. A lost release has a 30-second repeat limit. Other keys are ignored and raw input events
 are not stored. If hardware repeat events appear, the added loop stops rather than doubling them.
+Input is passed through an anonymous shell pipe, so the bridge does not create a named FIFO. This
+avoids the `mkfifo: Permission denied` error reported by the TV in `/data/local/tmp`.
 
 Keep the original HomeKeyService/InputKeyService setup enabled during this test. Stop the bridge before
 changing that setup. This bridge does not suppress the stock or custom volume panels; duplicate OSDs

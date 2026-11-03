@@ -7,7 +7,8 @@ STATE=${PLV_STATE_DIR:-/data/local/tmp/personal-launcher-volume}
 SCRIPT=$(readlink -f "$0") || exit 1
 LOCK="$STATE/lock"
 PID_FILE="$LOCK/pid"
-EVENTS="$STATE/events"
+READER_PID="$STATE/reader-pid"
+DEVICE_FILE="$STATE/device"
 LOG="$STATE/bridge.log"
 PROC_ROOT=${PLV_PROC_ROOT:-/proc}
 
@@ -18,6 +19,19 @@ running() {
     [ -r "$PROC_ROOT/$pid/cmdline" ] || return 1
     command_line=$(tr '\000' ' ' < "$PROC_ROOT/$pid/cmdline")
     case "$command_line" in *" $SCRIPT --watch "*) kill -0 "$pid" 2>/dev/null ;; *) return 1 ;; esac
+}
+
+reader_running() {
+    [ -r "$READER_PID" ] && [ -r "$DEVICE_FILE" ] || return 1
+    reader_pid=$(cat "$READER_PID")
+    device=$(cat "$DEVICE_FILE")
+    case "$reader_pid" in ''|*[!0-9]*) return 1 ;; esac
+    [ -r "$PROC_ROOT/$reader_pid/cmdline" ] || return 1
+    reader_command=$(tr '\000' ' ' < "$PROC_ROOT/$reader_pid/cmdline")
+    case "$reader_command" in
+        *"getevent -lt $device "*|*" $SCRIPT --reader $device "*) kill -0 "$reader_pid" 2>/dev/null ;;
+        *) return 1 ;;
+    esac
 }
 
 repeat_volume() {
@@ -36,25 +50,14 @@ repeat_volume() {
     done
 }
 
-watch_events() {
-    device=$1
-    worker= reader= held=
+parse_events() {
+    worker= held=
     stop_repeat() {
         if [ -n "$worker" ]; then
             kill "$worker" 2>/dev/null || :
             wait "$worker" 2>/dev/null || :
         fi
         worker= held=
-    }
-    cleanup() {
-        trap '' TERM INT HUP
-        stop_repeat
-        if [ -n "$reader" ]; then
-            kill "$reader" 2>/dev/null || :
-            wait "$reader" 2>/dev/null || :
-        fi
-        rm -f "$EVENTS" "$PID_FILE"
-        rmdir "$LOCK" 2>/dev/null || :
     }
     begin_repeat() {
         [ "$held" = "$1" ] && return
@@ -65,11 +68,7 @@ watch_events() {
         printf 'held %s\n' "$held"
     }
     trap 'exit 0' TERM INT HUP
-    trap cleanup EXIT
-    rm -f "$EVENTS"
-    mkfifo "$EVENTS" || exit 1
-    getevent -lt "$device" > "$EVENTS" 2>> "$LOG" &
-    reader=$!
+    trap stop_repeat EXIT
     while IFS= read -r event; do
         case "$event" in
             *EV_KEY*KEY_VOLUMEUP*DOWN) begin_repeat raise ;;
@@ -79,14 +78,27 @@ watch_events() {
             # If the driver supplies native repeats, do not add another repeat loop.
             *EV_KEY*KEY_VOLUMEUP*REPEAT|*EV_KEY*KEY_VOLUMEDOWN*REPEAT) stop_repeat ;;
         esac
-    done < "$EVENTS"
+    done
+}
+
+watch_events() {
+    cleanup() {
+        trap '' TERM INT HUP
+        if reader_running; then kill "$reader_pid" 2>/dev/null || :; fi
+        rm -f "$READER_PID" "$DEVICE_FILE" "$PID_FILE"
+        rmdir "$LOCK" 2>/dev/null || :
+    }
+    trap 'exit 0' TERM INT HUP
+    trap cleanup EXIT
+    # Anonymous pipes work on firmware that denies creation of named FIFO files.
+    sh "$SCRIPT" --reader "$1" | sh "$SCRIPT" --parse
 }
 
 case "${1:-status}" in
     start)
         device=${2:-/dev/input/event1}
         [ -r "$device" ] || { printf 'Cannot read input device: %s\n' "$device"; exit 1; }
-        for program in getevent cmd mkfifo nohup; do
+        for program in getevent cmd nohup; do
             command -v "$program" > /dev/null 2>&1 || { printf 'Missing command: %s\n' "$program"; exit 1; }
         done
         # Refuse to add repeats without the original key helpers; their disabled mode already repeats.
@@ -102,15 +114,27 @@ case "${1:-status}" in
         rmdir "$LOCK" 2>/dev/null || :
         mkdir "$LOCK" || { printf 'Bridge lock unavailable.\n'; exit 1; }
         : > "$LOG"
+        printf '%s\n' "$device" > "$DEVICE_FILE"
         nohup sh "$SCRIPT" --watch "$device" < /dev/null >> "$LOG" 2>&1 &
         printf '%s\n' "$!" > "$PID_FILE"
-        sleep 0.2
-        if running; then printf 'Bridge running (PID %s). Native initial tap; held repeat after 400 ms.\n' "$pid"
+        attempts=0
+        while [ "$attempts" -lt 10 ]; do
+            if running && reader_running; then break; fi
+            sleep 0.1
+            attempts=$((attempts + 1))
+        done
+        if running && reader_running; then printf 'Bridge running (PID %s). Native initial tap; held repeat after 400 ms.\n' "$pid"
         else printf 'Bridge failed to start.\n'; cat "$LOG"; exit 1; fi
         ;;
     --watch) watch_events "$2" ;;
+    --reader)
+        printf '%s\n' "$$" > "$READER_PID"
+        exec getevent -lt "$2"
+        ;;
+    --parse) parse_events ;;
     stop)
-        if running; then kill "$pid"; printf 'Stop requested. Home/Settings settings are unchanged.\n'
+        # End the producer first: EOF lets the parser stop its repeat worker and exit cleanly.
+        if running && reader_running; then kill "$reader_pid"; printf 'Stop requested. Home/Settings settings are unchanged.\n'
         else printf 'Bridge is not running.\n'; fi
         ;;
     status)

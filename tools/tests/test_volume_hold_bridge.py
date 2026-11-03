@@ -34,7 +34,10 @@ p.mkdir(parents=True,exist_ok=True)
 signal.signal(signal.SIGHUP,signal.SIG_IGN)
 os.execvp(sys.argv[1],sys.argv[1:])
 """)
-        self.fake("getevent", """import sys
+        self.fake("getevent", """import sys,os,pathlib
+p=pathlib.Path(os.environ['PLV_PROC_ROOT'])/str(os.getpid())
+p.mkdir(parents=True,exist_ok=True)
+(p/'cmdline').write_bytes(b'\\0'.join(x.encode() for x in ['getevent']+sys.argv[1:])+b'\\0')
 with open(sys.argv[-1]) as stream:
     for line in stream:
         print(line, end='', flush=True)
@@ -49,6 +52,8 @@ with open(os.environ['FAKE_SETTINGS_LOG'], 'a') as out:
     out.write(' '.join(sys.argv[1:]) + '\\n')
 print(os.environ.get('FAKE_HELPERS', 'com.sadique.launcher/com.sadique.launcher.HomeKeyService'))
 """)
+        # The actual TV denied mkfifo in /data/local/tmp. The bridge must never call it.
+        self.fake("mkfifo", "raise SystemExit('mkfifo: Permission denied')\n")
         self.run_bridge("start", str(self.device))
 
     def fake(self, name, body):
