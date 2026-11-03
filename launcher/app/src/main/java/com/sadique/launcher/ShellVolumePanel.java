@@ -9,7 +9,9 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 
 /** Shell-only relay: the installed launcher still draws its existing accessibility overlay. */
-@SuppressLint({"PrivateApi", "DiscouragedPrivateApi"})
+// This class runs exclusively in the standalone shell app_process, not in the target-34 app.
+// Discover transaction IDs from that runtime instead of hard-coding version-dependent numbers.
+@SuppressLint({"PrivateApi", "DiscouragedPrivateApi", "SoonBlockedPrivateApi"})
 final class ShellVolumePanel implements AutoCloseable {
     private final VolumePanelSession<IBinder> session;
 
