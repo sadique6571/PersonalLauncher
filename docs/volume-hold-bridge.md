@@ -228,3 +228,18 @@ adb shell pm grant com.sadique.launcher android.permission.WRITE_SECURE_SETTINGS
 
 No new permission is added to the launcher. The specific firmware page, mute key,
 active-route icons and Netflix response must be verified with the real remote.
+
+### Settings tile layout (6.1)
+
+Settings cards now place the icon beside the label with a 64dp minimum height
+and 16dp rounded corners. Quick settings and tools both use two cards per row;
+Categories is grouped with Screensaver under tools rather than duplicated.
+Theme refresh preserves the card corners and settings focus/scroll behavior.
+
+The Haier user confirmed direct panel updates in 2–7ms, three injected taps
+changing media volume from 25 to 28, and held volume working in Netflix after a
+controlled helper restart. The precise cause of the earlier lost hold state is
+not established. This layout release preserves the existing 50ms injector and
+Binder/cleanup behavior; it does not claim to fix that unconfirmed root cause.
+The supplied log capture contained no launcher crash/ANR, which is not a claim
+that every possible settings stall has been excluded.
