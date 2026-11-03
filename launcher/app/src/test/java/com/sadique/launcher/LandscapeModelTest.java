@@ -4,25 +4,11 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class LandscapeModelTest {
-    @Test public void screensaverScenesHaveDistinctPhotosAndMatchingDescriptions() {
-        java.util.Set<String> urls=new java.util.HashSet<>();
-        for (int i=0;i<LandscapeModel.landscapeCount();i++) {
-            String url=LandscapeModel.landscapePhotoUrl(i);
-            assertTrue(url.startsWith("https://images.unsplash.com/photo-"));
-            assertTrue(urls.add(url));
-            String caption=LandscapeModel.landscapeCaption(i);
-            assertFalse(caption.isEmpty());
-            assertFalse(caption.contains("Photo by"));
-            assertFalse(caption.contains("Picsum"));
-            assertFalse(caption.contains("1920"));
-        }
-        assertEquals("Boathouse on a mountain lake",LandscapeModel.landscapeCaption(1));
-    }
-    @Test public void screensaverRotationWrapsBothDirections() {
-        int count=LandscapeModel.landscapeCount();
-        assertEquals(LandscapeModel.landscapePhotoUrl(0),LandscapeModel.landscapePhotoUrl(count));
-        assertEquals(LandscapeModel.landscapePhotoUrl(count-1),LandscapeModel.landscapePhotoUrl(-1));
-        assertEquals(LandscapeModel.landscapeCaption(count-1),LandscapeModel.landscapeCaption(-1));
+    @Test public void bingDailyMetadataRefreshesWithoutRedownloadingEachHomeReturn() {
+        assertTrue(LandscapeModel.bingCheckDue(0,1_000));
+        assertFalse(LandscapeModel.bingCheckDue(1_000,2_000));
+        assertTrue(LandscapeModel.bingCheckDue(1_000,3_601_000));
+        assertTrue(LandscapeModel.bingCheckDue(2_000,1_000));
     }
     @Test public void portraitSquareAndInvalidImagesAreRejected() {
         assertTrue(LandscapeModel.isLandscape(1920,1080));

@@ -3,7 +3,7 @@
 **Personal Launcher by Sadique Sadiq** — a clean, fast home-screen launcher for Android TV / Google TV.
 
 - Package: `com.sadique.launcher`
-- Version: 4.8
+- Version: 6.7
 - Plain Java, classic Android Views, `minSdk` 26. Internet permission is used for online screensaver photos, weather and city lookup.
 - Day/night Home wallpaper, compact toolbar, configurable app grid, quick settings and editable name and photo.
 
@@ -61,23 +61,28 @@ Optional banner rows directly below the clock showing posters from the TV Watch 
 
 ## Online landscape screensaver
 
-Open the top Screensaver icon for a preview. It streams a rotating selection of landscape photos from
-Unsplash (30-second default slideshow, alternate-source retries), with a large center clock/date, network status at the top right, and weather at the bottom left.
-Photos stay in memory only; with no validated internet connection the screen shows the clock/date and
-an offline message instead of a saved landscape. Image requests are bounded, time out, and stop being
-scheduled when the screensaver closes. TLS verification remains enabled.
+Open the top Screensaver icon for a preview. Every 30 seconds it requests a fresh wide nature photo
+from Wikimedia Commons. Previously shown source IDs and identical downloaded image hashes are recorded
+in a private database and skipped across sessions and reboots. Photos themselves are not disk-cached.
+The feed uses public-domain/CC0 images that do not require attribution, checks nature metadata and
+wide dimensions, and shows the source scene description without photographer, resolution or provider labels.
+If a new image cannot be retrieved, the current image stays visible while the next request retries.
 
-Weather defaults to **Okara, Pakistan** and is provided by Open-Meteo. Change the city, Celsius/Fahrenheit,
-photo interval and optional Home-idle timeout in **Settings → Launcher settings → Screensaver & weather**.
-City search lets you choose a matching country/region; it does not request GPS or a Google login.
+Weather is at the bottom left, the scene caption at the bottom right and network status at the top right.
+Clock/date placement is configurable. City, Celsius/Fahrenheit and the Home idle timeout are in
+**Settings → System → Screensaver & weather**. Weather defaults to **Okara, Pakistan** and uses Open-Meteo.
 
-For Android's system-managed screensaver, open **Android screensaver settings** from that menu and
-select **Online Landscapes · Personal Launcher**. Any remote key exits the system dream. The launcher's
-own idle timeout defaults to Off and runs only while Home is in front, so it does not cover a playing app.
+Home uses Bing's daily image. It checks the daily metadata periodically while Home is visible and
+downloads a replacement only when the daily image changes or the previous bitmap was released.
+The online image remains warm on normal Home returns; real memory pressure or a process restart can
+require another download.
 
-Online sources: `images.unsplash.com`, `api.open-meteo.com`, `geocoding-api.open-meteo.com`.
+For Android's system-managed screensaver, open **Set automatic screensaver** and select
+**Online Landscapes · Personal Launcher**. Any remote key exits the system dream. Home idle startup
+defaults to Off and does not cover another app's playback.
 
-The Haier Home-button and reboot flow still needs testing on the real TV. Keep Google Home enabled while testing.
+Online sources: `commons.wikimedia.org`, `thumb.wikimedia.org`, `upload.wikimedia.org`,
+`www.bing.com`, `api.open-meteo.com`, `geocoding-api.open-meteo.com`.
 
 ## Performance
 

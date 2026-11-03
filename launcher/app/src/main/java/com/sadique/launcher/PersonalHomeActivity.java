@@ -126,8 +126,8 @@ public final class PersonalHomeActivity extends Activity {
             if (light != lastLight) {
                 lastLight = light;
                 refreshTileSurfaces();
-                updateOnlineWallpaper();
             }
+            updateOnlineWallpaper();
             handler.postDelayed(this, 60_000 - System.currentTimeMillis() % 60_000);
         }
     };
@@ -150,9 +150,13 @@ public final class PersonalHomeActivity extends Activity {
         onCreateStartMs = android.os.SystemClock.elapsedRealtime();
         BootLog.mark("home onCreate");
         prefs = getSharedPreferences("personal_home", MODE_PRIVATE);
+        if (!prefs.getBoolean("bing_daily_home_v67", false)) {
+            prefs.edit().putBoolean("bing_daily_home_v67", true)
+                    .putInt("wallpaper_source", 1).putString("wallpaper_mode", "mountains").apply();
+        }
         if (!prefs.getBoolean("reference_layout_v42", false)) {
             prefs.edit().putBoolean("reference_layout_v42", true).putString("theme_mode", "dark")
-                    .putInt("photo_seconds", 30).apply();
+                    .apply();
         }
         if (!prefs.getBoolean("reference_layout_v43", false)) {
             prefs.edit().putBoolean("reference_layout_v43", true).putInt("background_dim", 0).apply();
@@ -1801,7 +1805,6 @@ public final class PersonalHomeActivity extends Activity {
             case "Performance": return prefs.getInt("perf_mode", 0);
             case "Home wallpaper": return "custom".equals(prefs.getString("wallpaper_mode", "mountains")) ? 1 : -1;
             case "Temperature unit": return prefs.getBoolean("weather_fahrenheit", false) ? 1 : 0;
-            case "Photo change interval": return indexOf(new int[]{30, 60, 120, 300}, prefs.getInt("photo_seconds", 30));
             case "Clock position": return prefs.getInt("ss_clock_pos", 1);
             case "Start screensaver after idle": return indexOf(new int[]{0, 2, 5, 10, 15}, prefs.getInt("idle_screensaver_minutes", 0));
             default: return -1;
@@ -1843,13 +1846,12 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void screensaverSettings() {
-        chooseSetting("Online landscape screensaver", new String[]{"Preview", "Weather city", "Temperature unit", "Photo change interval", "Clock position", "Start after idle", "Set automatic screensaver"}, which -> {
+        chooseSetting("Online landscape screensaver", new String[]{"Preview", "Weather city", "Temperature unit", "Clock position", "Start after idle", "Set automatic screensaver"}, which -> {
             if (which == 0) launch(new Intent(this, LandscapeActivity.class));
             else if (which == 1) WeatherSettings.show(this);
             else if (which == 2) chooseSetting("Temperature unit", new String[]{"Celsius", "Fahrenheit"}, value -> prefs.edit().putBoolean("weather_fahrenheit", value == 1).apply());
-            else if (which == 3) chooseSetting("Photo change interval", new String[]{"30 seconds", "1 minute", "2 minutes", "5 minutes"}, value -> prefs.edit().putInt("photo_seconds", new int[]{30,60,120,300}[value]).apply());
-            else if (which == 4) chooseSetting("Clock position", new String[]{"Top", "Center", "Bottom"}, value -> prefs.edit().putInt("ss_clock_pos", value).apply());
-            else if (which == 5) chooseSetting("Start screensaver after idle", new String[]{"Off", "2 minutes", "5 minutes", "10 minutes", "15 minutes"}, value -> {
+            else if (which == 3) chooseSetting("Clock position", new String[]{"Top", "Center", "Bottom"}, value -> prefs.edit().putInt("ss_clock_pos", value).apply());
+            else if (which == 4) chooseSetting("Start screensaver after idle", new String[]{"Off", "2 minutes", "5 minutes", "10 minutes", "15 minutes"}, value -> {
                 prefs.edit().putInt("idle_screensaver_minutes", new int[]{0,2,5,10,15}[value]).apply(); armIdleScreensaver();
             });
             else launch(new Intent(this, ScreensaverSetupActivity.class));
@@ -2295,6 +2297,8 @@ public final class PersonalHomeActivity extends Activity {
             onlineWallpaper = old.onlineWallpaper;
             onlineNext = old.onlineNext;
             onlineIndex = old.onlineIndex;
+            onlineImageUrl = old.onlineImageUrl;
+            onlineCheckedAt = old.onlineCheckedAt;
             crossfade = old.crossfade;
             old.backdrop = null;
             old.onlineWallpaper = null;
@@ -2316,6 +2320,9 @@ public final class PersonalHomeActivity extends Activity {
         private Bitmap onlineWallpaper, onlineNext;
         private float crossfade = 1f;
         private int onlineIndex = -1;
+        private String onlineImageUrl = "";
+        private long onlineCheckedAt;
+        private boolean onlineLoading;
         /** Favorite wallpaper (saved by user). */
         private Bitmap favoriteWallpaper;
         SkyClock() {
@@ -2372,15 +2379,21 @@ public final class PersonalHomeActivity extends Activity {
             });
         }
 
-        /** Loads a fresh online wallpaper photo with crossfade (picsum seed never repeats). */
+        /** Keep Bing's daily image; periodically check metadata so a new day works while Home stays open. */
         void loadOnlinePhoto(int index) {
-            if (index == onlineIndex && onlineWallpaper != null) return;
-            onlineIndex = index;
+            if (onlineLoading) return;
+            if (index == onlineIndex && (onlineWallpaper != null || onlineNext != null)
+                    && !LandscapeModel.bingCheckDue(onlineCheckedAt, System.currentTimeMillis())) return;
+            onlineLoading = true;
             // Bing daily: use the index directly (0=today). No time-based seed —
             // the launcher must always show today's wallpaper. (User 2026-10-31.)
             final int bingIdx = index;
+            final String previousUrl = onlineImageUrl;
+            final boolean hasCurrentPhoto = onlineWallpaper != null || onlineNext != null;
             worker.execute(() -> {
                 Bitmap bmp = null;
+                String fetchedUrl = "";
+                boolean checked = false;
                 try {
                     // Retire the old 6-photo disk cache: it is no longer populated.
                     java.io.File[] stale = new java.io.File(getCacheDir(), "screensaver_photos").listFiles();
@@ -2390,12 +2403,25 @@ public final class PersonalHomeActivity extends Activity {
                     byte[] jsonBytes = OnlineContent.get(apiUrl, 64 * 1024);
                     String json = new String(jsonBytes, java.nio.charset.StandardCharsets.UTF_8);
                     String imageUrl = LandscapeModel.bingImageUrl(json);
-                    byte[] bytes = OnlineContent.get(imageUrl, 6 * 1024 * 1024);
-                    bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                    fetchedUrl = imageUrl;
+                    checked = true;
+                    if (!imageUrl.equals(previousUrl) || !hasCurrentPhoto) {
+                        byte[] bytes = OnlineContent.get(imageUrl, 6 * 1024 * 1024);
+                        bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                    }
                 } catch (Exception ignored) {}
                 Bitmap loaded = bmp;
+                String newUrl = fetchedUrl;
+                boolean metadataChecked = checked;
                 handler.post(() -> {
+                    onlineLoading = false;
+                    if (sky != this) { if (loaded != null) loaded.recycle(); return; }
+                    if (metadataChecked && (loaded != null || newUrl.equals(onlineImageUrl))) {
+                        onlineCheckedAt = System.currentTimeMillis();
+                        onlineIndex = index;
+                    }
                     if (loaded == null) return;
+                    onlineImageUrl = newUrl;
                     if (onlineNext != null && onlineNext != onlineWallpaper) onlineNext.recycle();
                     onlineNext = loaded;
                     crossfade = 0f;
