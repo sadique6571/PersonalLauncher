@@ -34,8 +34,8 @@ public final class LandscapeView extends FrameLayout {
     private ExecutorService weatherWorker;
     private boolean running, registered, photoBusy, weatherBusy, hasPhoto, networkOnline;
     private String lastWeather;
-    private int displayedPhoto = -1;
-    private int generation, photoIndex = (int) (System.currentTimeMillis() / 60_000);
+    private int generation;
+    private final java.util.Random photoRandom = new java.util.Random();
 
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
         @Override public void onAvailable(Network network) { handler.post(() -> networkChanged()); }
@@ -49,11 +49,12 @@ public final class LandscapeView extends FrameLayout {
             handler.postDelayed(this, 60_000 - System.currentTimeMillis() % 60_000);
         }
     };
+    private final Runnable photoRetry = () -> { if (running && !hasPhoto) requestPhoto(); };
     private final Runnable rotate = new Runnable() {
         @Override public void run() {
             if (!running) return;
             requestPhoto();
-            handler.postDelayed(this, Math.max(30, Math.min(300, prefs.getInt("photo_seconds", 30))) * 1000L);
+            handler.postDelayed(this, 30_000L);
         }
     };
     private final Runnable weatherTick = new Runnable() {
@@ -163,7 +164,9 @@ public final class LandscapeView extends FrameLayout {
         }
         if (worker != null) worker.shutdownNow();
         if (weatherWorker != null) weatherWorker.shutdownNow();
+        photo.animate().cancel();
         photo.setImageDrawable(null);
+        details.setText("");
         hasPhoto = false;
     }
 
@@ -188,7 +191,9 @@ public final class LandscapeView extends FrameLayout {
         wifi.setText(connected ? "Online" : "No internet");
         wifi.setTextColor(color);
         if (!connected) {
+            photo.animate().cancel();
             photo.setImageDrawable(null); hasPhoto = false;
+            details.setText("");
             status.setText("Offline · landscapes need internet");
             if (lastWeather == null) weather.setText("Weather unavailable · no internet");
             weatherStatus.setText("Offline · waiting to refresh");
@@ -214,11 +219,6 @@ public final class LandscapeView extends FrameLayout {
         date.setText(new SimpleDateFormat("EEEE, d MMMM yyyy", Locale.getDefault()).format(now.getTime()));
     }
 
-    /** Rotate reviewed landscapes with matching scene captions; retain bounded online reads. */
-    private byte[] freshPhotoBytes(int seed) throws java.io.IOException {
-        return OnlineContent.get(LandscapeModel.landscapePhotoUrl(seed), 6 * 1024 * 1024);
-    }
-
     /** Fixed clock/date style (2026-11-01): white with black outline + drop shadow,
      *  readable on any photo. Replaces the old brightness-adaptive colors. */
     private void adaptClockColors() {
@@ -232,53 +232,57 @@ public final class LandscapeView extends FrameLayout {
         if (!running || photoBusy || !online()) return;
         photoBusy = true;
         int request = generation;
-        int previousPhoto = displayedPhoto;
-        int firstPhoto = photoIndex;
-        photoIndex++;
+        int seed = photoRandom.nextInt();
         worker.execute(() -> {
             Bitmap result = null;
-            int selectedPhoto = -1;
             String caption = "";
-            for (int attempt = 0; attempt < 3 && result == null && !Thread.currentThread().isInterrupted(); attempt++) {
-              int candidate = LandscapeModel.landscapeIndex(firstPhoto + attempt);
-              if (candidate == previousPhoto) continue;
-              try {
-                byte[] bytes = freshPhotoBytes(candidate);
-                BitmapFactory.Options bounds = new BitmapFactory.Options();
-                bounds.inJustDecodeBounds = true;
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
-                if (!LandscapeModel.isLandscape(bounds.outWidth,bounds.outHeight)) throw new java.io.IOException("Photo is not a landscape");
-                bounds.inJustDecodeBounds = false;
-                bounds.inSampleSize = 1;
-                while (Math.max(bounds.outWidth, bounds.outHeight) / bounds.inSampleSize > 1920) bounds.inSampleSize *= 2;
-                result = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
-                selectedPhoto = candidate;
-                if (result != null) {
-                    caption = LandscapeModel.landscapeCaption(candidate);
+            int downloads = 0;
+            try (LandscapeHistory history = new LandscapeHistory(getContext())) {
+                for (int attempt = 0; attempt < 3 && result == null && downloads < 3 && !Thread.currentThread().isInterrupted(); attempt++) {
+                    try {
+                        String body = new String(OnlineContent.get(LandscapeFeed.queryUrl(seed + attempt, System.nanoTime()), 256 * 1024), java.nio.charset.StandardCharsets.UTF_8);
+                        for (LandscapeFeed.Scene scene : LandscapeFeed.scenes(body, history::contains)) {
+                            if (downloads >= 3 || Thread.currentThread().isInterrupted()) break;
+                            downloads++;
+                            try {
+                                byte[] bytes = OnlineContent.get(scene.url, 6 * 1024 * 1024);
+                                BitmapFactory.Options bounds = new BitmapFactory.Options();
+                                bounds.inJustDecodeBounds = true;
+                                BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
+                                if (!LandscapeModel.isLandscape(bounds.outWidth, bounds.outHeight)) continue;
+                                bounds.inJustDecodeBounds = false; bounds.inSampleSize = 1;
+                                while (Math.max(bounds.outWidth, bounds.outHeight) / bounds.inSampleSize > 1920) bounds.inSampleSize *= 2;
+                                Bitmap decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
+                                if (decoded == null) continue;
+                                if (!history.remember(scene.id, bytes)) { decoded.recycle(); continue; }
+                                result = decoded; caption = scene.caption; break;
+                            } catch (Exception unavailable) { /* Try another unseen source image. */ }
+                        }
+                    } catch (Exception unavailable) { /* Try a different nature query. */ }
                 }
-              } catch (Exception unavailable) { /* Try another landscape instead of retaining one failed source forever. */ }
-            }
+            } catch (Exception unavailable) { /* Never show an untracked repeat if history is unavailable. */ }
             Bitmap image = result;
-            int loadedPhoto = selectedPhoto;
             String photoCaption = caption;
             handler.post(() -> {
-                if (!running || request != generation) return;
+                if (!running || request != generation) { if (image != null) image.recycle(); return; }
                 photoBusy = false;
                 if (image != null && online()) {
                     // Fade through: old photo out, new photo in.
                     photo.animate().alpha(0f).setDuration(250).withEndAction(() -> {
+                        if (!running || request != generation || !online()) { image.recycle(); return; }
                         photo.setImageBitmap(image);
                         details.setText(photoCaption);
                         photo.animate().alpha(1f).setDuration(500).start();
                     }).start();
-                    hasPhoto = true; displayedPhoto = loadedPhoto;
+                    hasPhoto = true;
                     status.setText("");
                     // Wallpaper details caption at the bottom (user 2026-11-01).
                     adaptClockColors();
                 } else {
-                    status.setText("Landscape rotation unavailable · retrying automatically");
-                    handler.removeCallbacks(rotate);
-                    handler.postDelayed(rotate, 15_000);
+                    if (image != null) image.recycle();
+                    status.setText("New landscape unavailable · retrying automatically");
+                    handler.removeCallbacks(photoRetry);
+                    handler.postDelayed(photoRetry, 15_000);
                 }
             });
         });

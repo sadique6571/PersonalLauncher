@@ -13,13 +13,14 @@ final class OnlineContent {
         return host.equals("images.unsplash.com")
                 || host.equals("api.open-meteo.com") || host.equals("geocoding-api.open-meteo.com") || host.equals("wttr.in")
                 || host.equals("picsum.photos") || host.equals("fastly.picsum.photos")
-                || host.equals("www.bing.com");
+                || host.equals("www.bing.com") || host.equals("commons.wikimedia.org")
+                || host.equals("upload.wikimedia.org") || host.equals("thumb.wikimedia.org");
     }
 
     private static boolean imageHost(String host) {
         return host.equals("images.unsplash.com")
                 || host.equals("picsum.photos") || host.equals("fastly.picsum.photos")
-                || host.equals("www.bing.com");
+                || host.equals("www.bing.com") || host.equals("upload.wikimedia.org") || host.equals("thumb.wikimedia.org");
     }
 
     static byte[] get(String address, int limit) throws IOException {
@@ -37,7 +38,7 @@ final class OnlineContent {
             connection.setInstanceFollowRedirects(false);
             connection.setUseCaches(false);
             connection.setRequestProperty("Cache-Control", "no-cache");
-            connection.setRequestProperty("User-Agent", "PersonalLauncher/4.4");
+            connection.setRequestProperty("User-Agent", "PersonalLauncher/6.7 (https://github.com/sadique6571/PersonalLauncher)");
             connection.setRequestProperty("Accept", imageHost(host) ? "image/jpeg,image/webp,image/png" : "application/json");
             try {
                 int status = connection.getResponseCode();
