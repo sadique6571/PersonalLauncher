@@ -23,6 +23,8 @@ running() {
     # Android's tr stalled while reading this app_process cmdline on the tested TV.
     # ps gives us the same identity check without a raw procfs-to-tr pipeline.
     text=$(ps -p "$pid" -o ARGS= 2>/dev/null) || return 1
+    # Some Android ps builds print an empty header line even with ARGS=.
+    text=${text#"${text%%[![:space:]]*}"}
     case "$text" in "$NAME"|"$NAME "*|*" $MAIN "*) kill -0 "$pid" 2>/dev/null ;; *) return 1 ;; esac
 }
 

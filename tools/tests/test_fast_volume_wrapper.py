@@ -30,7 +30,7 @@ class FastVolumeWrapperTest(unittest.TestCase):
 assert sys.argv[1]=='-p' and sys.argv[3:]==['-o','ARGS=']
 entry=pathlib.Path(os.environ['PLV_FAST_PROC_ROOT'])/sys.argv[2]/'ps-args'
 if not entry.exists(): raise SystemExit(1)
-print(entry.read_text())
+print(os.environ.get('FAST_TEST_PS_PREFIX','')+entry.read_text())
 """)
         self.fake("app_process", """import os,pathlib,sys,signal,time
 root=pathlib.Path(os.environ['FAST_TEST_ROOT'])
@@ -131,6 +131,16 @@ esac
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertEqual((self.root/'controller-restored').read_text(),'yes')
         self.assertFalse((self.root/'sigterm').exists())
+
+    def test_android_blank_ps_header_does_not_hide_running_helper(self):
+        self.env['FAST_TEST_PS_PREFIX']='\n  \t'
+        self.start()
+        self.assertIn('running',self.run_wrapper('status').stdout)
+        self.assertIn('already running',self.run_wrapper('start',str(self.device)).stdout)
+        self.assertEqual((self.root/'order.log').read_text().splitlines().count('start'),1)
+        result=self.run_wrapper('stop')
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertEqual((self.root/'controller-restored').read_text(),'yes')
 
     def test_non_shell_start_is_refused(self):
         self.env['FAST_TEST_UID']='10000'
