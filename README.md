@@ -166,3 +166,5 @@ receive focus. Continue Watching is entered deliberately with Down from the bott
 For firmware where the key helpers suppress held-volume repeat, an optional
 [temporary ADB volume bridge](docs/volume-hold-bridge.md) is available for controlled diagnosis.
 It leaves the launcher settings untouched and does not replace the APK's volume UI.
+That guide also documents an optional single-process injector for TVs where a shell key command
+takes too long. Its APK is used as an ADB classpath payload; the installed launcher need not change.

@@ -48,14 +48,14 @@ repeat_volume() {
     trap - EXIT
     trap 'exit 0' TERM INT HUP
     # Keep the firmware's initial tap. Add steps only after a held press.
-    sleep "${PLV_REPEAT_DELAY:-0.05}"
+    sleep "${PLV_REPEAT_DELAY:-0.3}"
     deadline=$(( $(date +%s) + ${PLV_MAX_HOLD_SECONDS:-30} ))
     while [ "$(date +%s)" -lt "$deadline" ]; do
         adjust_volume "$direction" > /dev/null 2>&1 || {
             printf 'Native volume key injection failed; repeat stopped.\n' >&2
             exit 1
         }
-        sleep "${PLV_REPEAT_INTERVAL:-0.05}"
+        sleep "${PLV_REPEAT_INTERVAL:-0.01}"
     done
 }
 
@@ -164,7 +164,7 @@ case "${1:-status}" in
             sleep 0.1
             attempts=$((attempts + 1))
         done
-        if running && reader_running; then printf 'Bridge running (PID %s). Held step: 1 point; initial/repeat wait: 50 ms plus command time.\n' "$pid"
+        if running && reader_running; then printf 'Bridge running (PID %s). Hold threshold: 300 ms; repeat wait: 10 ms plus command time; step: 1.\n' "$pid"
         else printf 'Bridge failed to start.\n'; cat "$LOG"; exit 1; fi
         ;;
     --watch) watch_events "$2" ;;

@@ -266,7 +266,7 @@ else: raise SystemExit('Unexpected adb arguments: '+repr(a))
         self.assertTrue(all(s in ["keyevent 24", "keyevent 25"] for s in calls))
         self.assertEqual(len(self.steps()), len(calls))
 
-    def test_default_initial_and_repeat_waits_are_50ms(self):
+    def test_default_hold_is_300ms_and_repeat_wait_is_10ms(self):
         self.stop()
         self.env.pop("PLV_REPEAT_DELAY")
         self.env.pop("PLV_REPEAT_INTERVAL")
@@ -286,9 +286,9 @@ os.execv(os.environ['REAL_TEST_SLEEP'],['sleep']+sys.argv[1:])
         for line in (self.root / "sleep.log").read_text().splitlines():
             pid, delay = line.split()
             waits.setdefault(pid, []).append(delay)
-        repeaters = [values for values in waits.values() if "0.05" in values]
+        repeaters = [values for values in waits.values() if "0.01" in values]
         self.assertEqual(len(repeaters), 1)
-        self.assertEqual(repeaters[0][:2], ["0.05", "0.05"])
+        self.assertEqual(repeaters[0][:2], ["0.3", "0.01"])
 
     def test_unknown_non_volume_keys_and_stale_scan_are_ignored(self):
         self.bluetooth("000c009f", "DOWN")

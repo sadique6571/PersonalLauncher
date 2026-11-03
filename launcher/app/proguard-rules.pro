@@ -2,3 +2,6 @@
 # AndroidX code, not from renaming, and readable stack traces matter more in a sideloaded app
 # where crash reports arrive as screenshots.
 -dontobfuscate
+# Explicit shell-only entry point, loaded by app_process from the APK payload.
+-keep class com.sadique.launcher.ShellVolumeBridge { *; }
+-keep class com.sadique.launcher.ShellVolumeBridge$* { *; }
