@@ -88,6 +88,12 @@ else: raise SystemExit('Unexpected adb arguments: '+repr(a))
         # Android getevent pads labels to 20 columns; PTY output can also end in CRLF.
         os.write(self.input, f"[ 123.000] /dev/input/event1: EV_KEY       {key:<20} {action:<20}\r\n".encode())
 
+    def bluetooth(self, usage, action):
+        lines = (f"[ 2958.911284] /dev/input/event3: EV_MSC MSC_SCAN {usage}\n"
+                 f"[ 2958.911284] /dev/input/event3: EV_KEY KEY_UNKNOWN {action:<20}\n"
+                 "[ 2958.911284] /dev/input/event3: EV_SYN SYN_REPORT 00000000\n")
+        os.write(self.input, lines.encode())
+
     def steps(self):
         return self.audio.read_text().splitlines() if self.audio.exists() else []
 
@@ -222,6 +228,57 @@ else: raise SystemExit('Unexpected adb arguments: '+repr(a))
         os.write(self.input, (line + "\n").encode())
         self.wait_for_steps()
         self.event("KEY_VOLUMEUP", "UP")
+
+    def test_actual_bluetooth_volume_capture_repeats_and_releases(self):
+        self.bluetooth("000c0080", "DOWN")
+        self.wait_for_steps(2)
+        self.bluetooth("000c0080", "UP")
+        time.sleep(.15)
+        raised = self.steps()
+        self.assertTrue(all(x.endswith("raise") for x in raised))
+        time.sleep(.15)
+        self.assertEqual(self.steps(), raised)
+        self.bluetooth("000c0081", "DOWN")
+        self.wait_for_steps(len(raised) + 1)
+        self.assertTrue(self.steps()[-1].endswith("lower"))
+        self.bluetooth("000c0081", "UP")
+
+    def test_unknown_non_volume_keys_and_stale_scan_are_ignored(self):
+        self.bluetooth("000c009f", "DOWN")
+        self.bluetooth("000c009f", "UP")
+        # A scan without a key must not carry beyond its SYN_REPORT frame.
+        os.write(self.input, b"EV_MSC MSC_SCAN 000c0080\nEV_SYN SYN_REPORT 00000000\n")
+        self.event("KEY_UNKNOWN", "DOWN")
+        time.sleep(.3)
+        self.assertEqual(self.steps(), [])
+
+    def test_bluetooth_stale_release_does_not_stop_new_direction(self):
+        self.bluetooth("000c0080", "DOWN")
+        self.wait_for_steps()
+        self.bluetooth("000c0081", "DOWN")
+        self.bluetooth("000c0080", "UP")
+        deadline = time.monotonic() + 2
+        while not self.steps()[-1].endswith("lower") and time.monotonic() < deadline:
+            time.sleep(.02)
+        self.assertTrue(self.steps()[-1].endswith("lower"))
+        self.bluetooth("000c0081", "UP")
+
+    def test_unknown_release_without_scan_stops_volume_safely(self):
+        self.bluetooth("000c0080", "DOWN")
+        self.wait_for_steps()
+        self.event("KEY_UNKNOWN", "UP")
+        time.sleep(.15)
+        count = len(self.steps())
+        time.sleep(.2)
+        self.assertEqual(len(self.steps()), count)
+
+    def test_other_unknown_release_does_not_cancel_volume_hold(self):
+        self.bluetooth("000c0080", "DOWN")
+        self.wait_for_steps()
+        count = len(self.steps())
+        self.bluetooth("000c009f", "UP")
+        self.wait_for_steps(count + 2)
+        self.bluetooth("000c0080", "UP")
 
     def test_stale_pid_never_kills_an_unrelated_process(self):
         self.stop()

@@ -25,7 +25,10 @@ adb shell sh /data/local/tmp/volume-hold-bridge.sh start /dev/input/event1
 ```
 
 Use the device that actually reports volume keys in `adb shell getevent -lt`. `/dev/input/event1`
-was the IR receiver in the user's test; device numbering can change after reboot.
+was the IR receiver in the user's first test; the current Bluetooth remote reports on
+`/dev/input/event3` as `KEY_UNKNOWN` with preceding MSC_SCAN usages `000c0080` (Up) and `000c0081`
+(Down), according to the requested press order. Both formats are supported. Device numbering can
+change after reboot. Other unknown usages and scans from an earlier SYN_REPORT frame are ignored.
 
 Check or stop it:
 

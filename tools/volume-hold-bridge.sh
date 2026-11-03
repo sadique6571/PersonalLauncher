@@ -68,7 +68,7 @@ adjust_volume() {
 }
 
 parse_events() {
-    worker= held=
+    worker= held= scan_direction=
     stop_repeat() {
         if [ -n "$worker" ]; then
             kill "$worker" 2>/dev/null || :
@@ -89,6 +89,22 @@ parse_events() {
     printf 'event parser ready\n'
     while IFS= read -r event; do
         case "$event" in
+            # Haier Bluetooth remote: both keys are KEY_UNKNOWN; preceding HID usage distinguishes them.
+            *EV_MSC*MSC_SCAN*000c0080*) scan_direction=raise ;;
+            *EV_MSC*MSC_SCAN*000c0081*) scan_direction=lower ;;
+            *EV_MSC*MSC_SCAN*) scan_direction=other ;;
+            *EV_SYN*SYN_REPORT*) scan_direction= ;;
+            *EV_KEY*KEY_UNKNOWN*)
+                case "$event" in
+                    *DOWN*) case "$scan_direction" in raise|lower) begin_repeat "$scan_direction" ;; esac ;;
+                    *UP*)
+                        # A release without usage information stops the active loop conservatively.
+                        if [ -z "$scan_direction" ] || [ "$held" = "$scan_direction" ]; then stop_repeat; fi
+                        ;;
+                    *REPEAT*) stop_repeat ;;
+                esac
+                scan_direction=
+                ;;
             *EV_KEY*KEY_VOLUMEUP*DOWN*) begin_repeat raise ;;
             *EV_KEY*KEY_VOLUMEDOWN*DOWN*) begin_repeat lower ;;
             *EV_KEY*KEY_VOLUMEUP*UP*) [ "$held" = raise ] && stop_repeat ;;
