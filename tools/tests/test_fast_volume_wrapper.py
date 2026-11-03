@@ -26,12 +26,19 @@ class FastVolumeWrapperTest(unittest.TestCase):
                         PLV_OLD_BRIDGE=str(self.root / "old.sh"), FAST_TEST_ROOT=str(self.root))
         self.fake("id", "import os; print(os.environ.get('FAST_TEST_UID','2000'))\n")
         self.fake("settings", "raise SystemExit('Settings must not be changed')\n")
+        self.fake("ps", """import os,pathlib,sys
+assert sys.argv[1]=='-p' and sys.argv[3:]==['-o','ARGS=']
+entry=pathlib.Path(os.environ['PLV_FAST_PROC_ROOT'])/sys.argv[2]/'ps-args'
+if not entry.exists(): raise SystemExit(1)
+print(os.environ.get('FAST_TEST_PS_PREFIX','')+entry.read_text())
+""")
         self.fake("app_process", """import os,pathlib,sys,signal,time
 root=pathlib.Path(os.environ['FAST_TEST_ROOT'])
 with (root/'order.log').open('a') as out: out.write('start\\n')
 if os.environ.get('FAST_TEST_FAIL')=='1': raise SystemExit('unsupported runtime')
 proc=root/'proc'/str(os.getpid()); proc.mkdir(parents=True)
 (proc/'cmdline').write_bytes(b'personal-launcher-volume-fast\\0')
+(proc/'ps-args').write_text('personal-launcher-volume-fast')
 assert os.environ.get('CLASSPATH')==str(root/'payload.apk')
 main=sys.argv.index('com.sadique.launcher.ShellVolumeBridge')
 ready=pathlib.Path(sys.argv[main+2])
@@ -113,6 +120,28 @@ esac
         self.assertIn("already running",self.run_wrapper("start",str(self.device)).stdout)
         self.assertEqual((self.root/'order.log').read_text().splitlines().count('start'),1)
 
+    def test_unreadable_cmdline_stream_does_not_stall_status_or_stop(self):
+        self.start()
+        pid=(self.root/'state/pid').read_text().strip()
+        cmdline=self.root/'proc'/pid/'cmdline'
+        cmdline.unlink()
+        os.mkfifo(cmdline)
+        self.assertIn('running',self.run_wrapper('status').stdout)
+        result=self.run_wrapper('stop')
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertEqual((self.root/'controller-restored').read_text(),'yes')
+        self.assertFalse((self.root/'sigterm').exists())
+
+    def test_android_blank_ps_header_does_not_hide_running_helper(self):
+        self.env['FAST_TEST_PS_PREFIX']='\n  \t'
+        self.start()
+        self.assertIn('running',self.run_wrapper('status').stdout)
+        self.assertIn('already running',self.run_wrapper('start',str(self.device)).stdout)
+        self.assertEqual((self.root/'order.log').read_text().splitlines().count('start'),1)
+        result=self.run_wrapper('stop')
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertEqual((self.root/'controller-restored').read_text(),'yes')
+
     def test_non_shell_start_is_refused(self):
         self.env['FAST_TEST_UID']='10000'
         result=self.run_wrapper("start",str(self.device))
@@ -138,6 +167,7 @@ esac
         (state/'pid').write_text(str(os.getpid()))
         proc=self.root/'proc'/str(os.getpid()); proc.mkdir(parents=True)
         (proc/'cmdline').write_bytes(b'python3\\0unrelated\\0')
+        (proc/'ps-args').write_text('python3 unrelated')
         self.assertEqual(self.run_wrapper("stop").returncode,0)
 
     def test_custom_repeat_is_passed_to_runtime_and_status(self):
