@@ -115,8 +115,7 @@ final class VolumeAutoStart {
                             try (InputStream input=c.getAssets().open("fast-volume-bridge.sh")) { script=read(input,32768); }
                             String encoded=Base64.encodeToString(script.getBytes(StandardCharsets.UTF_8),Base64.NO_WRAP);
                             String command=VolumeStartupCommand.build(encoded,c.getApplicationInfo().sourceDir);
-                            String result=shell(manager,command);
-                            if (!result.contains("PLV_AUTO_START_OK")) throw new IOException("Helper did not confirm readiness");
+                            shell(manager,command);
                             state(c,"Started · automatic startup enabled"); return;
                         }
                     } catch (Exception failure) {
@@ -132,9 +131,9 @@ final class VolumeAutoStart {
             }
         }
     }
-    private static String shell(Manager manager,String command) throws Exception {
+    private static void shell(Manager manager,String command) throws Exception {
         ScheduledFuture<?> deadline=LIMITS.schedule(() -> { try { manager.disconnect(); } catch (IOException ignored) { } },20,TimeUnit.SECONDS);
-        try (AdbStream stream=manager.openStream("shell:"+command); InputStream input=stream.openInputStream()) { return read(input,32768); }
+        try (AdbStream stream=manager.openStream("shell:"+command); InputStream input=stream.openInputStream()) { VolumeStartupResponse.awaitReady(input,32768); }
         finally { deadline.cancel(false); }
     }
     private static String read(InputStream input,int limit) throws IOException {

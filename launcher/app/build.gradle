@@ -11,8 +11,8 @@ android {
         applicationId providers.gradleProperty('launcherApplicationId').getOrElse('com.sadique.launcher')
         minSdk 26
         targetSdk 34
-        versionCode 39
-        versionName '6.4'
+        versionCode 40
+        versionName '6.5'
     }
 
     // CI may compile with the debug key; published APKs require the persistent release key.

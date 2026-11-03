@@ -13,7 +13,8 @@ final class VolumeStartupCommand {
                 +" && cp "+quote(sourceApk)+" "+quote(payload+".new")
                 +" && chmod 0444 "+quote(payload+".new")+" && mv -f "+quote(payload+".new")+" "+quote(payload)
                 +" && mv -f "+quote(next)+" "+quote(script)
-                +" && sh "+quote(script)+" start auto 50 launcher && echo PLV_AUTO_START_OK";
+                // Keep stdout alive until the client sees the marker and closes this stream.
+                +" && sh "+quote(script)+" start auto 50 launcher && echo PLV_AUTO_START_OK && read -r plv_ack";
     }
     private VolumeStartupCommand() { }
 }
