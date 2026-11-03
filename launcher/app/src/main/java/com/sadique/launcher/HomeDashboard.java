@@ -26,7 +26,6 @@ final class HomeDashboard {
         section(host, rows, R.string.h_personalize);
         row(host, rows, R.string.h_launcher_settings, R.string.h_layout_hint, R.drawable.ic_palette, () -> actions.open(SETTINGS));
         row(host, rows, R.string.h_single_identity, 0, R.drawable.ic_person, () -> { panel.dismiss(); actions.open(IDENTITY); });
-        row(host, rows, R.string.h_categories, R.string.h_category_hint, R.drawable.ic_categories, () -> { panel.dismiss(); actions.open(CATEGORIES); });
         boolean appsOnly = host.getSharedPreferences("personal_home", 0).getBoolean("apps_only", false);
         row(host, rows, R.string.h_apps_only, appsOnly ? R.string.h_on : R.string.h_off, R.drawable.ic_apps, () -> {
             host.getSharedPreferences("personal_home", 0).edit().putBoolean("apps_only", !appsOnly).apply();
@@ -35,11 +34,10 @@ final class HomeDashboard {
         row(host, rows, R.string.h_local_pin, R.string.h_local_pin_hint, R.drawable.ic_person, () -> { panel.dismiss(); LauncherPin.settings(host); });
         row(host, rows, R.string.h_sleep_timer, R.string.h_sleep_timer_hint, R.drawable.ic_media_pause, () -> { panel.dismiss(); LauncherSleep.show(host); });
         section(host, rows, R.string.h_more_tools);
-        LinearLayout tools = new LinearLayout(host);
-        card(host, tools, R.string.h_search, R.drawable.ic_search, () -> { panel.dismiss(); actions.open(SEARCH); });
-        card(host, tools, R.string.h_store, R.drawable.ic_apps, () -> { panel.dismiss(); actions.open(STORE); });
-        card(host, tools, R.string.h_screensaver, R.drawable.ic_picture, () -> { panel.dismiss(); actions.open(SCREENSAVER); });
-        rows.addView(tools);
+        pair(host, rows, panel, actions, R.string.h_search, R.drawable.ic_search, SEARCH,
+                R.string.h_store, R.drawable.ic_apps, STORE);
+        pair(host, rows, panel, actions, R.string.h_screensaver, R.drawable.ic_picture, SCREENSAVER,
+                R.string.h_categories, R.drawable.ic_categories, CATEGORIES);
         panel.setOnDismissListener(d -> release.run()); panel.show(); return panel;
     }
     private static void pair(Activity host, LinearLayout rows, AlertDialog panel, Actions actions,
@@ -51,7 +49,7 @@ final class HomeDashboard {
     }
     private static void card(Activity host, LinearLayout strip, int title, int icon, Runnable action) {
         View card = GlassSettings.wideCard(host, host.getString(title), icon, GlassSettings.themeAccent(host), action);
-        card.setMinimumHeight(GlassSettings.dp(host, 72));
+        card.setMinimumHeight(GlassSettings.dp(host, 64));
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, -2, 1);
         int margin = GlassSettings.dp(host, 3); p.setMargins(margin, margin, margin, margin); strip.addView(card, p);
     }

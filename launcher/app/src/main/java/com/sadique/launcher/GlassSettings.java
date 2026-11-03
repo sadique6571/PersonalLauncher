@@ -100,20 +100,27 @@ final class GlassSettings {
         position.setMargins(0, dp(host, 3), 0, dp(host, 3)); row.setLayoutParams(position);
         return row;
     }
-    /** A wider tappable card (icon above label) for the Quick actions strip inside Settings. */
+    private static GradientDrawable cardBackground(Activity host, boolean focused) {
+        GradientDrawable shape = background(host, focused);
+        shape.setCornerRadius(dp(host, 16));
+        return shape;
+    }
+    /** Landscape tile: the icon and label share one row instead of stacking into a square. */
     static View wideCard(Activity host, String title, int icon, int tint, Runnable action) {
-        LinearLayout card = new LinearLayout(host); card.setOrientation(LinearLayout.VERTICAL);
-        card.setGravity(Gravity.CENTER);
-        card.setPadding(dp(host, 8), dp(host, 14), dp(host, 8), dp(host, 14));
-        card.setMinimumHeight(dp(host, 104)); card.setFocusable(true); card.setFocusableInTouchMode(true); card.setClickable(true);
-        card.setBackground(background(host, false));
-        card.setOnFocusChangeListener((v, focus) -> card.setBackground(background(host, focus)));
+        LinearLayout card = new LinearLayout(host); card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setPadding(dp(host, 11), dp(host, 10), dp(host, 11), dp(host, 10));
+        card.setMinimumHeight(dp(host, 64)); card.setFocusable(true); card.setFocusableInTouchMode(true); card.setClickable(true);
+        card.setTag("wide_card"); card.setClipToOutline(true); card.setElevation(dp(host, 2));
+        card.setBackground(cardBackground(host, false));
+        card.setOnFocusChangeListener((v, focus) -> card.setBackground(cardBackground(host, focus)));
         ImageView symbol = new ImageView(host); symbol.setImageResource(icon); symbol.setColorFilter(tint);
         if (tint == themeAccent(host)) symbol.setTag("theme_accent");
-        card.addView(symbol, new LinearLayout.LayoutParams(dp(host, 34), dp(host, 34)));
-        TextView heading = label(host, title, 13, Color.WHITE); heading.setGravity(Gravity.CENTER);
-        heading.setPadding(0, dp(host, 8), 0, 0);
-        card.addView(heading, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout.LayoutParams image = new LinearLayout.LayoutParams(dp(host, 26), dp(host, 26));
+        image.setMarginEnd(dp(host, 9)); card.addView(symbol, image);
+        TextView heading = label(host, title, 13, Color.WHITE); heading.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        heading.setMaxLines(2); heading.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        card.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
         card.setOnClickListener(v -> { v.requestFocus(); action.run(); });
         return card;
     }
@@ -245,7 +252,8 @@ final class GlassSettings {
     }
     private static void refreshViews(Activity host, View view) {
         if (view.isFocusable() && view.getBackground() instanceof GradientDrawable)
-            view.setBackground(background(host, view.isFocused() || view.isSelected()));
+            view.setBackground("wide_card".equals(view.getTag())
+                    ? cardBackground(host, view.isFocused()) : background(host, view.isFocused() || view.isSelected()));
         if (view instanceof TextView) {
             TextView text = (TextView) view;
             int style = text.getTypeface() == null ? Typeface.NORMAL : text.getTypeface().getStyle();
