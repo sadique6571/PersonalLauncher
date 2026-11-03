@@ -7,11 +7,11 @@ verified changes both the queried level (16 to 17) and the screen display. Direc
 `--adj` and `--set` commands returned success but left the level unchanged and are no longer used.
 
 The bridge reads only the selected input device and reacts to volume DOWN/UP events. The original tap
-remains native (one point); after a 400 ms hold delay, each repeat injects three paired Volume Up/Down
-presses in one call (`input keyevent 24 24 24` or `25 25 25`). This changes held volume by three points
-per repeat while avoiding a separate process startup for each point. The loop waits 150 ms between
-completed calls. Actual speed also depends on the TV's input-command startup time. Release stops
-further batches after any in-flight three-press call completes, so a key is
+remains native (one point); after a 50 ms hold delay, each repeat injects one paired Volume Up/Down
+press (`input keyevent 24` or `25`). The loop waits 50 ms between completed calls. A press that lasts
+longer than 50 ms can therefore receive an added repeat. Actual speed also depends on the TV's
+input-command startup time: 50 ms is the requested wait, not a guarantee of one visible step every
+50 ms. Release stops further repeats after any in-flight paired call completes, so a key is
 not left down mid-pair. A lost release has a 30-second repeat limit. Other keys are ignored and raw input events
 are not stored. If hardware repeat events appear, the added loop stops rather than doubling them.
 Input is passed through an anonymous shell pipe, so the bridge does not create a named FIFO. This

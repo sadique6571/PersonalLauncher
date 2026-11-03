@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 import time
 import unittest
+import shutil
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "volume-hold-bridge.sh"
@@ -46,7 +47,7 @@ with open(sys.argv[-1],newline='') as stream:
 """)
         self.fake("cmd", "raise SystemExit('Direct AudioService adjustment is ineffective on the TV')\n")
         self.fake("input", """import os,sys,time
-assert sys.argv[1] == 'keyevent' and sys.argv[2:] in [['24']*3,['25']*3],sys.argv
+assert sys.argv[1] == 'keyevent' and sys.argv[2:] in [['24'],['25']],sys.argv
 with open(os.environ['FAKE_INPUT_LOG'],'a') as out: out.write(' '.join(sys.argv[1:])+'\\n')
 with open(os.environ['FAKE_AUDIO_LOG'], 'a') as out:
     out.write(''.join(str(time.monotonic()) + ' ' + ('raise' if key=='24' else 'lower') + '\\n' for key in sys.argv[2:]))
@@ -208,7 +209,7 @@ else: raise SystemExit('Unexpected adb arguments: '+repr(a))
         self.event("KEY_VOLUMEUP", "DOWN")
         self.wait_for_steps()
         time.sleep(.3)
-        self.assertEqual(len(self.steps()), 3)
+        self.assertEqual(len(self.steps()), 1)
         self.assertEqual(len((self.root / "input.log").read_text().splitlines()), 1)
         self.assertIn("Native volume key injection failed", (self.root / "state/bridge.log").read_text())
 
@@ -224,7 +225,7 @@ else: raise SystemExit('Unexpected adb arguments: '+repr(a))
         self.assertEqual(len(self.steps()), count)
         calls = (self.root / "adb.log").read_text()
         self.assertIn("shell -tt getevent -lt", calls)
-        self.assertIn("shell input keyevent 24 24 24", calls)
+        self.assertIn("shell input keyevent 24", calls)
         self.assertIn("running", self.run_bridge("status-adb").stdout)
         self.run_bridge("stop-adb")
 
@@ -248,7 +249,7 @@ else: raise SystemExit('Unexpected adb arguments: '+repr(a))
         self.assertTrue(self.steps()[-1].endswith("lower"))
         self.bluetooth("000c0081", "UP")
 
-    def test_held_repeats_use_one_three_key_call_in_both_directions(self):
+    def test_held_repeats_use_one_key_call_in_both_directions(self):
         self.bluetooth("000c0080", "DOWN")
         self.wait_for_steps(3)
         self.bluetooth("000c0080", "UP")
@@ -260,10 +261,34 @@ else: raise SystemExit('Unexpected adb arguments: '+repr(a))
         self.bluetooth("000c0081", "UP")
         time.sleep(.15)
         calls = (self.root / "input.log").read_text().splitlines()
-        self.assertIn("keyevent 24 24 24", calls)
-        self.assertIn("keyevent 25 25 25", calls)
-        self.assertTrue(all(s in ["keyevent 24 24 24", "keyevent 25 25 25"] for s in calls))
-        self.assertEqual(len(self.steps()), 3 * len(calls))
+        self.assertIn("keyevent 24", calls)
+        self.assertIn("keyevent 25", calls)
+        self.assertTrue(all(s in ["keyevent 24", "keyevent 25"] for s in calls))
+        self.assertEqual(len(self.steps()), len(calls))
+
+    def test_default_initial_and_repeat_waits_are_50ms(self):
+        self.stop()
+        self.env.pop("PLV_REPEAT_DELAY")
+        self.env.pop("PLV_REPEAT_INTERVAL")
+        self.env["REAL_TEST_SLEEP"] = shutil.which("sleep")
+        self.env["FAKE_SLEEP_LOG"] = str(self.root / "sleep.log")
+        self.fake("sleep", """import os,sys
+with open(os.environ['FAKE_SLEEP_LOG'],'a') as out:
+    out.write(str(os.getppid())+' '+sys.argv[1]+'\\n')
+os.execv(os.environ['REAL_TEST_SLEEP'],['sleep']+sys.argv[1:])
+""")
+        self.run_bridge("start", str(self.device))
+        self.bluetooth("000c0080", "DOWN")
+        self.wait_for_steps(2)
+        self.bluetooth("000c0080", "UP")
+        time.sleep(.2)
+        waits = {}
+        for line in (self.root / "sleep.log").read_text().splitlines():
+            pid, delay = line.split()
+            waits.setdefault(pid, []).append(delay)
+        repeaters = [values for values in waits.values() if "0.05" in values]
+        self.assertEqual(len(repeaters), 1)
+        self.assertEqual(repeaters[0][:2], ["0.05", "0.05"])
 
     def test_unknown_non_volume_keys_and_stale_scan_are_ignored(self):
         self.bluetooth("000c009f", "DOWN")
