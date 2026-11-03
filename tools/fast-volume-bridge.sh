@@ -20,7 +20,9 @@ running() {
     pid=$(cat "$PID_FILE")
     case "$pid" in ''|*[!0-9]*) return 1 ;; esac
     [ -r "$PROC_ROOT/$pid/cmdline" ] || return 1
-    text=$(tr '\000' ' ' < "$PROC_ROOT/$pid/cmdline")
+    # Android's tr stalled while reading this app_process cmdline on the tested TV.
+    # ps gives us the same identity check without a raw procfs-to-tr pipeline.
+    text=$(ps -p "$pid" -o ARGS= 2>/dev/null) || return 1
     case "$text" in "$NAME"|"$NAME "*|*" $MAIN "*) kill -0 "$pid" 2>/dev/null ;; *) return 1 ;; esac
 }
 
