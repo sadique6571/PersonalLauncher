@@ -456,15 +456,14 @@ public final class PersonalHomeActivity extends Activity {
         time = text("", clockSize, TEXT);
         time.setGravity(Gravity.CENTER);
         time.setSingleLine(true);
-        // Bold like the demo.
-        time.setTypeface(time.getTypeface(), android.graphics.Typeface.BOLD);
         // Clock shadow for readability on bright wallpapers (toggle).
         if (prefs.getBoolean("clock_shadow", true)) {
             time.setShadowLayer(dp(8), 0, dp(3), 0xcc000000);
         }
-        String[] clockFonts = {"sans-serif-light", "serif", "monospace"};
+        // Use the regular family with bold weight; the light family overrides the intended weight.
+        String[] clockFonts = {"sans-serif", "serif", "monospace"};
         time.setTypeface(android.graphics.Typeface.create(
-                clockFonts[Math.max(0, Math.min(2, prefs.getInt("clock_font", 0)))], android.graphics.Typeface.NORMAL));
+                clockFonts[Math.max(0, Math.min(2, prefs.getInt("clock_font", 0)))], android.graphics.Typeface.BOLD));
         // Analog mode: hide the digital time (keeps layout for clockY), SkyClock draws the face.
         boolean analogClock = prefs.getInt("clock_style", 0) == 1;
         // AM/PM is a separate view, not a span: it can never be clipped when
@@ -1570,7 +1569,7 @@ public final class PersonalHomeActivity extends Activity {
 
     private void clockSettings() {
         String[] labels = {"Clock size", "Clock style", "Clock font", "Time format", "Clock alignment", "Clock seconds", "Clock glow", "Clock shadow", "Hide clock", "Hide greeting"};
-        String[] hints = {"Small, normal or large", "Digital or analog", "Light, serif or mono", "12-hour or 24-hour", "Left, center or right", "Show seconds", "Halo behind the clock", "Shadow for readability", "Hide the clock", "Hide the greeting"};
+        String[] hints = {"Small, normal or large", "Digital or analog", "Bold, serif or mono", "12-hour or 24-hour", "Left, center or right", "Show seconds", "Halo behind the clock", "Shadow for readability", "Hide the clock", "Hide the greeting"};
         int[] icons = {R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock};
         Runnable[] choices = {
             () -> chooseSetting("Clock size", new String[]{"Small", "Normal", "Large"}, which -> {
@@ -1579,7 +1578,7 @@ public final class PersonalHomeActivity extends Activity {
             () -> chooseSetting("Clock style", new String[]{"Digital", "Analog"}, which -> {
                 prefs.edit().putInt("clock_style", which).apply(); buildHomeSoon();
             }),
-            () -> chooseSetting("Clock font", new String[]{"Light", "Serif", "Mono"}, which -> {
+            () -> chooseSetting("Clock font", new String[]{"Bold", "Serif", "Mono"}, which -> {
                 prefs.edit().putInt("clock_font", which).apply(); buildHomeSoon();
             }),
             () -> chooseSetting("Time format", new String[]{"12-hour", "24-hour"}, which -> {
