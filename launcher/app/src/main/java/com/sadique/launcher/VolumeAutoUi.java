@@ -17,7 +17,7 @@ final class VolumeAutoUi {
         }
         LinearLayout rows=new LinearLayout(host); rows.setOrientation(LinearLayout.VERTICAL);
         TextView status=GlassSettings.label(host,VolumeAutoStart.status(host),14,0xffe5f2ff); rows.addView(status);
-        TextView explanation=GlassSettings.label(host,"Auto-start uses this TV's local wireless debugging. One-time pairing authorizes this launcher for local ADB access. Port changes are detected automatically.",12,0xffb7cbdf);
+        TextView explanation=GlassSettings.label(host,"Auto-start uses this TV's local wireless debugging. One-time pairing authorizes local ADB access. Home & remote setup can reuse this connection to keep the launcher as Home and restore its remote permissions. Port changes are detected automatically.",12,0xffb7cbdf);
         explanation.setPadding(0,12,0,12); rows.addView(explanation);
         rows.addView(GlassSettings.row(host,"Pairing setup","Open Wireless debugging → Pair device with pairing code. Keep that dialog open while completing the one-time setup from your existing ADB connection.",R.drawable.ic_settings,GlassSettings.themeAccent(host),() -> {
             try { host.startActivity(new Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)); }

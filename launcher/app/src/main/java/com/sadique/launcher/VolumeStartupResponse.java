@@ -10,6 +10,15 @@ final class VolumeStartupResponse {
     private VolumeStartupResponse() { }
 
     static void awaitReady(InputStream input,int limit) throws IOException {
+        await(input,limit,new String[]{"PLV_AUTO_START_OK"},"Helper did not confirm readiness");
+    }
+    static void awaitMarker(InputStream input,int limit,String marker) throws IOException {
+        await(input,limit,new String[]{marker},"Setup command did not confirm readiness");
+    }
+    static String awaitResult(InputStream input,int limit,String success,String failed) throws IOException {
+        return await(input,limit,new String[]{success,failed},"Setup command did not confirm readiness");
+    }
+    private static String await(InputStream input,int limit,String[] markers,String failure) throws IOException {
         ByteArrayOutputStream line=new ByteArrayOutputStream();
         byte[] buffer=new byte[1024]; int total=0,count;
         while ((count=input.read(buffer))!=-1) {
@@ -19,11 +28,11 @@ final class VolumeStartupResponse {
                 if (value=='\n') {
                     String text=new String(line.toByteArray(),StandardCharsets.UTF_8);
                     if (text.endsWith("\r")) text=text.substring(0,text.length()-1);
-                    if (text.equals("PLV_AUTO_START_OK")) return;
+                    for (String marker:markers) if (text.equals(marker)) return marker;
                     line.reset();
                 } else line.write(value);
             }
         }
-        throw new IOException("Helper did not confirm readiness");
+        throw new IOException(failure);
     }
 }
