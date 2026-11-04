@@ -8,17 +8,18 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class HomeSetupCommandTest {
+    private static void write(Path path,String text) throws IOException { Files.write(path,text.getBytes(StandardCharsets.UTF_8)); }
     private static final class Rig implements AutoCloseable {
         final Path dir=Files.createTempDirectory("home-setup"),bin=Files.createDirectory(dir.resolve("bin"));
         Rig() throws Exception {
-            Files.writeString(dir.resolve("home"),"com.google.android.apps.tv.launcherx/.Home\n");
-            Files.writeString(dir.resolve("services"),"org.example/.OtherService\n");
+            write(dir.resolve("home"),"com.google.android.apps.tv.launcherx/.Home\n");
+            write(dir.resolve("services"),"org.example/.OtherService\n");
             script("pm","printf '%s\\n' \"$*\" >> \"$RIG/pm.log\"\n[ \"$FAIL_GRANT\" != 1 ]\n");
             script("settings","printf '%s\\n' \"$*\" >> \"$RIG/settings.log\"\n[ \"$1\" != --user ] || shift 2\ncase \"$1 $2 $3\" in\n'get secure enabled_accessibility_services') [ \"$FAIL_READ\" != 1 ] || exit 1; cat \"$RIG/services\" ;;\n'put secure enabled_accessibility_services') printf '%s' \"$4\" > \"$RIG/services\" ;;\n'put secure accessibility_enabled') printf '%s' \"$4\" > \"$RIG/accessibility\" ;;\n*) exit 1 ;; esac\n");
             script("cmd","printf '%s\\n' \"$*\" >> \"$RIG/cmd.log\"\ncase \"$1 $2\" in\n'package resolve-activity') cat \"$RIG/home\" ;;\n'package set-home-activity') if [ \"$KEEP_OTHER_HOME\" != 1 ]; then for value in \"$@\"; do target=$value; done; printf '%s\\n' \"$target\" > \"$RIG/home\"; fi; printf 'Success\\n' ;;\n'appops set') exit 0 ;;\n*) exit 1 ;; esac\n");
         }
         void script(String name,String body) throws Exception {
-            Path file=bin.resolve(name); Files.writeString(file,"#!/bin/sh\n"+body); assertTrue(file.toFile().setExecutable(true));
+            Path file=bin.resolve(name); write(file,"#!/bin/sh\n"+body); assertTrue(file.toFile().setExecutable(true));
         }
         String run(int sdk,int user,String... env) throws Exception {
             ProcessBuilder builder=new ProcessBuilder("/bin/sh","-c",HomeSetupCommand.build("com.sadique.launcher",user,sdk));
@@ -28,7 +29,7 @@ public class HomeSetupCommandTest {
             String output=new String(child.getInputStream().readAllBytes(),StandardCharsets.UTF_8);
             assertTrue(child.waitFor(5,java.util.concurrent.TimeUnit.SECONDS)); return output;
         }
-        String read(String name) throws Exception { Path file=dir.resolve(name); return Files.exists(file)?Files.readString(file):""; }
+        String read(String name) throws Exception { Path file=dir.resolve(name); return Files.exists(file)?new String(Files.readAllBytes(file),StandardCharsets.UTF_8):""; }
         @Override public void close() throws Exception {
             try(java.util.stream.Stream<Path> paths=Files.walk(dir)) {
                 for(Path file:(Iterable<Path>)paths.sorted(Comparator.reverseOrder())::iterator) Files.deleteIfExists(file);
@@ -51,8 +52,8 @@ public class HomeSetupCommandTest {
         org.junit.Assume.assumeTrue(new File("/bin/sh").canExecute());
         try(Rig rig=new Rig()) {
             String services="org.example/.OtherService:com.sadique.launcher/.HomeKeyService:com.sadique.launcher/com.sadique.launcher.InputKeyService";
-            Files.writeString(rig.dir.resolve("services"),services);
-            Files.writeString(rig.dir.resolve("home"),"com.sadique.launcher/.MainActivity\n");
+            write(rig.dir.resolve("services"),services);
+            write(rig.dir.resolve("home"),"com.sadique.launcher/.MainActivity\n");
             assertTrue(rig.run(34,0).contains(HomeSetupCommand.MARKER));
             assertEquals(services,rig.read("services"));
             assertFalse(rig.read("settings.log").contains("put secure enabled_accessibility_services"));
@@ -76,7 +77,7 @@ public class HomeSetupCommandTest {
     @Test public void nullServiceListBootstrapsOnlyOurHelpers() throws Exception {
         org.junit.Assume.assumeTrue(new File("/bin/sh").canExecute());
         try(Rig rig=new Rig()) {
-            Files.writeString(rig.dir.resolve("services"),"null\n");
+            write(rig.dir.resolve("services"),"null\n");
             assertTrue(rig.run(34,0).contains(HomeSetupCommand.MARKER));
             assertFalse(rig.read("services").contains("null"));
             assertEquals(2,rig.read("services").split(":").length);
