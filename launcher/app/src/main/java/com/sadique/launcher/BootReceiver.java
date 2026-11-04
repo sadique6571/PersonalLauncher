@@ -12,8 +12,10 @@ import java.util.concurrent.Executors;
  */
 public final class BootReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context, Intent intent) {
-        if (!Intent.ACTION_BOOT_COMPLETED.equals(intent == null ? null : intent.getAction())) return;
+        String action=intent==null?null:intent.getAction();
+        if (!Intent.ACTION_BOOT_COMPLETED.equals(action) && !Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) return;
         VolumeAutoStart.request(context);
+        if (!Intent.ACTION_BOOT_COMPLETED.equals(action)) return;
         final PendingResult result = goAsync();
         // Use a scheduled executor so we can enforce a time bound.
         // Respect BroadcastReceiver time limits: goAsync() gives us ~10s.

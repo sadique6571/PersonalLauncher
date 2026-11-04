@@ -3,7 +3,7 @@
 **Personal Launcher by Sadique Sadiq** — a clean, fast home-screen launcher for Android TV / Google TV.
 
 - Package: `com.sadique.launcher`
-- Version: 6.8
+- Version: 6.9
 - Plain Java, classic Android Views, `minSdk` 26. Internet permission is used for online screensaver photos, weather and city lookup.
 - Day/night Home wallpaper, compact toolbar, configurable app grid, quick settings and editable name and photo.
 
@@ -58,6 +58,27 @@ be read. Empty or unsupported devices show a clear message instead of invented r
 ## Netflix & YouTube rows
 
 Optional banner rows directly below the clock showing posters from the TV Watch Next feed — Netflix (`com.netflix.ninja`) and YouTube (`com.google.android.youtube.tv`). Off by default; enable in **Apps** settings. Rows stay hidden if the app published nothing.
+
+## Automatic Home and remote setup
+
+Open **Launcher settings → System → Home & remote setup** for the actual default Home,
+saved pairing, settings grant, accessibility permissions, Home-listener connection and last setup result.
+Enable or retry automatic setup, disable future Home repair, open Android's Home picker or accessibility
+settings, and inspect local pairing/volume recovery from the same guide.
+
+Saved local ADB pairing can set this package as the real Home app and restore only its Home/Settings
+helpers while preserving other enabled accessibility services. The system Home resolver is checked
+after setting it; failure is reported separately from volume-helper status. Setup is requested at boot
+and after an app update, with bounded repair attempts when Home is opened. It does not disable the stock
+launcher or run a permanent polling service.
+
+For the requested upgrade, existing installations with paired and enabled volume recovery start with
+Home automation enabled. Fresh installs remain off until enabled from the guide. One-time Android
+permission/pairing approval is still necessary on a new TV. Choosing the Android Home picker disables
+automatic repair so it will not overwrite that choice. Disabling repair leaves the selected Home in place.
+
+The protected shell diagnostic is:
+`adb shell content call --uri content://com.sadique.launcher.theme --method home_auto_status_v1`.
 
 ## Online landscape screensaver
 

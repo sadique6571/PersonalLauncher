@@ -1678,8 +1678,8 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void systemMenu() {
-        String[] labels = {"Screensaver & weather", "Profile name & photo", "Avatar shape", "Header background", "Performance", "Volume auto-start", "Export settings", "Import settings", "Choose default Home", "Reset layout & unhide apps"};
-        String[] hints = {"Slideshow, weather & idle timer", "Name and local profile picture", "Circle or rounded square", "Subtle panel behind header", "Light, Balanced or Full", "One-time pairing and reboot recovery", "Save to a file", "Restore from a file", "Set this launcher as Home", "Restore the default layout"};
+        String[] labels = {"Screensaver & weather", "Profile name & photo", "Avatar shape", "Header background", "Performance", "Volume auto-start", "Export settings", "Import settings", "Home & remote setup", "Reset layout & unhide apps"};
+        String[] hints = {"Slideshow, weather & idle timer", "Name and local profile picture", "Circle or rounded square", "Subtle panel behind header", "Light, Balanced or Full", "One-time pairing and reboot recovery", "Save to a file", "Restore from a file", "Automatic Home repair and permission status", "Restore the default layout"};
         int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_person, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_volume, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_home_settings, R.drawable.ic_settings};
         Runnable[] choices = {
             this::screensaverSettings,
@@ -1700,7 +1700,7 @@ public final class PersonalHomeActivity extends Activity {
             () -> VolumeAutoUi.show(this),
             this::exportSettings,
             this::importSettings,
-            () -> launch(new Intent(this, HomeSettingsActivity.class)),
+            () -> LauncherSetupUi.show(this),
             () -> new AlertDialog.Builder(this).setTitle("Reset layout and show all apps?").setPositiveButton("Reset", (dialog, which) -> {
                 prefs.edit().remove("app_order").remove("hidden_apps").remove("tv_columns").remove("phone_columns").remove("large_tiles")
                         .remove("focus_title_size").remove("clock_size").remove("background_dim").remove("theme_mode")
@@ -1974,7 +1974,7 @@ public final class PersonalHomeActivity extends Activity {
         new AlertDialog.Builder(this)
             .setTitle("Use as Home screen?")
             .setMessage("Set Personal Launcher as your default launcher so the Home button opens it.")
-            .setPositiveButton("Set as default", (d, w) -> launch(new Intent(this, HomeSettingsActivity.class)))
+            .setPositiveButton("Set as default", (d, w) -> LauncherSetupUi.show(this))
             .setNegativeButton("Later", (d, w) -> prefs.edit().putLong("home_offer_snooze",
                     System.currentTimeMillis() + 3L * 24 * 60 * 60 * 1000).apply())
             .show();
@@ -2165,6 +2165,7 @@ public final class PersonalHomeActivity extends Activity {
         super.onResume();
         resumed = true;
         VolumeAutoStart.request(this);
+        HomeAutomation.onResume(this);
         armIdleScreensaver();
         handler.removeCallbacks(tick);
         tick.run();

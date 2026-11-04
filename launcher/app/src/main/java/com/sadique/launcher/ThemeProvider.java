@@ -23,6 +23,12 @@ import java.io.FileNotFoundException;
 public class ThemeProvider extends ContentProvider {
 
     @Override public Bundle call(String method, String arg, Bundle extras) {
+        if ("home_auto_status_v1".equals(method)) {
+            VolumePanelBinder.enforceShell(); Bundle status=new Bundle();
+            status.putString("status",HomeAutomation.status(getContext()));
+            status.putBoolean("enabled",HomeAutomation.enabled(getContext()));
+            status.putString("current_home",HomeAutomation.currentHome(getContext())); return status;
+        }
         if ("volume_auto_setup_v1".equals(method)) {
             VolumePanelBinder.enforceShell(); return VolumeAutoStart.setup(getContext(),arg);
         }
