@@ -1,63 +1,115 @@
 # Personal Launcher
 
-**Personal Launcher by Sadique Sadiq** — a clean, fast home-screen launcher for Android TV / Google TV.
+**Personal Launcher by Sadique Sadiq** — a customizable Home launcher for Android TV / Google TV.
 
-- Package: `com.sadique.launcher`
-- Version: 6.9
-- Plain Java, classic Android Views, `minSdk` 26. Internet permission is used for online screensaver photos, weather and city lookup.
-- Day/night Home wallpaper, compact toolbar, configurable app grid, quick settings and editable name and photo.
+- **Version:** 7.0 · **Release build:** 75 · **Android version code:** 48
+- **Package:** `com.sadique.launcher` · **Minimum Android:** 8.0 / API 26
+- Plain Java and Android Views, with performance profiles for low-memory TVs.
+- Internet access is used for daily Bing wallpaper, Picsum screensaver photos, weather and city lookup.
+
+## Download
+
+[**Download PersonalLauncher.apk — version 7.0, build 75**](https://github.com/sadique6571/PersonalLauncher/releases/download/v4.7-build-75/PersonalLauncher.apk)
+
+[Release page](https://github.com/sadique6571/PersonalLauncher/releases/tag/v4.7-build-75)
+
+The release tag uses the older `v4.7-build-75` naming format; the APK's displayed version is **7.0**.
+This README update does not replace or rebuild that APK. App auto-update is not implemented yet.
 
 ## Home screen
 
-- TV: profile at the top left with greeting underneath; weather, network status, Quick actions drawer and Settings at the top right. Search and the notification bell are in the toolbar. Play Store and Screensaver are at the end of Settings; voice uses the remote Assistant button.
-- Clock with date (digital or analog, 3 fonts, seconds, glow, shadow, 12/24-hour, left/center/right alignment, hide option). Large bold style like the demo. Apps appear directly below the clock; the clock scrolls away with content.
-- One app drawer. Long-press an app → Move app, or use Launcher settings → Rearrange apps; saved order survives restarts and new apps append. Small 16:9 rounded cards show original app icons without wordmark banners. Clean card backgrounds and proportional logos avoid stretched edge pixels; a subtle highlight and shadow give tiles a raised appearance. No labels underneath.
-- Focus uses a matching icon-colour glow/border with zoom, press dip and parallax wallpaper effects.
-- Tiles: size, spacing, corner radius, logo size, colour glow, focus border thickness, staggered slide-in entrance animation, NEW-app badge.
-- Themes: Midnight Cyan, Sunset Orange, Deep Purple, or a custom accent colour — themes tint the glass panels and setting icons.
-- Wallpaper: mountain-lake built-in, day/night auto, online photos, slideshow, crossfade, or a saved favourite. Bottom shade, smooth day/night transition, header blur (on/off).
-- Bottom shade gradient behind tiles (on/off). Header frosted blur (on/off).
-- Launcher-wide font: Default, Serif, Mono or Light.
-- Greeting text (time-based, can be hidden). Home weather card (Open-Meteo). Cinematic top/bottom shade and grid backdrop panel.
-- No favorites, duplicate dock/quick-access rows or Gemini button.
-- Phones keep a portrait/touch layout with adaptive columns. Profile photos are chosen locally through Android's picker.
-- Wi-Fi is green only with Android-validated internet access; missing internet is red. Ethernet/mobile data use their own indicators.
+The default **TV Glass** style is inspired by Apple TV's visual layout:
 
-Search filters installed, non-hidden apps **inside the launcher** as you type. The explicit Play Store
-button opens Google's normal search/install screen for new apps. The mic button uses the TV's configured
-Assistant; supported speech-to-text activities can also return a phrase into local app search. The launcher
-does not record audio or request microphone permission. Availability depends on the installed system service.
+- A top shelf shows the selected installed app's artwork and name beside the existing bold clock.
+  This is app artwork, not a streaming recommendation feed.
+- Floating 16:9 app cards use original app icons, rounded corners, a white focus outline and subtle focus zoom.
+  Light performance mode applies focus changes without the zoom animation.
+- The profile photo and name sit at the top left. Weather, network status, Search, the notification bell and
+  Settings are in the top toolbar.
+- Daily Bing wallpaper stays behind the Home interface. Wallpaper and profile snapshots avoid reloading
+  the default background on each Home return.
+- The digital clock supports a separate AM/PM label, date, seconds, font, size, glow and shadow options.
+  An analog clock and hide options are also available. TV Glass puts the clock beside the top shelf;
+  Classic retains the previous Home arrangement and clock alignment options.
+- App columns, tile size, spacing, corners, logo size and focus-border thickness remain configurable.
+- Long-press an app to move it, hide it, assign a category or open Android app information.
+  Saved app order survives updates; new apps append to the grid. Hiding does not disable or uninstall apps.
+- No duplicate app dock, Favorites row or Gemini button is added. Phones retain the portrait/touch layout.
 
-The quick panel provides Wi-Fi, Bluetooth, inputs, display and sound controls. Its top-right gear opens
-TV system settings. Media volume is controlled with the remote.
-Settings pages share one panel with Back navigation, restoring the previous row focus and scroll position, and stay open when a local option changes.
-The panel position is configured before showing it, without a slide/reposition animation.
+To restore the previous Home arrangement, open
+**Launcher settings → Theme → Visual style → Classic**.
 
-## Launcher settings
+## Glass appearance
 
-Settings are grouped into 6 categories, each with its own icon:
+Open **Launcher settings → Theme**:
 
-- **Tiles** — columns, tile size/spacing/corners, logo size, focused-app title size, colour glow, focus border, app entrance animation
-- **Clock** — size, style (digital/analog), font, 12/24-hour, alignment, seconds, glow, shadow, hide clock, hide greeting
-- **Theme** — Midnight Cyan, Sunset Orange, Deep Purple, custom accent
-- **Wallpaper** — source (day/night auto, online, favourite), slideshow interval, bottom shade, smooth day/night, header blur, save favourite
-- **Apps** — hide/unhide, Netflix & YouTube banner rows (on/off, order, poster size, logos, auto-scroll), row spacing
-- **System** — screensaver & weather, profile name/photo, avatar shape, header background, launcher font, performance (Auto/Light/Balanced/Full), export/import settings, default Home, layout reset
+| Option | Choices | Effect |
+| --- | --- | --- |
+| Visual style | TV Glass / Classic | Switch the Home arrangement and shared panel style |
+| Glass finish | Soft / Clear / Frosted | Change TV Glass surface appearance |
+| Glass intensity | Airy / Normal / Solid | Adjust surface opacity |
+| Glass edge | Off / Subtle / Bright | Adjust the unfocused glass outline; focused controls remain visible |
+| Theme | Midnight Cyan / Sunset Orange / Deep Purple / Custom | Choose accent colours for controls and icons |
+| Launcher font | Default / Serif / Mono / Light | Choose the interface font |
 
-Hiding never disables or uninstalls an app. All launcher dialogs share the same rounded, translucent dark-glass styling with adjustable intensity and blur behind dialogs (API 31+).
+For a more transparent appearance, try **TV Glass + Frosted + Airy + Subtle**.
 
-## Continue watching
+Frosted panel blur is optional. It needs Android 12 / API 31 or newer, runtime cross-window blur support,
+and a performance profile above Light. If blur is unsupported or disabled, panels use a more opaque
+surface and stronger dimming. Availability changes refresh visible panels. Selecting Frosted does not
+guarantee real blur on every TV. Soft and Clear use lightweight gradients without backdrop blur.
 
-Resume entries appear in a separate row **after the app grid**, never among default app icons.
-Thumbnails/posters shared by the publishing apps load over HTTPS or Android content providers, with an app-icon fallback when artwork is unavailable.
-The row uses Android TV's shared Watch Next provider and asks for TV-listings access when available.
-It filters finished items and hidden apps, and opens the publishing app's resume link. Some TVs restrict
-provider access and some streaming apps never publish entries; private Netflix/other app histories cannot
-be read. Empty or unsupported devices show a clear message instead of invented resume items.
+## Control Center and settings
 
-## Netflix & YouTube rows
+The Settings button opens **Control Center** in TV Glass, with Network, Bluetooth, Inputs, Display and
+Sound cards. Its header gear opens the original TV settings. Bluetooth opens the firmware's Bluetooth /
+remote-accessory settings when available.
 
-Optional banner rows directly below the clock showing posters from the TV Watch Next feed — Netflix (`com.netflix.ninja`) and YouTube (`com.google.android.youtube.tv`). Off by default; enable in **Apps** settings. Rows stay hidden if the app published nothing.
+Settings pages use a shared panel with Back navigation, preserving the previous row focus and scroll
+position. Local appearance choices update the panel while it stays open.
+
+Launcher settings are grouped into:
+
+- **Tiles** — columns, sizes, spacing, corners, logo size, focused-app title size and focus effects.
+- **Clock** — digital/analog style, font, size, time format, alignment, seconds, glow and shadow.
+- **Theme** — visual style, accents, interface font and glass appearance.
+- **Wallpaper** — source, custom image, slideshow interval, darkness and bottom shade.
+- **Apps** — visibility and available content-row preferences.
+- **System** — screensaver/weather, profile, performance, volume auto-start, Home/remote setup,
+  settings export/import and layout reset.
+
+Search filters installed, non-hidden apps inside the launcher. Play Store search opens Google's normal
+search/install screen. Voice search uses the TV's configured Assistant or speech activity; the launcher
+does not request microphone permission or record audio.
+
+### Picture and Sound sliders: preview only
+
+Display and Sound open custom slider pages:
+
+| Picture preview | Sound preview |
+| --- | --- |
+| Backlight, Brightness, Contrast, Colour, Sharpness, Hue | Bass, Treble, Balance |
+
+Use **Left / Right** to change a sample value and **Up / Down** to move between rows. Reset restores
+the page's sample values. Closing the page discards them.
+
+**These sliders do not change the TV's picture or sound.** Hardware integration is pending model-specific
+ADB inspection and testing. Each page includes an **Open TV picture/sound settings** shortcut to the working
+system controls. The existing remote volume control is separate and remains functional.
+
+## Remote volume and navigation
+
+The launcher provides its own volume indicator and an optional fast-volume helper for firmware with
+unreliable held-key repeat. **Launcher settings → System → Volume auto-start** shows saved pairing and
+startup status. With configured local pairing, recovery is requested at boot and after app updates.
+
+The working helper and launcher key services handle volume without requiring a manual start command
+after every normal reboot. Recovery still depends on this TV's saved authorization, permissions and
+wireless-debugging availability.
+
+Horizontal app navigation follows visible app order across row boundaries. First/last items stop in
+place; Up/Down follow columns. Up from the first row goes to Search. Only Search, the bell and Settings
+are in the toolbar's remote focus path. Continue Watching is entered with Down from the bottom app row.
 
 ## Automatic Home and remote setup
 
@@ -106,92 +158,65 @@ The Home idle timeout defaults to Off and does not cover another app's playback.
 Online sources: `picsum.photos`, `fastly.picsum.photos`, `www.bing.com`,
 `api.open-meteo.com`, `geocoding-api.open-meteo.com`, `wttr.in`.
 
+## Continue Watching and notifications
+
+Continue Watching appears after the app grid. It reads Android TV's shared Watch Next provider, filters
+finished entries and hidden apps, and opens the publishing app's resume link. Artwork uses the provider's
+image or an app-icon fallback. Access and available entries depend on the TV and publishing apps;
+private Netflix/other app histories cannot be read, and no resume items are invented.
+
+The notification bell shows eligible clearable alerts. Ongoing, playback, foreground-service and active
+progress notifications are filtered out. Notification access is requested separately. Alert content stays
+in bounded memory and is not stored or uploaded.
+
 ## Performance
 
-The launcher auto-detects device RAM and selects a performance tier:
-- **Light** (≤2 GB, e.g. Haier H40K800FX): static wallpaper, no crossfade/parallax/entrance, minimal effects
-- **Balanced** (2–4 GB): bounded effects and caches
-- **Full** (>4 GB): all effects
+The launcher chooses a performance tier from device RAM:
 
-Override via **Settings → System → Performance**. Weather is cached for 15 minutes with stale indication. Bitmaps are decoded to the exact display size. Memory is trimmed automatically under pressure.
+- **Light** — minimal effects, including on low-memory TVs such as the Haier H40K800FX; no Frosted window blur.
+- **Balanced** — bounded effects and caches.
+- **Full** — additional effects where supported.
 
-## Build
+Override it in **Launcher settings → System → Performance**. Image decoding and caches are bounded,
+and memory is trimmed under pressure. Weather failures/offline status show “Unavailable” without an
+update timestamp. No performance benchmark improvement is claimed for the glass restyle.
 
-A push to `main` touching `launcher/**` builds the release APK on GitHub Actions
-(JDK 17, Gradle 8.9, Android SDK 34) and attaches `PersonalLauncher.apk` to a
-release. The APK is debug-signed for sideloading over ADB.
-Builds and launcher checks for this update run on GitHub Actions.
+## Install or update
 
-## Install on the TV
+For an existing installation with working ADB:
 
-```bash
-adb install PersonalLauncher.apk
-adb shell cmd package set-home-activity --user 0 com.sadique.launcher/.MainActivity
+```sh
+curl -fL https://github.com/sadique6571/PersonalLauncher/releases/download/v4.7-build-75/PersonalLauncher.apk -o launcher.apk &&
+adb shell 'if [ -f /data/local/tmp/fast-volume-bridge.sh ]; then sh /data/local/tmp/fast-volume-bridge.sh stop; fi' &&
+adb install -r launcher.apk &&
+adb shell am start -n com.sadique.launcher/.MainActivity
 ```
 
-Press Home, pick **Personal Launcher** as the home app. Confirm it runs well
-before disabling the stock launcher.
+Keep the app installed when updating so its preferences and saved pairing remain available. Use the same
+package and signing key with an increasing Android version code. The displayed version can remain
+**7.0** while release build numbers increase.
 
-## License
+An existing paired setup can restore Home and volume automatically after installation; allow startup
+recovery to finish. A new TV still needs one-time Android permission/pairing approval through the setup
+guide. Keep another working Home available during initial setup.
 
-MIT License — see [LICENSE](LICENSE).
+## Build and release signing
 
-## APK updates and release signing
+Launcher checks use JDK 17, Gradle 8.9, Android SDK 34 and:
 
-Older releases used a fresh runner-generated debug key, so Android reports a package conflict when
-installing a later build. Version 4.3 publishing requires one persistent release keystore, stored in
-GitHub repository Actions secrets `LAUNCHER_KEYSTORE_BASE64` and `LAUNCHER_KEYSTORE_PASSWORD`.
-Use PKCS12, alias `personal-launcher`, with the same store/key password; keep a private backup.
-Never commit or publish the keystore. The release workflow refuses to publish when signing secrets
-are missing. CI still builds and tests independently with a temporary debug key.
+```sh
+cd launcher
+./gradlew --no-daemon testReleaseUnitTest lintRelease assembleRelease
+```
 
-An installed APK signed by a lost temporary key cannot accept the new release key. A **one-time
-uninstall/reinstall** is necessary, which removes local launcher preferences. Keep another working
-Home enabled before doing this. After migration, APKs with this same package/key and increasing
-version codes install as updates. Do not uninstall anything automatically.
+The release workflow runs tests, lint and the release build, then verifies the APK signature before
+publishing. Published APKs use the persistent release keystore. CI can use a temporary debug key for
+validation; that is different from the published APK.
 
-Automatic system screensavers require selecting **Personal Launcher Landscapes** in Android settings. Use Screensaver → Set automatic screensaver for selection instructions and status. The DreamService declares the system binding permission and settings metadata; there is no ordinary runtime permission that can silently replace the Android-selected screensaver. A 5-minute Home-only idle fallback can be enabled from setup when firmware restricts the picker.
+A push to `main` touching `launcher/**` triggers APK publication. README-only changes do not trigger
+a new APK release. Build 75 remains the download linked above.
 
-### Simplified TV Home (5.2)
+## Volume troubleshooting
 
-Home has one editable name/photo and a notification bell next to Search. Local profile switching,
-watchlists, Now Playing, Live Guide and remote-button learning have been removed. Existing name,
-layout and current avatar/wallpaper paths are preserved on update. Saved legacy profile data is not
-used to switch identities and is not deleted. Continue Watching still opens shared streaming entries,
-with no watchlist-save long press. There is no category strip or “All apps” button on Home; use Categories in Settings to filter,
-and Reset filter there to restore the full app grid.
-
-The bell lists notification alerts only and updates while open. Foreground-service, ongoing,
-non-clearable, group-summary, playback and active-progress status entries are excluded. Finished,
-clearable download alerts can still appear. Access consent is requested separately; no refresh or
-permission controls are mixed into the alert list. Notification content stays in bounded memory,
-is never stored or sent, and the existing listener component/consent remains valid.
-
-Settings starts with a two-column TV-style button grid for Network, Bluetooth, Inputs, Display,
-Sound and TV settings. Bluetooth uses the standard firmware Bluetooth settings action, not the
-pair-new-accessory screen. Volume and launcher preferences follow; Search, Store and Screensaver
-are at the bottom. Startup diagnostics is hidden from the normal panel; boot log instrumentation
-is retained for troubleshooting. The optional launcher PIN, apps-only mode and inexact sleep timer
-remain available; PIN is a UI gate, not Android security. Sleep needs the Home accessibility service,
-may be delayed by Android, and clears on reboot. Home/Settings theme mappings and accessibility
-permissions are not modified by this update. No Favorites or Recently Opened feature is added.
-
-Validation includes notification filtering and legacy asset-path/category tests. Physical TV checks
-are still needed for button focus, notification delivery and the firmware Bluetooth screen.
-
-When accessibility key filtering is active, held volume uses a fallback repeat only when the firmware
-provides no native repeats. The original tap still goes to Android. Shared press identity prevents
-both key services from adding/resetting repeat loops; release cancels it and a 30-second safety limit
-covers a lost release. The explicit consume_volume_keys compatibility mode remains available.
-
-Horizontal app navigation follows visible app order across row boundaries: Right enters the next row,
-Left enters the preceding row, and the first/last item stops in place. Pending off-screen focus is
-tracked during held-key repeats so geometric focus search cannot jump into the header. Up/Down follow columns; Up from the first row goes directly to Search. Only Search, the bell and
-Settings are in the toolbar focus path, and Down returns to apps. Decorative header elements cannot
-receive focus. Continue Watching is entered deliberately with Down from the bottom app row.
-
-For firmware where the key helpers suppress held-volume repeat, an optional
-[temporary ADB volume bridge](docs/volume-hold-bridge.md) is available for controlled diagnosis.
-It leaves the launcher settings untouched and does not replace the APK's volume UI.
-That guide also documents an optional single-process injector for TVs where a shell key command
-takes too long. Its APK is used as an ADB classpath payload; the installed launcher need not change.
+The [volume-hold bridge guide](docs/volume-hold-bridge.md) documents the optional shell helper and
+diagnostic commands for firmware with slow or missing held-volume repeat.
