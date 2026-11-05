@@ -124,7 +124,7 @@ final class TvControlPreview {
                 @Override public void onStartTrackingTouch(SeekBar bar) { requestFocus(); }
                 @Override public void onStopTrackingTouch(SeekBar bar) { }
             });
-            boolean glass = TvGlassStyle.enabled(host.getSharedPreferences("personal_home", 0));
+            boolean glass = TvGlassStyle.enabled(ThemePreferences.get(host));
             LinearLayout.LayoutParams trackPosition = new LinearLayout.LayoutParams(-1, GlassSettings.dp(host, glass ? 36 : 32));
             trackPosition.topMargin = GlassSettings.dp(host, glass ? 6 : 0);
             trackPosition.bottomMargin = GlassSettings.dp(host, glass ? 6 : 0);

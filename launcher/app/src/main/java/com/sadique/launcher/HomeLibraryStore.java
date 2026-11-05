@@ -11,7 +11,7 @@ import java.util.Set;
 final class HomeLibraryStore {
     private final SharedPreferences prefs, registry;
     HomeLibraryStore(Context context) {
-        this(context.getSharedPreferences("personal_home", 0), context.getSharedPreferences("home_local_profiles", 0));
+        this(ThemePreferences.get(context), context.getSharedPreferences("home_local_profiles", 0));
     }
     HomeLibraryStore(SharedPreferences prefs, SharedPreferences registry) { this.prefs = prefs; this.registry = registry; }
     String assetName(String name) {

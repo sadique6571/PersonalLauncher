@@ -63,6 +63,16 @@ public final class PersonalHomeActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     /** Dedicated app-loading worker: icon scans never block avatar/wallpaper/import, and a new scan cancels the old. */
     private final ExecutorService appWorker = Executors.newSingleThreadExecutor();
+    private final ExecutorService weatherWorker = Executors.newSingleThreadExecutor();
+    private boolean weatherBusy;
+    private long nextWeatherAttempt;
+    private String lastWeatherRequestKey="";
+    private final SharedPreferences.OnSharedPreferenceChangeListener weatherPreferences=(preferences,key)-> {
+        if ("weather_lat".equals(key) || "weather_lon".equals(key) || "weather_fahrenheit".equals(key)) {
+            nextWeatherAttempt=0;
+            handler.removeCallbacks(this.weatherRefresh); handler.post(this.weatherRefresh);
+        }
+    };
     private SharedPreferences prefs;
     private LinearLayout page, header, actions, clockLayout, appBody;    private HomeAppGrid<App> grid;
     private android.widget.ImageButton searchButton;
@@ -85,8 +95,6 @@ public final class PersonalHomeActivity extends Activity {
     /** Wallpaper-adaptive text: true while the region behind the text is bright (dark text in use). */
     /** Effective clock text size in sp (after the compact-screen cap), for fitClockText(). */
     private int clockTextSize = 68;
-    private ImageView focusedArtwork;
-    private String featuredPkg;
     private boolean tvGlass() { return tv && TvGlassStyle.enabled(prefs); }
     /** Entrance animation plays only on the very first grid render, never on rebuilds. */
     private boolean firstGridRender = true;
@@ -153,7 +161,8 @@ public final class PersonalHomeActivity extends Activity {
         super.onCreate(state);
         onCreateStartMs = android.os.SystemClock.elapsedRealtime();
         BootLog.mark("home onCreate");
-        prefs = getSharedPreferences("personal_home", MODE_PRIVATE);
+        prefs = ThemePreferences.get(this);
+        prefs.registerOnSharedPreferenceChangeListener(weatherPreferences);
         if (!prefs.getBoolean("bing_daily_home_v67", false)) {
             prefs.edit().putBoolean("bing_daily_home_v67", true)
                     .putInt("wallpaper_source", 1).putString("wallpaper_mode", "mountains").apply();
@@ -255,8 +264,7 @@ public final class PersonalHomeActivity extends Activity {
         shape.setColor(blend(night, dayC, day));
         // Glass intensity (user 2026-11-01): 0=airy, 100=solid. Focused stays a touch brighter.
         int intensity = Math.max(0, Math.min(100, prefs.getInt("glass_alpha", 70)));
-        int alpha = 100 + intensity * 155 / 100;
-        shape.setAlpha(focused ? Math.min(255, alpha + 30) : alpha);
+        shape.setAlpha(ClassicGlassAlpha.card(intensity,focused));
         shape.setCornerRadius(tileRadius());
         shape.setStroke(dp(focused ? 3 : 1), focused ? accent : 0xff28435e);
         return shape;
@@ -382,7 +390,7 @@ public final class PersonalHomeActivity extends Activity {
         root.addView(page, new ViewGroup.LayoutParams(-1, -1));
         // Cinematic shade: subtle dark gradients top and bottom for a film-like frame.
         GradientDrawable topShade = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{TvGlassStyle.enabled(prefs) ? 0x22000000 : 0x66000000, 0x00000000});
+                new int[]{TvGlassStyle.enabled(prefs) ? 0x22000000 : ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs)) << 24, 0x00000000});
         View topBar = new View(this);
         topBar.setBackground(topShade);
         topBar.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -446,7 +454,7 @@ public final class PersonalHomeActivity extends Activity {
         actions = new LinearLayout(this);
         actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         actions.addView(networkStatus, new LinearLayout.LayoutParams(-2, dp(44)));
-        homeWeather = text("", 13, MUTED);
+        homeWeather = text("Unavailable", 13, MUTED);
         homeWeather.setGravity(Gravity.CENTER);
         homeWeather.setPadding(dp(10), dp(8), dp(10), dp(8));
         actions.addView(homeWeather, 0, new LinearLayout.LayoutParams(-2, dp(44)));
@@ -538,7 +546,6 @@ public final class PersonalHomeActivity extends Activity {
         appHeading.setSingleLine(true);
         appHeading.setEllipsize(android.text.TextUtils.TruncateAt.END);
         appHeading.setPadding(dp(4), dp(8), 0, dp(12));
-        focusedArtwork = null; featuredPkg = null;
         grid = new HomeAppGrid<>(this, app -> app.info.activityInfo.packageName,
                 (app, width) -> createAppTile(app, width, carriedApp != null && app.info.activityInfo.packageName.equals(carriedApp.info.activityInfo.packageName)));
         grid.setUpFromApps(() -> { if (searchButton != null) searchButton.requestFocus(); });
@@ -548,7 +555,7 @@ public final class PersonalHomeActivity extends Activity {
         appBody.setOrientation(LinearLayout.VERTICAL);
         // Grid backdrop: soft panel behind the apps so tiles stand out from the wallpaper.
         GradientDrawable gridBackdrop = new GradientDrawable();
-        gridBackdrop.setColor(0x33000000);
+        gridBackdrop.setColor(ClassicGlassAlpha.drawer(TvGlassStyle.intensity(prefs)) << 24);
         gridBackdrop.setCornerRadius(dp(20));
         boolean liquidGlass = TvGlassStyle.enabled(prefs);
         appBody.setBackground(liquidGlass ? TvGlassStyle.liquid(dp(28), dp(1), prefs) : gridBackdrop);
@@ -570,39 +577,13 @@ public final class PersonalHomeActivity extends Activity {
         LinearLayout scrollContent = new LinearLayout(this);
         scrollContent.setOrientation(LinearLayout.VERTICAL);
         if (prefs.getBoolean("hide_clock", false) || prefs.getBoolean("apps_only", false)) clock.setVisibility(View.GONE);
-        int align = prefs.getInt("clock_align", 1);
+        int align = TvGlassStyle.enabled(prefs) ? 1 : Math.max(0,Math.min(2,prefs.getInt("clock_align",1)));
         LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(-2, -2);
         clockParams.gravity = new int[]{Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END}[align];
-        if (tvGlass()) {
-            // Top shelf uses installed-app artwork, not invented streaming recommendations.
-            LinearLayout shelf = new LinearLayout(this);
-            shelf.setGravity(Gravity.CENTER_VERTICAL);
-            shelf.setPadding(dp(12), dp(16), dp(12), dp(16));
-            focusedArtwork = new ImageView(this);
-            focusedArtwork.setImageDrawable(TvSymbols.icon(this, R.drawable.ic_apps));
-            focusedArtwork.setScaleType(ImageView.ScaleType.FIT_XY);
-            focusedArtwork.setBackground(surface(false));
-            focusedArtwork.setClipToOutline(true);
-            focusedArtwork.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-            int artWidth = compact ? 140 : 180;
-            shelf.addView(focusedArtwork, new LinearLayout.LayoutParams(dp(artWidth), dp(artWidth * 9f / 16f)));
-            LinearLayout caption = new LinearLayout(this);
-            caption.setOrientation(LinearLayout.VERTICAL);
-            caption.setPadding(dp(20), 0, dp(16), 0);
-            TextView section = text(getString(R.string.h_your_apps), 13, MUTED);
-            caption.addView(section);
-            appHeading.setPadding(0, dp(4), 0, dp(4));
-            appHeading.setTextSize(prefs.getInt("focus_title_size", 32));
-            caption.addView(appHeading);
-            shelf.addView(caption, new LinearLayout.LayoutParams(0, -2, 1));
-            shelf.addView(clock, new LinearLayout.LayoutParams(-2, -2));
-            scrollContent.addView(shelf);
-        } else {
-            scrollContent.addView(clock, clockParams);
-        }
+        scrollContent.addView(clock, clockParams);
         scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
         page.addView(scroll, new LinearLayout.LayoutParams(-1, -2));
-        if (!tvGlass()) page.addView(appHeading);
+        page.addView(appHeading);
         page.addView(appBody, new LinearLayout.LayoutParams(-1, 0, 1));
         // Focus-glow tracker: keep the wallpaper glow on the focused tile no matter
         // which scroller moved.
@@ -786,67 +767,54 @@ public final class PersonalHomeActivity extends Activity {
      * refreshes only when stale, or on city/unit change.
      */
     private void refreshHomeWeather() {
-        if (homeWeather == null) return;
-        // Show cached value immediately.
-        String cached = weatherCacheKey().equals(prefs.getString("weather_cache_key", ""))
-                ? prefs.getString("weather_cached", null) : null;
-        long cachedAt = prefs.getLong("weather_cached_at", 0);
-        String cacheKey = weatherCacheKey();
-        Network weatherNetwork = connectivity == null ? null : connectivity.getActiveNetwork();
-        NetworkCapabilities weatherCaps = weatherNetwork == null ? null : connectivity.getNetworkCapabilities(weatherNetwork);
-        boolean weatherOnline = weatherCaps != null && weatherCaps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
-        if (!weatherOnline) {
-            homeWeather.setText("Unavailable"); homeWeather.setAlpha(1f); homeWeather.setVisibility(View.VISIBLE);
-            handler.removeCallbacks(weatherRefresh); handler.postDelayed(weatherRefresh, 60_000L); return;
+        if (homeWeather==null || !resumed || isDestroyed()) return;
+        String cacheKey=weatherCacheKey(); long now=System.currentTimeMillis();
+        String cached=prefs.getString("weather_cached",null); long cachedAt=prefs.getLong("weather_cached_at",0);
+        Network network=connectivity==null?null:connectivity.getActiveNetwork();
+        NetworkCapabilities caps=network==null?null:connectivity.getNetworkCapabilities(network);
+        boolean canRequest=HomeWeatherPolicy.canAttempt(network!=null,
+                caps!=null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),
+                caps!=null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED));
+        homeWeather.setAlpha(1f); homeWeather.setVisibility(View.VISIBLE);
+        handler.removeCallbacks(weatherRefresh);
+        if (!canRequest) {
+            homeWeather.setText("Unavailable"); nextWeatherAttempt=0;
+            handler.postDelayed(weatherRefresh,60_000L); return;
         }
-        boolean cacheValid = cached != null
-                && System.currentTimeMillis() - cachedAt < WEATHER_CACHE_MS
-                && cacheKey.equals(prefs.getString("weather_cache_key", ""));
-        if (cacheValid) {
-            homeWeather.setText(weatherLabel(cached, cachedAt));
-            homeWeather.setAlpha(1f);
-            homeWeather.setVisibility(View.VISIBLE);
-            // Schedule next refresh for when the cache expires.
-            handler.removeCallbacks(weatherRefresh);
-            long delay = WEATHER_CACHE_MS - (System.currentTimeMillis() - cachedAt);
-            handler.postDelayed(weatherRefresh, Math.max(delay, 60_000L));
-            return;
+        if (HomeWeatherPolicy.fresh(cached,prefs.getString("weather_cache_key",""),cacheKey,cachedAt,now,WEATHER_CACHE_MS)) {
+            homeWeather.setText(cached);
+            handler.postDelayed(weatherRefresh,Math.max(60_000L,WEATHER_CACHE_MS-(now-cachedAt))); return;
         }
-        // Show stale cache while fetching (with reduced opacity to indicate staleness).
-        if (cached != null) {
-            homeWeather.setText("Unavailable");
-            homeWeather.setAlpha(1f);
-            homeWeather.setVisibility(View.VISIBLE);
+        homeWeather.setText("Unavailable");
+        if (weatherBusy) return;
+        if (cacheKey.equals(lastWeatherRequestKey) && now<nextWeatherAttempt) {
+            handler.postDelayed(weatherRefresh,Math.max(1000,nextWeatherAttempt-now)); return;
         }
-        worker.execute(() -> {
-            String value;
-            try {
-                boolean fahrenheit = prefs.getBoolean("weather_fahrenheit", false);
-                double lat = Double.parseDouble(prefs.getString("weather_lat", Double.toString(LandscapeModel.LATITUDE)));
-                double lon = Double.parseDouble(prefs.getString("weather_lon", Double.toString(LandscapeModel.LONGITUDE)));
-                value = WeatherClient.fetch(lat, lon, fahrenheit);
-            } catch (Exception unavailable) {
-                value = null;
+        weatherBusy=true; lastWeatherRequestKey=cacheKey;
+        String latitude=prefs.getString("weather_lat",Double.toString(LandscapeModel.LATITUDE));
+        String longitude=prefs.getString("weather_lon",Double.toString(LandscapeModel.LONGITUDE));
+        boolean fahrenheit=prefs.getBoolean("weather_fahrenheit",false);
+        weatherWorker.execute(() -> {
+            String result;
+            try { result=WeatherClient.fetch(Double.parseDouble(latitude),Double.parseDouble(longitude),fahrenheit); }
+            catch(Exception unavailable) {
+                result=null;
+                android.util.Log.w("PersonalWeather","Home weather unavailable ("+unavailable.getClass().getSimpleName()+")");
             }
-            String text = value;
+            String value=result;
             handler.post(() -> {
-                if (isDestroyed() || homeWeather == null) return;
-                if (text != null) {
-                    // Cache the fresh value.
-                    prefs.edit()
-                            .putString("weather_cached", text)
-                            .putLong("weather_cached_at", System.currentTimeMillis())
-                            .putString("weather_cache_key", weatherCacheKey())
-                            .apply();
-                    homeWeather.setText(weatherLabel(text, System.currentTimeMillis()));
-                    homeWeather.setAlpha(1f);
-                    homeWeather.setVisibility(View.VISIBLE);
-                } else {
-                    homeWeather.setText("Unavailable"); homeWeather.setAlpha(1f); homeWeather.setVisibility(View.VISIBLE);
-                }
-                // If fetch failed but we have stale cache, keep showing it (dimmed).
+                weatherBusy=false;
+                if (isDestroyed()) return;
+                // A delayed response must never become the cache for a newly selected city/unit.
+                if (!cacheKey.equals(weatherCacheKey())) { nextWeatherAttempt=0; refreshHomeWeather(); return; }
+                long fetchedAt=System.currentTimeMillis();
+                if (value!=null) prefs.edit().putString("weather_cached",value).putLong("weather_cached_at",fetchedAt)
+                        .putString("weather_cache_key",cacheKey).apply();
+                nextWeatherAttempt=fetchedAt+(value==null?60_000L:WEATHER_CACHE_MS);
+                if (!resumed || homeWeather==null) return;
+                homeWeather.setText(value==null?"Unavailable":value); homeWeather.setAlpha(1f); homeWeather.setVisibility(View.VISIBLE);
                 handler.removeCallbacks(weatherRefresh);
-                handler.postDelayed(weatherRefresh, text == null ? 60_000L : WEATHER_CACHE_MS);
+                handler.postDelayed(weatherRefresh,value==null?60_000L:WEATHER_CACHE_MS);
             });
         });
     }
@@ -856,11 +824,6 @@ public final class PersonalHomeActivity extends Activity {
         return prefs.getString("weather_lat", "") + ","
                 + prefs.getString("weather_lon", "") + ","
                 + prefs.getBoolean("weather_fahrenheit", false);
-    }
-
-    private String weatherLabel(String value, long fetchedAt) {
-        if (fetchedAt <= 0) return value;
-        return value;
     }
 
     private final Runnable weatherRefresh = this::refreshHomeWeather;
@@ -882,6 +845,7 @@ public final class PersonalHomeActivity extends Activity {
         icon.setBounds(0, 0, dp(28), dp(24));
         networkStatus.setCompoundDrawables(icon, null, null, null);
         networkStatus.setContentDescription(online ? "Internet available. Open Wi-Fi settings" : "No validated internet access. Open Wi-Fi settings");
+        refreshHomeWeather();
     }
 
     private int appGeneration;
@@ -944,7 +908,7 @@ public final class PersonalHomeActivity extends Activity {
                     android.graphics.drawable.Drawable logo = app.info.loadIcon(pm);
                     if (pkg.equals("com.google.android.youtube.tv") || pkg.equals("com.google.android.youtube")) logo = getDrawable(R.drawable.logo_youtube);
                     if (pkg.equals("com.netflix.ninja") || pkg.equals("com.netflix.mediaclient")) logo = getDrawable(R.drawable.logo_netflix);
-                    AppArtwork artwork = AppArtwork.create(getResources(), logo, logoScale());
+                    AppArtwork artwork = AppArtwork.create(getResources(), logo, cache.logoScale());
                     card = ((android.graphics.drawable.BitmapDrawable) artwork.image).getBitmap(); accent = artwork.accent;
                     cache.save(pkg, version, card, accent);
                 }
@@ -989,16 +953,6 @@ public final class PersonalHomeActivity extends Activity {
         return new android.graphics.drawable.BitmapDrawable(getResources(), bitmap);
     }
 
-    /** Share the bitmap through a separate drawable callback for the top shelf. */
-    private void setFocusedArtwork(android.graphics.drawable.Drawable icon) {
-        if (focusedArtwork == null) return;
-        if (icon == null) focusedArtwork.setImageDrawable(TvSymbols.icon(this, R.drawable.ic_apps));
-        else {
-            android.graphics.drawable.Drawable.ConstantState state = icon.getConstantState();
-            focusedArtwork.setImageDrawable(state == null ? icon : state.newDrawable(getResources()));
-        }
-    }
-
     /** Swaps a finished icon into the live tile and the cached App. Runs on the UI thread. */
     private void updateTileIcon(String pkg, android.graphics.drawable.Drawable icon, int accent) {
         if (cachedApps != null) {
@@ -1014,7 +968,6 @@ public final class PersonalHomeActivity extends Activity {
         if (tile instanceof android.widget.FrameLayout) {
             View iconView = ((android.widget.FrameLayout) tile).getChildAt(0);
             if (iconView instanceof ImageView) ((ImageView) iconView).setImageDrawable(icon);
-            if (focusedArtwork != null && pkg.equals(featuredPkg)) setFocusedArtwork(icon);
             tile.setForeground(tileBorder(accent, tile.isFocused()));
             tile.setTag(accent);
         }
@@ -1057,17 +1010,7 @@ public final class PersonalHomeActivity extends Activity {
         grid.submit(visible, columns, avail / columns);
         if (movingRendered) { movingRendered = false; grid.rebind(); }
         if (gridState != null) { grid.getLayoutManager().onRestoreInstanceState(gridState); gridState = null; }
-        if (visible.isEmpty()) {
-            appHeading.setText(R.string.h_no_apps);
-            featuredPkg = null;
-            setFocusedArtwork(null);
-        } else if (focusedArtwork != null) {
-            App featured = visible.get(0);
-            for (App app : visible) if (app.info.activityInfo.packageName.equals(focusedPkg)) { featured = app; break; }
-            appHeading.setText(featured.name);
-            featuredPkg = featured.info.activityInfo.packageName;
-            setFocusedArtwork(featured.icon);
-        }
+        appHeading.setText(visible.isEmpty()?R.string.h_no_apps:R.string.h_your_apps);
         if (restoreFocus && (panel == null || !panel.isShowing()) && (searchDialog == null || !searchDialog.isShowing()))
             grid.focusKey(focusedPkg);
         firstGridRender = false;
@@ -1234,8 +1177,7 @@ public final class PersonalHomeActivity extends Activity {
                 tile.setOutlineSpotShadowColor(app.accent);
             }
             if (focus) {
-                appHeading.setText(app.name);
-                if (focusedArtwork != null) { featuredPkg = app.info.activityInfo.packageName; setFocusedArtwork(app.icon); }
+                if (!TvGlassStyle.enabled(prefs)) appHeading.setText(app.name);
                 appHeading.setTextColor(TEXT);
                 int[] position = new int[2], origin = new int[2];
                 tile.getLocationInWindow(position); sky.getLocationInWindow(origin);
@@ -1607,12 +1549,13 @@ public final class PersonalHomeActivity extends Activity {
             bg = TvGlassStyle.liquid(dp(28), dp(1), prefs);
         } else if (mode == 1) {
             bg = new GradientDrawable();
-            bg.setColor(0x40000000);
+            bg.setColor(ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs)) << 24);
         } else if (mode == 2) {
             // Frosted glass: semi-transparent gradient simulating blur.
             bg = new GradientDrawable(
                     GradientDrawable.Orientation.TOP_BOTTOM,
-                    new int[]{0x60000000, 0x30000000});
+                    new int[]{ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs)) << 24,
+                            ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs))/2 << 24});
         }
         if (bg != null) {
             bg.setCornerRadius(dp(TvGlassStyle.enabled(prefs) ? 28 : 18));
@@ -1728,15 +1671,30 @@ public final class PersonalHomeActivity extends Activity {
         subMenu("Clock", labels, hints, icons, choices);
     }
 
+    private void switchVisualStyle(boolean glass) {
+        if (prefs.getBoolean("tv_glass_style",true)==glass) return;
+        int priorLogo=prefs.getInt("logo_size",1);
+        prefs.edit().putBoolean("tv_glass_style",glass).apply();
+        if (priorLogo!=prefs.getInt("logo_size",1)) {
+            appGeneration++;
+            if (cachedApps!=null) for(App app:cachedApps) { app.iconReady=false; app.iconLoading=false; }
+        }
+        GlassSettings.dismiss(this);
+        buildHomeSoon();
+        handler.removeCallbacks(themeMenuRefresh); handler.postDelayed(themeMenuRefresh,300);
+    }
+
+    private final Runnable themeMenuRefresh=()-> {
+        if (resumed && !isFinishing() && !isDestroyed() && !GlassSettings.showing(this)) themeSettings();
+    };
+
     private void themeSettings() {
         // "Dark mode" removed 2026-11-01 (user): the theme glass color covers it.
         String[] labels = {"Visual style", "Theme", "Accent color", "Launcher font", "Glass intensity", "Glass finish", "Glass edge"};
         String[] hints = {"TV Glass or Classic", "Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels", "Soft, Clear or Frosted panels", "Reflection around glass surfaces"};
         int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness};
         Runnable[] choices = {
-            () -> chooseSetting("Visual style", new String[]{"TV Glass", "Classic"}, which -> {
-                prefs.edit().putBoolean("tv_glass_style", which == 0).apply(); buildHomeSoon();
-            }),
+            () -> chooseSetting("Visual style", new String[]{"TV Glass", "Classic"}, which -> switchVisualStyle(which==0)),
             () -> chooseSetting("Theme", new String[]{"Midnight Cyan", "Sunset Orange", "Deep Purple", "Custom"}, which -> {
                 prefs.edit().putInt("theme_name", which).apply();
                 if (which == 3) chooseAccentColor();
@@ -2147,7 +2105,7 @@ public final class PersonalHomeActivity extends Activity {
             for (java.util.Map.Entry<String, ?> e : all.entrySet()) {
                 String k = e.getKey();
                 // Skip secrets, caches, and transient state.
-                if (k.equals(NotificationAccessSetup.ASKED) || k.contains("key") || k.contains("secret") || k.contains("token")
+                if (k.equals(ThemePreferences.MIGRATED) || k.equals(NotificationAccessSetup.ASKED) || k.contains("key") || k.contains("secret") || k.contains("token")
                         || k.contains("password") || k.startsWith("weather_cached")) continue;
                 Object v = e.getValue();
                 if (v instanceof String || v instanceof Integer || v instanceof Boolean
@@ -2224,7 +2182,7 @@ public final class PersonalHomeActivity extends Activity {
                     java.util.Iterator<String> keys = settings.keys();
                     while (keys.hasNext()) {
                         String k = keys.next();
-                        if (k.equals(NotificationAccessSetup.ASKED)) continue;
+                        if (k.equals(ThemePreferences.MIGRATED) || k.equals(NotificationAccessSetup.ASKED)) continue;
                         Object v = settings.get(k);
                         if (v instanceof String) ed.putString(k, (String) v);
                         else if (v instanceof Integer) ed.putInt(k, (Integer) v);
@@ -2337,6 +2295,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     @Override protected void onPause() {
+        handler.removeCallbacks(themeMenuRefresh);
         VolumeKeys.stop();
         VolumeSlider.hide(this);
         resumed = false;
@@ -2358,6 +2317,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     @Override protected void onNewIntent(Intent intent) {
+        handler.removeCallbacks(themeMenuRefresh);
         super.onNewIntent(intent);
         setIntent(intent);
         if (panel != null) panel.dismiss();
@@ -2394,6 +2354,8 @@ public final class PersonalHomeActivity extends Activity {
         if (searchDialog != null) searchDialog.dismiss();
         handler.removeCallbacksAndMessages(null);
         if (continueWatching != null) continueWatching.stop();
+        prefs.unregisterOnSharedPreferenceChangeListener(weatherPreferences);
+        weatherWorker.shutdownNow();
         worker.shutdownNow();
         appWorker.shutdownNow();
         super.onDestroy();

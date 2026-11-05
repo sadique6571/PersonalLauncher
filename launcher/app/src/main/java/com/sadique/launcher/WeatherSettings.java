@@ -39,7 +39,7 @@ final class WeatherSettings {
                 new Handler(Looper.getMainLooper()).post(() -> {
                     if (activity.isDestroyed() || activity.isFinishing()) return;
                     new AlertDialog.Builder(activity).setTitle("Choose weather location").setItems(labels, (dialog, which) -> {
-                        SharedPreferences prefs = activity.getSharedPreferences("personal_home", 0);
+                        SharedPreferences prefs = ThemePreferences.get(activity);
                         prefs.edit().putString("weather_city", labels[which]).putString("weather_lat", Double.toString(lat[which]))
                                 .putString("weather_lon", Double.toString(lon[which])).apply();
                         Toast.makeText(activity, "Weather location saved", Toast.LENGTH_SHORT).show();

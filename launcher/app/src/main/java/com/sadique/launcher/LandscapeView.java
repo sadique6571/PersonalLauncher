@@ -65,7 +65,7 @@ public final class LandscapeView extends FrameLayout {
 
     public LandscapeView(Context context) {
         super(context);
-        prefs = context.getSharedPreferences("personal_home", Context.MODE_PRIVATE);
+        prefs = ThemePreferences.get(context);
         connectivity = context.getSystemService(ConnectivityManager.class);
         setBackgroundColor(0xff041225);
         photo = new ImageView(context);

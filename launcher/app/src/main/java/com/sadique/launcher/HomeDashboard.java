@@ -13,7 +13,7 @@ final class HomeDashboard {
     private HomeDashboard() { }
     static AlertDialog show(Activity host, String network, Runnable rebuild, Actions actions) {
         LinearLayout rows = HomeLibraryUi.rows(host);
-        AlertDialog panel = GlassSettings.panel(host, TvGlassStyle.enabled(host.getSharedPreferences("personal_home", 0)) ? "Control Center" : host.getString(R.string.h_dashboard), rows, true);
+        AlertDialog panel = GlassSettings.panel(host, TvGlassStyle.enabled(ThemePreferences.get(host)) ? "Control Center" : host.getString(R.string.h_dashboard), rows, true);
         rows.addView(GlassSettings.label(host, network, 12, 0xffb5cadd));
         section(host, rows, R.string.h_quick_settings);
         pair(host, rows, panel, actions, R.string.h_wifi, R.drawable.ic_wifi, WIFI,
@@ -25,9 +25,9 @@ final class HomeDashboard {
         section(host, rows, R.string.h_personalize);
         row(host, rows, R.string.h_launcher_settings, R.string.h_layout_hint, R.drawable.ic_palette, () -> actions.open(SETTINGS));
         row(host, rows, R.string.h_single_identity, 0, R.drawable.ic_person, () -> { panel.dismiss(); actions.open(IDENTITY); });
-        boolean appsOnly = host.getSharedPreferences("personal_home", 0).getBoolean("apps_only", false);
+        boolean appsOnly = ThemePreferences.get(host).getBoolean("apps_only", false);
         row(host, rows, R.string.h_apps_only, appsOnly ? R.string.h_on : R.string.h_off, R.drawable.ic_apps, () -> {
-            host.getSharedPreferences("personal_home", 0).edit().putBoolean("apps_only", !appsOnly).apply();
+            ThemePreferences.get(host).edit().putBoolean("apps_only", !appsOnly).apply();
             panel.dismiss(); rebuild.run();
         });
         row(host, rows, R.string.h_local_pin, R.string.h_local_pin_hint, R.drawable.ic_person, () -> { panel.dismiss(); LauncherPin.settings(host); });

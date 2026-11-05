@@ -34,7 +34,7 @@ final class TvSymbols extends Drawable {
         return resource;
     }
     static Drawable icon(Context context, int resource) {
-        if (TvGlassStyle.enabled(context.getSharedPreferences("personal_home", 0)) && supports(resource))
+        if (TvGlassStyle.enabled(ThemePreferences.get(context)) && supports(resource))
             return new TvSymbols(resource);
         Drawable original = context.getDrawable(resource);
         return original == null ? null : original.mutate();

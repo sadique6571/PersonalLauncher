@@ -23,12 +23,14 @@ import java.util.Set;
 final class IconCache {
     private final File dir;
     private final SharedPreferences prefs;
+    private final int logoSize;
 
     IconCache(Context context) {
         Context app = context.getApplicationContext();
         this.dir = new File(app.getCacheDir(), "icon_cards");
         this.dir.mkdirs();
-        this.prefs = app.getSharedPreferences("personal_home", Context.MODE_PRIVATE);
+        this.prefs = ThemePreferences.get(app);
+        logoSize=Math.max(0,Math.min(2,prefs.getInt("logo_size",1)));
     }
 
     static long version(PackageManager pm, String pkg) {
@@ -44,12 +46,14 @@ final class IconCache {
     }
 
     private File file(String pkg, long version) {
-        return new File(dir, safe(pkg) + "_" + version + ".png");
+        return new File(dir, safe(pkg) + "_" + version + "_s" + logoSize + ".png");
     }
 
     private String accentKey(String pkg, long version) {
-        return "icon_accent_" + safe(pkg) + "_" + version;
+        return "icon_accent_" + safe(pkg) + "_" + version + "_s" + logoSize;
     }
+
+    float logoScale() { return new float[]{.8f,1f,1.2f}[logoSize]; }
 
     /** Cached card, or null. */
     Bitmap load(String pkg, long version) {
@@ -70,7 +74,7 @@ final class IconCache {
 
     void save(String pkg, long version, Bitmap card, int accent) {
         if (version == 0 || card == null) return;
-        File tmp = new File(dir, safe(pkg) + "_" + version + ".tmp");
+        File tmp = new File(dir, safe(pkg) + "_" + version + "_s" + logoSize + ".tmp");
         try (FileOutputStream out = new FileOutputStream(tmp)) {
             if (!card.compress(Bitmap.CompressFormat.PNG, 100, out)) return;
             out.flush();
@@ -92,17 +96,17 @@ final class IconCache {
     /** Deletes stale versions of one package (and their accent entries). */
     private void prune(String pkg, long keepVersion) {
         String prefix = safe(pkg) + "_";
-        String keep = prefix + keepVersion + ".png";
+        String keep = prefix + keepVersion + "_s";
         File[] files = dir.listFiles();
         if (files == null) return;
         for (File f : files) {
             String name = f.getName();
-            if (name.startsWith(prefix) && !name.equals(keep)) f.delete();
+            if (name.startsWith(prefix) && !name.startsWith(keep)) f.delete();
         }
         String accentPrefix = "icon_accent_" + prefix;
-        String keepAccent = accentKey(pkg, keepVersion);
+        String keepAccent = "icon_accent_"+safe(pkg)+"_"+keepVersion+"_s";
         for (String key : new HashSet<>(prefs.getAll().keySet())) {
-            if (key.startsWith(accentPrefix) && !key.equals(keepAccent)) prefs.edit().remove(key).apply();
+            if (key.startsWith(accentPrefix) && !key.startsWith(keepAccent)) prefs.edit().remove(key).apply();
         }
     }
 
@@ -118,8 +122,7 @@ final class IconCache {
                 new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0));
         Set<String> packages = new HashSet<>();
         android.content.res.Resources resources = app.getResources();
-        float logoScale = new float[]{.8f, 1f, 1.2f}[Math.max(0, Math.min(2,
-                app.getSharedPreferences("personal_home", Context.MODE_PRIVATE).getInt("logo_size", 1)))];
+        float logoScale=cache.logoScale();
         // Bound the work: stop after ~6s to respect receiver time limits.
         // Remaining icons compose on-demand when Home opens.
         long deadline = System.currentTimeMillis() + 6000;

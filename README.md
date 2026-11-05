@@ -2,7 +2,7 @@
 
 **Personal Launcher by Sadique Sadiq** — a customizable Home launcher for Android TV / Google TV.
 
-- **Version:** 7.0 · **Android version code:** 56 · Release build numbers increase independently.
+- **Version:** 7.0 · **Android version code:** 57 · Release build numbers increase independently.
 - **Package:** `com.sadique.launcher` · **Minimum Android:** 8.0 / API 26
 - Plain Java and Android Views, with performance profiles for low-memory TVs.
 - Internet access is used for daily Bing wallpaper, Picsum screensaver photos, weather and city lookup.
@@ -47,8 +47,7 @@ Disabling auto-update prevents automatic installation. The old APK needs one man
 
 The default **TV Glass** style is inspired by Apple TV's visual layout:
 
-- A top shelf shows the selected installed app's artwork and name beside the existing bold clock.
-  This is app artwork, not a streaming recommendation feed.
+- The bold clock is centered above the app grid in TV Glass. There is no large selected-app artwork or title preview above the grid.
 - The app icon and Android TV banner use the selected silver **PL Monogram**. Home toolbar actions are larger, standalone white symbols; remote focus uses colour and scale without a surrounding box.
 - Glass surfaces use translucent neutral tint, a fine reflected rim and rounded corners. Volume uses one bottom-filled white capsule with the output icon inside; Picture/Sound preview sliders use matching broad horizontal capsules.
 - Apple-style status bar, app drawer and app-picker panels sample a cached blur of Home's actual wallpaper plane, with a lighter glass tint and reflected edges. This works without Android 12 window-blur support and includes the phone layout. One thumbnail, at most 256 pixels on its longest edge, is blurred off the UI thread when the wallpaper or layout changes; it is not captured every frame. Classic retains its original panel backgrounds. This is a wallpaper blur and lens finish, not Apple's proprietary optical refraction implementation.
@@ -57,11 +56,11 @@ The default **TV Glass** style is inspired by Apple TV's visual layout:
   Light performance mode applies focus changes without the zoom animation.
 - The profile photo and name sit at the top left. Weather, network status, Search, the notification bell and
   Settings and a direct Screensaver shortcut are in the top toolbar.
+- Home weather has a dedicated request worker, immediate offline/unavailable text, and retries when network or city/unit settings change. A usable internet route is tried even when firmware has not marked it validated.
 - Daily Bing wallpaper stays behind the Home interface. Wallpaper and profile snapshots avoid reloading
   the default background on each Home return.
 - The digital clock supports a separate AM/PM label, date, seconds, font, size, glow and shadow options.
-  An analog clock and hide options are also available. TV Glass puts the clock beside the top shelf;
-  Classic retains the previous Home arrangement and clock alignment options.
+  An analog clock and hide options are also available. Classic retains its own clock alignment preference.
 - App columns, tile size, spacing, corners, logo size and focus-border thickness remain configurable.
 - Long-press an app to move it, hide it, assign a category or open Android app information.
   Saved app order survives updates; new apps append to the grid. Hiding does not disable or uninstall apps.
@@ -69,6 +68,16 @@ The default **TV Glass** style is inspired by Apple TV's visual layout:
 
 To restore the previous Home arrangement, open
 **Launcher settings → Theme → Visual style → Classic**.
+
+## Separate theme settings
+
+TV Glass and Classic save their own colours, accent, glass finish/intensity, fonts, clock options, tile
+sizes, columns, spacing and visual row settings. Switching back restores that theme's choices. The first
+update preserves the currently active theme's existing appearance; the other theme starts from its defaults.
+Profile identity, wallpaper source/photo, weather city and units, app order/visibility, performance,
+permissions and device/update/volume setup are shared. Appearance exports retain both theme profiles.
+Classic's card fill and panel base both follow its own Glass intensity. The base is translucent too,
+so Airy/Normal/Solid changes remain visible; Soft and Clear do not force dialog-window blur.
 
 ## Glass appearance
 

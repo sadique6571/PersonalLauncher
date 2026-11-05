@@ -14,7 +14,7 @@ final class ProfileAssets {
         BitmapFactory.decodeFile(file.getPath(), options);
         if (options.outWidth <= 0 || options.outHeight <= 0) return null;
         int bound = avatar ? 256 : Math.min(MemoryProfile.wallpaperMaxDim(MemoryProfile.effectiveTier(ctx,
-                ctx.getSharedPreferences("personal_home", 0))), Math.max(ctx.getResources().getDisplayMetrics().widthPixels,
+                ThemePreferences.get(ctx))), Math.max(ctx.getResources().getDisplayMetrics().widthPixels,
                 ctx.getResources().getDisplayMetrics().heightPixels));
         options.inSampleSize = 1;
         while (Math.max(options.outWidth, options.outHeight) / options.inSampleSize > bound * 2) options.inSampleSize *= 2;

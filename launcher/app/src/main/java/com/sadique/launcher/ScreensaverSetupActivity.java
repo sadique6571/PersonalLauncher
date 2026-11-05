@@ -29,7 +29,7 @@ public final class ScreensaverSetupActivity extends Activity {
             }
         }));
         page.addView(GlassSettings.row(this, "Start after 5 minutes on Home", "Home-only fallback if your TV restricts system screensavers", R.drawable.ic_picture, 0xff40d9ff, () -> {
-            getSharedPreferences("personal_home", 0).edit().putInt("idle_screensaver_minutes", 5).apply();
+            ThemePreferences.get(this).edit().putInt("idle_screensaver_minutes", 5).apply();
             Toast.makeText(this, "Home idle slideshow enabled after 5 minutes", Toast.LENGTH_LONG).show();
         }));
         page.addView(GlassSettings.row(this, "Preview landscapes", "Preview does not change Android's selection", R.drawable.ic_picture, 0xff40d9ff,

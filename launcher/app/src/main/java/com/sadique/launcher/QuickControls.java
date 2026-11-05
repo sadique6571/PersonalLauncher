@@ -30,7 +30,7 @@ final class QuickControls {
         slider.setProgressTintList(android.content.res.ColorStateList.valueOf(0xff55baff));
         slider.setThumbTintList(android.content.res.ColorStateList.valueOf(0xffd4efff));
         slider.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff2a3d56));
-        boolean glass = TvGlassStyle.enabled(host.getSharedPreferences("personal_home", 0));
+        boolean glass = TvGlassStyle.enabled(ThemePreferences.get(host));
         controls.addView(slider, new LinearLayout.LayoutParams(-1, GlassSettings.dp(host, glass ? 36 : 27)));
         slider.setOnFocusChangeListener((v, focus) -> card.setBackground(GlassSettings.background(host, focus)));
         card.addView(controls, new LinearLayout.LayoutParams(0, -2, 1));

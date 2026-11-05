@@ -14,7 +14,7 @@ final class GlassCapsule {
     private final RectF bounds = new RectF();
     private float radius;
     GlassCapsule(Context context) {
-        android.content.SharedPreferences prefs = context.getSharedPreferences("personal_home", 0);
+        android.content.SharedPreferences prefs = ThemePreferences.get(context);
         shell = (GlassSurface) TvGlassStyle.surface(0,
                 Math.max(1, Math.round(context.getResources().getDisplayMetrics().density)), false, prefs);
     }

@@ -45,7 +45,7 @@ public final class AppContentRow extends LinearLayout {
         this.host = host;
         this.packages = packages;
         this.focusTitle = focusTitle;
-        prefs = host.getSharedPreferences("personal_home", 0);
+        prefs = ThemePreferences.get(host);
         setOrientation(VERTICAL);
         int rowGap = new int[]{8, 18, 28}[Math.max(0, Math.min(2, prefs.getInt("row_spacing", 1)))];
         setPadding(0, dp(rowGap), 0, dp(8));

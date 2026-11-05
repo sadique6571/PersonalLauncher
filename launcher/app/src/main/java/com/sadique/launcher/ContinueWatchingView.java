@@ -55,7 +55,7 @@ public final class ContinueWatchingView extends LinearLayout {
 
     public ContinueWatchingView(Activity host, Consumer<String> focusTitle) {
         super(host); this.host = host; this.focusTitle = focusTitle;
-        prefs = host.getSharedPreferences("personal_home", 0);
+        prefs = ThemePreferences.get(host);
         setOrientation(VERTICAL); setPadding(0, dp(22), 0, dp(12));
         heading = label("Continue watching", 23);
         addView(heading);

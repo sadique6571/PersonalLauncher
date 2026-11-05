@@ -125,7 +125,7 @@ final class VolumeSlider {
         if (observerOwner != null) context = observerOwner;
         if (!(context instanceof AccessibilityService) && !(context instanceof Activity)) return false;
         try {
-            android.content.SharedPreferences prefs = context.getSharedPreferences("personal_home", 0);
+            android.content.SharedPreferences prefs = ThemePreferences.get(context);
             boolean glass = TvGlassStyle.enabled(prefs);
             int style = glass ? 1 : 0;
             style = style * 31 + prefs.getInt("glass_finish", 0);
@@ -177,7 +177,7 @@ final class VolumeSlider {
         int value = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
         boolean muted = audio.isStreamMute(AudioManager.STREAM_MUSIC);
         observedVolume = value; observedMute = muted;
-        int accent = TvGlassStyle.enabled(owner.getSharedPreferences("personal_home", 0)) ? 0xfff4f6fa : GlassSettings.themeAccent(owner);
+        int accent = TvGlassStyle.enabled(ThemePreferences.get(owner)) ? 0xfff4f6fa : GlassSettings.themeAccent(owner);
         slider.level(VolumeLevel.fraction(value, maximum, muted), accent);
         long now = SystemClock.uptimeMillis();
         if (routeChecked == 0 || now - routeChecked >= 500) {
