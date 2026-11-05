@@ -40,6 +40,8 @@ final class LiquidBackdrop {
     private void capture() {
         if (closed || !source.isAttachedToWindow() || source.getWidth() <= 0 || source.getHeight() <= 0) return;
         int generation=epoch;
+        android.content.SharedPreferences prefs=source.getContext().getSharedPreferences("personal_home",0);
+        int radius=GlassTransparency.blurRadius(TvGlassStyle.finish(prefs),TvGlassStyle.intensity(prefs));
         float scale=256f / Math.max(source.getWidth(), source.getHeight());
         int w=Math.max(1,Math.round(source.getWidth()*scale)), h=Math.max(1,Math.round(source.getHeight()*scale));
         Bitmap sample;
@@ -54,7 +56,7 @@ final class LiquidBackdrop {
             if (Thread.currentThread().isInterrupted()) { sample.recycle(); return; }
             try {
                 int[] pixels=new int[w*h]; sample.getPixels(pixels,0,w,0,0,w,h);
-                GlassBlur.blur(pixels,w,h,5); sample.setPixels(pixels,0,w,0,0,w,h);
+                GlassBlur.blur(pixels,w,h,radius); sample.setPixels(pixels,0,w,0,0,w,h);
             } catch (RuntimeException | OutOfMemoryError unavailable) { sample.recycle(); return; }
             main.post(() -> {
                 if (closed || generation!=epoch) { sample.recycle(); return; }
@@ -84,3 +86,4 @@ final class LiquidBackdrop {
         blurred=null;
     }
 }
+

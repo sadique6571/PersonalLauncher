@@ -13,6 +13,7 @@ final class GlassSurface extends GradientDrawable {
     private final Paint backdrop = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final android.graphics.Matrix backdropMatrix = new android.graphics.Matrix();
     private android.graphics.Bitmap backdropImage;
+    private int backdropOpacity=255;
     private final Paint rim = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint inner = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF outer = new RectF(), inset = new RectF();
@@ -24,6 +25,7 @@ final class GlassSurface extends GradientDrawable {
         rim.setStyle(Paint.Style.STROKE); rim.setStrokeWidth(this.width);
         inner.setStyle(Paint.Style.STROKE); inner.setStrokeWidth(this.width);
     }
+    void backdropOpacity(int alpha) { backdropOpacity=Math.max(0,Math.min(255,alpha)); invalidateSelf(); }
     void backdrop(android.graphics.Bitmap image, int sceneWidth, int sceneHeight, int x, int y) {
         if (backdropImage != image) {
             backdropImage=image;
@@ -47,7 +49,8 @@ final class GlassSurface extends GradientDrawable {
                 new float[]{0, .35f, 1}, Shader.TileMode.CLAMP));
     }
     @Override public void draw(Canvas canvas) {
-        if (backdropImage != null) {
+        if (backdropImage != null && backdropOpacity>0) {
+            backdrop.setAlpha(backdropOpacity*getAlpha()/255);
             float radius=getCornerRadius();
             if (getShape()==OVAL) canvas.drawOval(outer,backdrop);
             else canvas.drawRoundRect(outer,radius,radius,backdrop);
@@ -66,4 +69,5 @@ final class GlassSurface extends GradientDrawable {
         }
     }
 }
+
 

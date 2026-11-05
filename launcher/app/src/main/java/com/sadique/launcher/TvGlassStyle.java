@@ -35,19 +35,21 @@ final class TvGlassStyle {
         float strength = intensity(prefs) / 100f;
         int base = finish == 1 ? 24 : finish == 2 ? 96 : 48;
         int alpha = base + Math.round((245 - base) * strength * strength);
-        if (liquid) alpha = Math.round(alpha * .50f);
+        if (liquid) alpha = GlassTransparency.tintAlpha(finish,intensity(prefs));
         if (focused) alpha = Math.min(245, alpha + 30);
         int top = (alpha << 24) | (tinted(focused ? 0xffaaa7b5 : 0xff797580, prefs) & 0xffffff);
         int middle = (Math.max(0, alpha - 28) << 24) | (tinted(0xff494451, prefs) & 0xffffff);
         int bottom = (Math.max(0, alpha - 16) << 24) | (tinted(0xff393541, prefs) & 0xffffff);
         int edge = edge(prefs);
         if (liquid && edge != 0) edge = 0xaaffffff;
-        GradientDrawable shape = new GlassSurface(strokeWidth, focused ? 0xccffffff : edge);
+        GlassSurface shape = new GlassSurface(strokeWidth, focused ? 0xccffffff : edge);
+        if (liquid) shape.backdropOpacity(GlassTransparency.backdropAlpha(finish,intensity(prefs)));
         shape.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
         shape.setColors(new int[]{top, middle, bottom});
         shape.setCornerRadius(radius);
         return shape;
     }
 }
+
 
 
