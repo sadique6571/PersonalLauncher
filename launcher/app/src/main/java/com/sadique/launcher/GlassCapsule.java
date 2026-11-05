@@ -7,22 +7,35 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.Shader;
 
-/** Shared white-filled capsule for the volume OSD and interactive horizontal controls. */
+/** Shared full-height capsule: white glass fill for Apple, accent fill and border for Classic. */
 final class GlassCapsule {
-    private final GlassSurface shell;
+    private final android.graphics.drawable.GradientDrawable shell;
+    private final boolean glass;
+    private final int accent;
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF bounds = new RectF();
     private float radius;
     GlassCapsule(Context context) {
         android.content.SharedPreferences prefs = ThemePreferences.get(context);
-        shell = (GlassSurface) TvGlassStyle.surface(0,
-                Math.max(1, Math.round(context.getResources().getDisplayMetrics().density)), false, prefs);
+        glass=TvGlassStyle.enabled(prefs); accent=GlassSettings.themeAccent(context);
+        int stroke=Math.max(1,Math.round(context.getResources().getDisplayMetrics().density));
+        if(glass) shell=TvGlassStyle.surface(0,stroke,false,prefs);
+        else {
+            shell=new android.graphics.drawable.GradientDrawable(
+                    android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                    new int[]{TvGlassStyle.tinted(0xff132539,prefs),TvGlassStyle.tinted(0xff09182a,prefs)});
+            shell.setStroke(stroke,0x55415a72);
+            shell.setAlpha(PanelTransparency.alpha(ClassicGlassAlpha.card(TvGlassStyle.intensity(prefs),false),prefs,false));
+        }
+    }
+    int filledTextColor() {
+        return glass ? 0xff142239 : (android.graphics.Color.luminance(accent)>.179 ? 0xff000000 : 0xffffffff);
     }
     void size(int width, int height) {
         bounds.set(0, 0, width, height); radius = Math.min(width, height) / 2f;
         shell.setCornerRadius(radius); shell.setBounds(0, 0, width, height);
         fill.setShader(new LinearGradient(0, 0, Math.max(1, width), Math.max(1, height),
-                0xffffffff, 0xffe9edf5, Shader.TileMode.CLAMP));
+                glass ? 0xffffffff : accent, glass ? 0xffe9edf5 : accent, Shader.TileMode.CLAMP));
     }
     void draw(Canvas canvas, float fraction, boolean vertical, boolean rtl) {
         shell.draw(canvas);
@@ -35,6 +48,6 @@ final class GlassCapsule {
             canvas.drawRoundRect(bounds, radius, radius, fill);
             canvas.restoreToCount(save);
         }
-        shell.drawRim(canvas);
+        if (shell instanceof GlassSurface) ((GlassSurface)shell).drawRim(canvas);
     }
 }

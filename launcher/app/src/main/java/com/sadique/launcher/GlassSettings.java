@@ -56,7 +56,7 @@ final class GlassSettings {
         shape.setStroke(dp(host, focused ? 2 : 1), focused ? themeAccent(host) : 0x55415a72);
         // Glass intensity: 0=airy, 100=solid.
         int intensity = Math.max(0, Math.min(100, prefs.getInt("glass_alpha", 70)));
-        shape.setAlpha(ClassicGlassAlpha.card(intensity,focused));
+        shape.setAlpha(PanelTransparency.alpha(ClassicGlassAlpha.card(intensity,focused),prefs,false));
         return shape;
     }
     /** Mixes a glass base color 30% toward the theme accent. */
@@ -81,7 +81,7 @@ final class GlassSettings {
         android.content.Context context = dialog.getContext();
         android.content.SharedPreferences prefs = ThemePreferences.get(context);
         boolean glass = TvGlassStyle.enabled(prefs);
-        boolean frosted = TvGlassStyle.finish(prefs) == 2;
+        boolean frosted = PanelTransparency.enabled(prefs) && TvGlassStyle.finish(prefs) == 2;
         boolean blur = frostedAvailable(context) && frosted;
         android.view.Window window = dialog.getWindow();
         if (android.os.Build.VERSION.SDK_INT >= 31) {
@@ -351,7 +351,7 @@ final class GlassSettings {
         android.content.SharedPreferences prefs = ThemePreferences.get(host);
         if (!glass) {
             shell.setStroke(dp(host, 1), 0x55415a72);
-            shell.setAlpha(ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs)));
+            shell.setAlpha(PanelTransparency.alpha(ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs)),prefs,false));
         }
         return shell;
     }

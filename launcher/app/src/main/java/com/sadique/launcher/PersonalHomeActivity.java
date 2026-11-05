@@ -264,7 +264,7 @@ public final class PersonalHomeActivity extends Activity {
         shape.setColor(blend(night, dayC, day));
         // Glass intensity (user 2026-11-01): 0=airy, 100=solid. Focused stays a touch brighter.
         int intensity = Math.max(0, Math.min(100, prefs.getInt("glass_alpha", 70)));
-        shape.setAlpha(ClassicGlassAlpha.card(intensity,focused));
+        shape.setAlpha(PanelTransparency.alpha(ClassicGlassAlpha.card(intensity,focused),prefs,false));
         shape.setCornerRadius(tileRadius());
         shape.setStroke(dp(focused ? 3 : 1), focused ? accent : 0xff28435e);
         return shape;
@@ -558,7 +558,7 @@ public final class PersonalHomeActivity extends Activity {
         gridBackdrop.setColor(ClassicGlassAlpha.drawer(TvGlassStyle.intensity(prefs)) << 24);
         gridBackdrop.setCornerRadius(dp(20));
         boolean liquidGlass = TvGlassStyle.enabled(prefs);
-        appBody.setBackground(liquidGlass ? TvGlassStyle.liquid(dp(28), dp(1), prefs) : gridBackdrop);
+        appBody.setBackground(liquidGlass ? TvGlassStyle.drawer(dp(28), dp(1), prefs) : gridBackdrop);
         appBody.setPadding(dp(liquidGlass ? 12 : 8), dp(liquidGlass ? 8 : 4), dp(liquidGlass ? 12 : 8), dp(8));
         // The drawer panel stays fixed on screen; only the tiles scroll inside it,
         // clipped to the rounded corners so scrolling stops under the header.
@@ -1534,9 +1534,12 @@ public final class PersonalHomeActivity extends Activity {
         return mode;
     }
 
-    void liquidPanel(View target, int radius) {
+    void liquidPanel(View target, int radius) { liquidPanel(target,radius,false); }
+    void liquidDrawerPanel(View target, int radius) { liquidPanel(target,radius,true); }
+    private void liquidPanel(View target, int radius, boolean drawer) {
         if (!TvGlassStyle.enabled(prefs)) return;
-        target.setBackground(TvGlassStyle.liquid(dp(radius), dp(1), prefs));
+        target.setBackground(drawer ? TvGlassStyle.drawer(dp(radius), dp(1), prefs)
+                : TvGlassStyle.liquid(dp(radius), dp(1), prefs));
         target.setClipToOutline(true);
         if (liquidBackdrop != null) liquidBackdrop.bind(target);
     }
@@ -1549,13 +1552,13 @@ public final class PersonalHomeActivity extends Activity {
             bg = TvGlassStyle.liquid(dp(28), dp(1), prefs);
         } else if (mode == 1) {
             bg = new GradientDrawable();
-            bg.setColor(ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs)) << 24);
+            bg.setColor(PanelTransparency.alpha(ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs)),prefs,false) << 24);
         } else if (mode == 2) {
             // Frosted glass: semi-transparent gradient simulating blur.
             bg = new GradientDrawable(
                     GradientDrawable.Orientation.TOP_BOTTOM,
-                    new int[]{ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs)) << 24,
-                            ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs))/2 << 24});
+                    new int[]{PanelTransparency.alpha(ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs)),prefs,false) << 24,
+                            PanelTransparency.alpha(ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs))/2,prefs,false) << 24});
         }
         if (bg != null) {
             bg.setCornerRadius(dp(TvGlassStyle.enabled(prefs) ? 28 : 18));
@@ -1690,9 +1693,9 @@ public final class PersonalHomeActivity extends Activity {
 
     private void themeSettings() {
         // "Dark mode" removed 2026-11-01 (user): the theme glass color covers it.
-        String[] labels = {"Visual style", "Theme", "Accent color", "Launcher font", "Glass intensity", "Glass finish", "Glass edge"};
-        String[] hints = {"TV Glass or Classic", "Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels", "Soft, Clear or Frosted panels", "Reflection around glass surfaces"};
-        int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness};
+        String[] labels = {"Visual style", "Theme", "Accent color", "Launcher font", "Glass intensity", "Glass finish", "Glass edge", "Panel transparency"};
+        String[] hints = {"TV Glass or Classic", "Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels", "Soft, Clear or Frosted panels", "Reflection around glass surfaces", "Solid panels when off; app drawer stays transparent"};
+        int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness};
         Runnable[] choices = {
             () -> chooseSetting("Visual style", new String[]{"TV Glass", "Classic"}, which -> switchVisualStyle(which==0)),
             () -> chooseSetting("Theme", new String[]{"Midnight Cyan", "Sunset Orange", "Deep Purple", "Custom"}, which -> {
@@ -1714,6 +1717,9 @@ public final class PersonalHomeActivity extends Activity {
             }),
             () -> chooseSetting("Glass edge", new String[]{"Off", "Subtle", "Bright"}, which -> {
                 prefs.edit().putInt("glass_edge", which).apply(); buildHomeSoon();
+            }),
+            () -> chooseSetting("Panel transparency", new String[]{"On", "Off"}, which -> {
+                prefs.edit().putBoolean("panel_transparency", which==0).apply(); buildHomeSoon();
             }),
         };
         subMenu("Theme", labels, hints, icons, choices);
@@ -1847,6 +1853,7 @@ public final class PersonalHomeActivity extends Activity {
     /** Index of the currently applied option for a settings chooser (-1 when none applies). (User 2026-11-01.) */
     private int settingCurrentIndex(String title) {
         switch (title) {
+            case "Panel transparency": return PanelTransparency.enabled(prefs) ? 0 : 1;
             case "Glass finish": return TvGlassStyle.finish(prefs);
             case "Glass edge": return Math.max(0, Math.min(2, prefs.getInt("glass_edge", 1)));
             case "Visual style": return TvGlassStyle.enabled(prefs) ? 0 : 1;

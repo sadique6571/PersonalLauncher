@@ -9,17 +9,31 @@ import android.view.View;
 
 /** The volume capsule, rotated horizontally: the entire body fills, with readable text over both halves. */
 final class DownloadCapsule extends View {
-    private final GlassCapsule capsule;
+    private GlassCapsule capsule;
+    private final android.content.SharedPreferences prefs;
+    private final android.content.SharedPreferences.OnSharedPreferenceChangeListener styleChanged=(p,key)-> {
+        if ("tv_glass_style".equals(key) || "panel_transparency".equals(key) || "glass_alpha".equals(key)
+                || "glass_finish".equals(key) || "glass_edge".equals(key) || "theme_name".equals(key) || "custom_accent".equals(key)) refreshStyle();
+    };
     private final TextPaint text = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private String caption="Checking GitHub", fitted=caption;
     private int percent=-1;
     private float baseline;
     DownloadCapsule(Context context) {
-        super(context); capsule=new GlassCapsule(context);
+        super(context); prefs=ThemePreferences.get(context); capsule=new GlassCapsule(context);
         text.setTypeface(android.graphics.Typeface.create("sans-serif-medium",android.graphics.Typeface.NORMAL));
         text.setTextSize(14*getResources().getDisplayMetrics().scaledDensity); text.setTextAlign(Paint.Align.CENTER);
         setFocusable(false); setClickable(false); setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
         setAccessibilityLiveRegion(ACCESSIBILITY_LIVE_REGION_POLITE);
+    }
+    private void refreshStyle() {
+        capsule=new GlassCapsule(getContext()); capsule.size(getWidth(),getHeight()); invalidate();
+    }
+    @Override protected void onAttachedToWindow() {
+        super.onAttachedToWindow(); prefs.registerOnSharedPreferenceChangeListener(styleChanged); refreshStyle();
+    }
+    @Override protected void onDetachedFromWindow() {
+        prefs.unregisterOnSharedPreferenceChangeListener(styleChanged); super.onDetachedFromWindow();
     }
     void progress(String message, int percent) {
         this.percent=percent;
@@ -40,12 +54,12 @@ final class DownloadCapsule extends View {
         boolean rtl=getLayoutDirection()==LAYOUT_DIRECTION_RTL;
         capsule.draw(canvas,fraction,false,rtl);
         text.setColor(0xffffffff); canvas.drawText(fitted,getWidth()/2f,baseline,text);
-        // Repaint only the text over the full-height white fill, as the volume symbol does.
+        // Repaint only the text over the full-height themed fill for contrast.
         if (fraction>0) {
             int save=canvas.save();
             if (rtl) canvas.clipRect(getWidth()*(1-fraction),0,getWidth(),getHeight());
             else canvas.clipRect(0,0,getWidth()*fraction,getHeight());
-            text.setColor(0xff142239); canvas.drawText(fitted,getWidth()/2f,baseline,text);
+            text.setColor(capsule.filledTextColor()); canvas.drawText(fitted,getWidth()/2f,baseline,text);
             canvas.restoreToCount(save);
         }
     }

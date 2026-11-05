@@ -57,6 +57,27 @@ public class ThemePreferencesTest {
         prefs.edit().putBoolean("tv_glass_style",false).apply(); assertEquals("Person",prefs.getString("name",""));
         int count=changed.size(); prefs.unregisterOnSharedPreferenceChangeListener(listener); prefs.edit().putInt("glass_alpha",40).apply(); assertEquals(count,changed.size());
     }
+    @Test public void transparencyIsIndependentAndDrawerNeverBecomesSolid() {
+        ThemePreferences prefs=new ThemePreferences(new Memory());
+        assertTrue(PanelTransparency.enabled(prefs));
+        prefs.edit().putInt("glass_alpha",30).putInt("glass_finish",1).putBoolean("panel_transparency",false).apply();
+        for(int alpha:new int[]{0,24,70,150,245}) {
+            assertEquals(255,PanelTransparency.alpha(alpha,prefs,false));
+            assertEquals(alpha,PanelTransparency.alpha(alpha,prefs,true));
+        }
+        prefs.edit().putBoolean("tv_glass_style",false).apply();
+        assertTrue(PanelTransparency.enabled(prefs));
+        prefs.edit().putInt("glass_alpha",70).putBoolean("panel_transparency",false).apply();
+        assertEquals(255,PanelTransparency.alpha(ClassicGlassAlpha.card(70,false),prefs,false));
+        assertEquals(49,PanelTransparency.alpha(ClassicGlassAlpha.drawer(70),prefs,true));
+        prefs.edit().putBoolean("panel_transparency",true).apply();
+        assertEquals(105,PanelTransparency.alpha(ClassicGlassAlpha.card(70,false),prefs,false));
+        prefs.edit().putBoolean("tv_glass_style",true).apply();
+        assertFalse(PanelTransparency.enabled(prefs));
+        assertEquals(30,prefs.getInt("glass_alpha",0)); assertEquals(1,prefs.getInt("glass_finish",0));
+        prefs.edit().putBoolean("panel_transparency",true).apply();
+        assertEquals(24,PanelTransparency.alpha(24,prefs,false));
+    }
     private static final class Memory implements SharedPreferences {
         final Map<String,Object> data=new HashMap<>(); final Set<OnSharedPreferenceChangeListener> listeners=new HashSet<>();
         public Map<String,?> getAll(){return new HashMap<>(data);}

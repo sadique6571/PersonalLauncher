@@ -9,7 +9,7 @@ final class ThemePreferences implements SharedPreferences {
     static final String MIGRATED="appearance_profiles_v1";
     private static final String GLASS="appearance.glass.", CLASSIC="appearance.classic.";
     private static final Set<String> VISUAL=new HashSet<>(Arrays.asList(
-            "theme_name","custom_accent","app_font","glass_alpha","glass_finish","glass_edge",
+            "theme_name","custom_accent","app_font","glass_alpha","glass_finish","glass_edge","panel_transparency",
             "clock_size","clock_style","clock_font","clock_align","time_24h","clock_seconds","clock_glow","clock_shadow","hide_clock",
             "hide_greeting","avatar_shape","header_bg_mode","header_bg","header_blur",
             "tv_columns","phone_columns","large_tiles","tile_corners","tile_spacing","logo_size","focus_border","focus_title_size","focus_glow","app_entrance",

@@ -35,7 +35,7 @@ final class UpdateDownloadUi {
             remove();
             DownloadCapsule shell = new DownloadCapsule(host);
             shell.setKeepScreenOn(true);
-            int width = Math.min(dp(host, 310), host.getResources().getDisplayMetrics().widthPixels - dp(host, 32));
+            int width = Math.min(dp(host, 440), host.getResources().getDisplayMetrics().widthPixels - dp(host, 32));
             FrameLayout.LayoutParams position = new FrameLayout.LayoutParams(width, dp(host, 48), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
             position.topMargin = dp(host, 12); ((FrameLayout) content).addView(shell, position);
             capsule = new WeakReference<>(shell); body = new WeakReference<>(shell);

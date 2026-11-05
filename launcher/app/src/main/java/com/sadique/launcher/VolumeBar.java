@@ -60,7 +60,7 @@ final class VolumeBar extends View {
         }
         track.set(1, 1, getWidth() - 1, getHeight() - 1);
         float radius = getWidth() / 2f;
-        paint.setColor(0xb51b2a3c); canvas.drawRoundRect(track, radius, radius, paint);
+        paint.setColor((PanelTransparency.alpha(181,ThemePreferences.get(getContext()),false)<<24) | 0x1b2a3c); canvas.drawRoundRect(track, radius, radius, paint);
         if (fraction <= 0) return;
         clip.reset(); clip.addRoundRect(track, radius, radius, Path.Direction.CW);
         int save = canvas.save(); canvas.clipPath(clip);

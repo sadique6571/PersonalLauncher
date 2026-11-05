@@ -164,10 +164,10 @@ final class AppLibraryDialog {
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(12), dp(8), dp(12), dp(12));
         if (TvGlassStyle.enabled(ThemePreferences.get(activity))) {
-            panel.setBackground(TvGlassStyle.surface(dp(28), dp(1), false, ThemePreferences.get(activity)));
+            panel.setBackground(TvGlassStyle.drawer(dp(28), dp(1), ThemePreferences.get(activity)));
             panel.setClipToOutline(true);
         } else panel.setBackgroundResource(R.drawable.glass_panel);
-        if (activity instanceof PersonalHomeActivity) ((PersonalHomeActivity) activity).liquidPanel(panel, 28);
+        if (activity instanceof PersonalHomeActivity) ((PersonalHomeActivity) activity).liquidDrawerPanel(panel, 28);
         View decor = activity.getWindow().getDecorView();
         catalogWidth = Math.min(dp(800), Math.max(dp(200), decor.getWidth() - dp(64)));
         int width = catalogWidth;
