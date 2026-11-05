@@ -1751,8 +1751,6 @@ public final class PersonalHomeActivity extends Activity {
             }),
             () -> chooseSetting("Glass finish", new String[]{"Soft", "Clear", "Frosted"}, which -> {
                 prefs.edit().putInt("glass_finish", which).apply();
-                if (which == 2 && !GlassSettings.frostedAvailable(this))
-                    Toast.makeText(this, "Frosted surface selected. This TV uses the no-blur fallback.", Toast.LENGTH_LONG).show();
                 buildHomeSoon();
             }),
             () -> chooseSetting("Glass edge", new String[]{"Off", "Subtle", "Bright"}, which -> {
@@ -2769,6 +2767,7 @@ public final class PersonalHomeActivity extends Activity {
                 (int) (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * part));
     }
 }
+
 
 
 

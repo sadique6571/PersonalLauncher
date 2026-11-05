@@ -2,7 +2,7 @@
 
 **Personal Launcher by Sadique Sadiq** — a customizable Home launcher for Android TV / Google TV.
 
-- **Version:** 7.0 · **Android version code:** 55 · Release build numbers increase independently.
+- **Version:** 7.0 · **Android version code:** 56 · Release build numbers increase independently.
 - **Package:** `com.sadique.launcher` · **Minimum Android:** 8.0 / API 26
 - Plain Java and Android Views, with performance profiles for low-memory TVs.
 - Internet access is used for daily Bing wallpaper, Picsum screensaver photos, weather and city lookup.
@@ -83,12 +83,17 @@ Open **Launcher settings → Theme**:
 | Theme | Midnight Cyan / Sunset Orange / Deep Purple / Custom | Choose accent colours for controls and icons, including Black, Graphite, Silver, Blue, Teal, Gold, Rose and Indigo |
 | Launcher font | Default / Serif / Mono / Light | Choose the interface font |
 
-For a more transparent appearance, try **TV Glass + Frosted + Airy + Subtle**.
+Both the wallpaper-blur layer and tint follow Glass intensity; Airy keeps the actual wallpaper detail visible.
+Clear does not add blur, Soft uses a small blur, and Frosted is stronger. The cached image never replaces
+the original wallpaper with an opaque layer.
 
-Frosted panel blur is optional. It needs Android 12 / API 31 or newer, runtime cross-window blur support,
+For a more transparent appearance, try **TV Glass + Clear + Airy + Subtle**.
+
+Frosted dialog-window blur is optional. It needs Android 12 / API 31 or newer, runtime cross-window blur support,
 and a performance profile above Light. If blur is unsupported or disabled, panels use a more opaque
 surface and stronger dimming. Availability changes refresh visible panels. Selecting Frosted does not
-guarantee real blur on every TV. Soft and Clear use lightweight gradients without backdrop blur.
+guarantee window blur on every TV. Soft and Clear dialog windows use lightweight gradients; the Home
+drawer and status bar use the separate cached-wallpaper blend described above.
 
 ## Control Center and settings
 
@@ -253,5 +258,6 @@ a new APK release. The download above follows the latest signed release.
 
 The [volume-hold bridge guide](docs/volume-hold-bridge.md) documents the optional shell helper and
 diagnostic commands for firmware with slow or missing held-volume repeat.
+
 
 
