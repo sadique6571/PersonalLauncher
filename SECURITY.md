@@ -1,17 +1,3 @@
-# Security
-
-CleanYourTV talks to TVs over ADB and installs a launcher on them, so a security bug here can
-reach people's living rooms. Please report anything you find privately, not in a public issue.
-
-## How to report
-
-Use GitHub's private vulnerability reporting: open the
-[Security tab](https://github.com/sadique6571/PersonalLauncher/security) and choose **Report a vulnerability**.
-Only the maintainer sees the report. If that doesn't work for you, email
-[hello@itsgathin.com](mailto:hello@itsgathin.com) with "Security" in the subject.
-
-Please include what is affected (the prompt, a tool in `tools/`, the launcher, a debloat list),
-the steps to reproduce it, and what an attacker could do with it.
 
 ## What counts
 
