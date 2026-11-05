@@ -16,7 +16,7 @@ final class TvSymbols extends Drawable {
     private TvSymbols(int resource) {
         this.resource = resource;
         paint.setColor(0xfff1f5fb); paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(1.7f); paint.setStrokeCap(Paint.Cap.ROUND); paint.setStrokeJoin(Paint.Join.ROUND);
+        paint.setStrokeWidth(2.1f); paint.setStrokeCap(Paint.Cap.ROUND); paint.setStrokeJoin(Paint.Join.ROUND);
     }
     static Drawable icon(Context context, int resource) {
         if (TvGlassStyle.enabled(context.getSharedPreferences("personal_home", 0))

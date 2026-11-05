@@ -305,7 +305,8 @@ public final class PersonalHomeActivity extends Activity {
         icon.setColorFilter(TEXT);
         icon.setContentDescription(title);
         icon.setTooltipText(title);
-        icon.setPadding(dp(tvGlass() ? 13 : 11), dp(tvGlass() ? 13 : 11), dp(tvGlass() ? 13 : 11), dp(tvGlass() ? 13 : 11));
+        int symbolInset = TvGlassStyle.enabled(prefs) ? dp(tv ? 10 : 9) : dp(11);
+        icon.setPadding(symbolInset, symbolInset, symbolInset, symbolInset);
         icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
         icon.setBackground(toolbarSurface(false));
         icon.setClipToOutline(true);
