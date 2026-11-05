@@ -23,7 +23,8 @@ final class LauncherUpdatesUi {
         panel[0]=GlassSettings.panel(host,"Updates · GitHub",rows);
         Runnable refresh=new Runnable() { @Override public void run() {
             if(!panel[0].isShowing() || !rows.isAttachedToWindow()) return;
-            state.setText("Automatic updates: "+(GitHubUpdates.enabled(host)?"On":"Off")+"\n"+GitHubUpdates.status(host));
+            String summary="Automatic updates: "+(GitHubUpdates.enabled(host)?"On":"Off")+"\n"+GitHubUpdates.status(host);
+            if (!summary.contentEquals(state.getText())) state.setText(summary);
             handler.postDelayed(this,1000);
         }};
         rows.addOnAttachStateChangeListener(new android.view.View.OnAttachStateChangeListener() {
@@ -33,3 +34,4 @@ final class LauncherUpdatesUi {
         panel[0].show(); handler.removeCallbacks(refresh); handler.post(refresh);
     }
 }
+
