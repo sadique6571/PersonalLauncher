@@ -1605,7 +1605,18 @@ public final class PersonalHomeActivity extends Activity {
 
     /** Submenu helper with per-row icons. */
     private void subMenu(String title, String[] labels, String[] hints, int[] icons, Runnable[] choices) {
-        GlassSettings.options(this, title, labels, hints, icons, which -> choices[which].run());
+        if (!tvGlass()) { GlassSettings.options(this, title, labels, hints, icons, which -> choices[which].run()); return; }
+        List<Integer> visible = new ArrayList<>();
+        for (int i=0;i<labels.length;i++) {
+            if ("Launcher font".equals(labels[i]) || "Clock font".equals(labels[i]) || "Clock alignment".equals(labels[i])) continue;
+            visible.add(i);
+        }
+        String[] names = new String[visible.size()], descriptions = new String[visible.size()];
+        int[] symbols = new int[visible.size()];
+        for (int i=0;i<visible.size();i++) {
+            int source = visible.get(i); names[i]=labels[source]; descriptions[i]=hints[source]; symbols[i]=icons[source];
+        }
+        GlassSettings.options(this, title, names, descriptions, symbols, which -> choices[visible.get(which)].run());
     }
 
     private void tileSettings() {
