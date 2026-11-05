@@ -28,6 +28,7 @@ final class GlassSettings {
 
     static GradientDrawable background(Activity host, boolean focused) {        java.util.Calendar now = java.util.Calendar.getInstance();
         android.content.SharedPreferences prefs = host.getSharedPreferences("personal_home", 0);
+        if (TvGlassStyle.enabled(prefs)) return TvGlassStyle.surface(dp(host, 18), dp(host, focused ? 2 : 1), focused, prefs.getInt("glass_alpha", 70));
         float day = HomeAppearance.daylight(prefs.getString("theme_mode", "dark"),
                 now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE));
         boolean light = day >= .5f;
@@ -57,7 +58,7 @@ final class GlassSettings {
         if (dialog == null || dialog.getWindow() == null) return;
         android.content.Context context = dialog.getContext();
         int tier = MemoryProfile.effectiveTier(context, context.getSharedPreferences("personal_home", 0));
-        if (android.os.Build.VERSION.SDK_INT >= 31 && tier != MemoryProfile.TIER_LIGHT) {
+        if (android.os.Build.VERSION.SDK_INT >= 31 && tier != MemoryProfile.TIER_LIGHT && !TvGlassStyle.enabled(context.getSharedPreferences("personal_home", 0))) {
             dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
             android.view.WindowManager.LayoutParams attrs = dialog.getWindow().getAttributes();
             attrs.setBlurBehindRadius(40); dialog.getWindow().setAttributes(attrs);
@@ -102,7 +103,7 @@ final class GlassSettings {
     }
     private static GradientDrawable cardBackground(Activity host, boolean focused) {
         GradientDrawable shape = background(host, focused);
-        shape.setCornerRadius(dp(host, 16));
+        shape.setCornerRadius(dp(host, TvGlassStyle.enabled(host.getSharedPreferences("personal_home", 0)) ? 20 : 16));
         return shape;
     }
     /** Landscape tile: the icon and label share one row instead of stacking into a square. */
@@ -113,7 +114,10 @@ final class GlassSettings {
         card.setMinimumHeight(dp(host, 64)); card.setFocusable(true); card.setFocusableInTouchMode(true); card.setClickable(true);
         card.setTag("wide_card"); card.setClipToOutline(true); card.setElevation(dp(host, 2));
         card.setBackground(cardBackground(host, false));
-        card.setOnFocusChangeListener((v, focus) -> card.setBackground(cardBackground(host, focus)));
+        card.setOnFocusChangeListener((v, focus) -> {
+            card.setBackground(cardBackground(host, focus));
+            card.setTranslationZ(focus ? dp(host, 3) : 0);
+        });
         ImageView symbol = new ImageView(host); symbol.setImageResource(icon); symbol.setColorFilter(tint);
         if (tint == themeAccent(host)) symbol.setTag("theme_accent");
         LinearLayout.LayoutParams image = new LinearLayout.LayoutParams(dp(host, 26), dp(host, 26));
@@ -172,7 +176,9 @@ final class GlassSettings {
                 window.setLayout(width, tv ? -1 : Math.round(host.getResources().getDisplayMetrics().heightPixels * .88f));
                 window.setWindowAnimations(0);
                 window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-                window.setDimAmount(.12f);
+                boolean glass = TvGlassStyle.enabled(host.getSharedPreferences("personal_home", 0));
+                window.setBackgroundDrawableResource(android.R.color.transparent);
+                window.setDimAmount(glass ? .32f : .12f);
             }
         }
         Panel current = state;
@@ -180,7 +186,9 @@ final class GlassSettings {
             View old = current.content.getChildAt(0); Page saved = new Page(old); current.content.removeView(old); current.pages.push(saved);
         }
         LinearLayout page = new LinearLayout(host); page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(dp(host, 12), dp(host, 12), dp(host, 12), dp(host, 12));
+        page.setPadding(dp(host, 16), dp(host, 16), dp(host, 16), dp(host, 16));
+        page.setTag("settings_shell");
+        styleShell(host, page);
         LinearLayout bar = new LinearLayout(host); bar.setGravity(Gravity.CENTER_VERTICAL);
         if (!current.pages.isEmpty()) {
             TextView back = label(host, "‹", 26, Color.WHITE); back.setGravity(Gravity.CENTER);
@@ -250,7 +258,18 @@ final class GlassSettings {
         for (Page page : state.pages) refreshViews(host, page.root);
         applyBlur(state.dialog);
     }
+    private static void styleShell(Activity host, View page) {
+        boolean glass = TvGlassStyle.enabled(host.getSharedPreferences("personal_home", 0));
+        GradientDrawable shell = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                glass ? new int[]{0xf22b3442, 0xf0111927} : new int[]{0xff122338, 0xff09182a});
+        shell.setCornerRadius(dp(host, glass ? 26 : 10));
+        shell.setStroke(dp(host, 1), glass ? 0x55ffffff : 0x55415a72);
+        page.setBackground(shell);
+        page.setClipToOutline(true);
+        page.setElevation(dp(host, glass ? 6 : 0));
+    }
     private static void refreshViews(Activity host, View view) {
+        if ("settings_shell".equals(view.getTag())) styleShell(host, view);
         if (view.isFocusable() && view.getBackground() instanceof GradientDrawable)
             view.setBackground("wide_card".equals(view.getTag())
                     ? cardBackground(host, view.isFocused()) : background(host, view.isFocused() || view.isSelected()));

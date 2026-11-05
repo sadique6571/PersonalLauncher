@@ -84,6 +84,9 @@ public final class PersonalHomeActivity extends Activity {
     /** Wallpaper-adaptive text: true while the region behind the text is bright (dark text in use). */
     /** Effective clock text size in sp (after the compact-screen cap), for fitClockText(). */
     private int clockTextSize = 68;
+    private ImageView focusedArtwork;
+    private String featuredPkg;
+    private boolean tvGlass() { return tv && TvGlassStyle.enabled(prefs); }
     /** Entrance animation plays only on the very first grid render, never on rebuilds. */
     private boolean firstGridRender = true;
     /** Debounced rebuild: coalesces rapid settings changes into one buildHome(). */
@@ -240,6 +243,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private GradientDrawable surface(boolean focused) {
+        if (tvGlass()) return TvGlassStyle.surface(tileRadius(), dp(focused ? 2 : 1), focused, prefs.getInt("glass_alpha", 70));
         GradientDrawable shape = new GradientDrawable();
         float day = appearanceDaylight();
         // Theme-tinted glass (user 2026-11-01): the dark base takes the theme's hue.
@@ -290,7 +294,7 @@ public final class PersonalHomeActivity extends Activity {
 
     private GradientDrawable toolbarSurface(boolean focused) {
         GradientDrawable shape = surface(focused);
-        shape.setCornerRadius(dp(16));
+        shape.setCornerRadius(dp(tvGlass() ? 24 : 16));
         return shape;
     }
 
@@ -510,6 +514,7 @@ public final class PersonalHomeActivity extends Activity {
         appHeading.setSingleLine(true);
         appHeading.setEllipsize(android.text.TextUtils.TruncateAt.END);
         appHeading.setPadding(dp(4), dp(8), 0, dp(12));
+        focusedArtwork = null; featuredPkg = null;
         grid = new HomeAppGrid<>(this, app -> app.info.activityInfo.packageName,
                 (app, width) -> createAppTile(app, width, carriedApp != null && app.info.activityInfo.packageName.equals(carriedApp.info.activityInfo.packageName)));
         grid.setUpFromApps(() -> { if (searchButton != null) searchButton.requestFocus(); });
@@ -519,10 +524,10 @@ public final class PersonalHomeActivity extends Activity {
         appBody.setOrientation(LinearLayout.VERTICAL);
         // Grid backdrop: soft panel behind the apps so tiles stand out from the wallpaper.
         GradientDrawable gridBackdrop = new GradientDrawable();
-        gridBackdrop.setColor(0x33000000);
+        gridBackdrop.setColor(tvGlass() ? 0x00000000 : 0x33000000);
         gridBackdrop.setCornerRadius(dp(20));
         appBody.setBackground(gridBackdrop);
-        appBody.setPadding(dp(8), dp(4), dp(8), dp(8));
+        appBody.setPadding(dp(tvGlass() ? 12 : 8), dp(tvGlass() ? 8 : 4), dp(tvGlass() ? 12 : 8), dp(8));
         // The drawer panel stays fixed on screen; only the tiles scroll inside it,
         // clipped to the rounded corners so scrolling stops under the header.
         final int drawerRadius = dp(20);
@@ -543,10 +548,36 @@ public final class PersonalHomeActivity extends Activity {
         int align = prefs.getInt("clock_align", 1);
         LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(-2, -2);
         clockParams.gravity = new int[]{Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END}[align];
-        scrollContent.addView(clock, clockParams);
+        if (tvGlass()) {
+            // Top shelf uses installed-app artwork, not invented streaming recommendations.
+            LinearLayout shelf = new LinearLayout(this);
+            shelf.setGravity(Gravity.CENTER_VERTICAL);
+            shelf.setPadding(dp(12), dp(16), dp(12), dp(16));
+            focusedArtwork = new ImageView(this);
+            focusedArtwork.setImageResource(R.drawable.ic_apps);
+            focusedArtwork.setScaleType(ImageView.ScaleType.FIT_XY);
+            focusedArtwork.setBackground(surface(false));
+            focusedArtwork.setClipToOutline(true);
+            focusedArtwork.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            int artWidth = compact ? 140 : 180;
+            shelf.addView(focusedArtwork, new LinearLayout.LayoutParams(dp(artWidth), dp(artWidth * 9f / 16f)));
+            LinearLayout caption = new LinearLayout(this);
+            caption.setOrientation(LinearLayout.VERTICAL);
+            caption.setPadding(dp(20), 0, dp(16), 0);
+            TextView section = text(getString(R.string.h_your_apps), 13, MUTED);
+            caption.addView(section);
+            appHeading.setPadding(0, dp(4), 0, dp(4));
+            appHeading.setTextSize(prefs.getInt("focus_title_size", 32));
+            caption.addView(appHeading);
+            shelf.addView(caption, new LinearLayout.LayoutParams(0, -2, 1));
+            shelf.addView(clock, new LinearLayout.LayoutParams(-2, -2));
+            scrollContent.addView(shelf);
+        } else {
+            scrollContent.addView(clock, clockParams);
+        }
         scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
         page.addView(scroll, new LinearLayout.LayoutParams(-1, -2));
-        page.addView(appHeading);
+        if (!tvGlass()) page.addView(appHeading);
         page.addView(appBody, new LinearLayout.LayoutParams(-1, 0, 1));
         // Focus-glow tracker: keep the wallpaper glow on the focused tile no matter
         // which scroller moved.
@@ -925,6 +956,16 @@ public final class PersonalHomeActivity extends Activity {
         return new android.graphics.drawable.BitmapDrawable(getResources(), bitmap);
     }
 
+    /** Share the bitmap through a separate drawable callback for the top shelf. */
+    private void setFocusedArtwork(android.graphics.drawable.Drawable icon) {
+        if (focusedArtwork == null) return;
+        if (icon == null) focusedArtwork.setImageResource(R.drawable.ic_apps);
+        else {
+            android.graphics.drawable.Drawable.ConstantState state = icon.getConstantState();
+            focusedArtwork.setImageDrawable(state == null ? icon : state.newDrawable(getResources()));
+        }
+    }
+
     /** Swaps a finished icon into the live tile and the cached App. Runs on the UI thread. */
     private void updateTileIcon(String pkg, android.graphics.drawable.Drawable icon, int accent) {
         if (cachedApps != null) {
@@ -940,6 +981,7 @@ public final class PersonalHomeActivity extends Activity {
         if (tile instanceof android.widget.FrameLayout) {
             View iconView = ((android.widget.FrameLayout) tile).getChildAt(0);
             if (iconView instanceof ImageView) ((ImageView) iconView).setImageDrawable(icon);
+            if (focusedArtwork != null && pkg.equals(featuredPkg)) setFocusedArtwork(icon);
             tile.setForeground(tileBorder(accent, tile.isFocused()));
             tile.setTag(accent);
         }
@@ -982,7 +1024,17 @@ public final class PersonalHomeActivity extends Activity {
         grid.submit(visible, columns, avail / columns);
         if (movingRendered) { movingRendered = false; grid.rebind(); }
         if (gridState != null) { grid.getLayoutManager().onRestoreInstanceState(gridState); gridState = null; }
-        if (visible.isEmpty()) appHeading.setText(R.string.h_no_apps);
+        if (visible.isEmpty()) {
+            appHeading.setText(R.string.h_no_apps);
+            featuredPkg = null;
+            setFocusedArtwork(null);
+        } else if (focusedArtwork != null) {
+            App featured = visible.get(0);
+            for (App app : visible) if (app.info.activityInfo.packageName.equals(focusedPkg)) { featured = app; break; }
+            appHeading.setText(featured.name);
+            featuredPkg = featured.info.activityInfo.packageName;
+            setFocusedArtwork(featured.icon);
+        }
         if (restoreFocus && (panel == null || !panel.isShowing()) && (searchDialog == null || !searchDialog.isShowing()))
             grid.focusKey(focusedPkg);
         firstGridRender = false;
@@ -1112,7 +1164,7 @@ public final class PersonalHomeActivity extends Activity {
         android.widget.FrameLayout tile = new android.widget.FrameLayout(this);
         tile.setBackground(surface(false));
         tile.setClipToOutline(true);
-        tile.setElevation(perfAllows("parallax") ? dp(3) : 0);
+        tile.setElevation(perfAllows("parallax") ? dp(tvGlass() ? 4 : 3) : 0);
         tile.setFocusable(true);
         tile.setClickable(true);
         tile.setContentDescription(app.name);
@@ -1137,7 +1189,11 @@ public final class PersonalHomeActivity extends Activity {
             if (focus) focusedPkg = app.info.activityInfo.packageName;
             if (!moving) {
                 // Focus zoom: gentle scale animation.
-                v.animate().scaleX(focus ? 1.05f : 1f).scaleY(focus ? 1.05f : 1f).setDuration(150).start();
+                float scale = focus ? (tvGlass() ? 1.06f : 1.05f) : 1f;
+                v.animate().cancel();
+                if (MemoryProfile.effectiveTier(this, prefs) == MemoryProfile.TIER_LIGHT) {
+                    v.setScaleX(scale); v.setScaleY(scale);
+                } else v.animate().scaleX(scale).scaleY(scale).setDuration(tvGlass() ? 180 : 150).start();
             }
             tile.setTranslationZ(focus && prefs.getBoolean("focus_glow", true) ? dp(10) : 0);
             if (android.os.Build.VERSION.SDK_INT >= 28) {
@@ -1146,6 +1202,7 @@ public final class PersonalHomeActivity extends Activity {
             }
             if (focus) {
                 appHeading.setText(app.name);
+                if (focusedArtwork != null) { featuredPkg = app.info.activityInfo.packageName; setFocusedArtwork(app.icon); }
                 appHeading.setTextColor(TEXT);
                 int[] position = new int[2], origin = new int[2];
                 tile.getLocationInWindow(position); sky.getLocationInWindow(origin);
@@ -1191,8 +1248,8 @@ public final class PersonalHomeActivity extends Activity {
         });
         android.widget.FrameLayout.LayoutParams position = new android.widget.FrameLayout.LayoutParams(-1, -2);
         int spacing = Math.max(0, Math.min(2, prefs.getInt("tile_spacing", 1)));
-        int hm = new int[]{dp(4), dp(8), dp(14)}[spacing];
-        int vm = new int[]{dp(5), dp(10), dp(16)}[spacing];
+        int hm = (tvGlass() ? new int[]{dp(6), dp(10), dp(16)} : new int[]{dp(4), dp(8), dp(14)})[spacing];
+        int vm = (tvGlass() ? new int[]{dp(8), dp(12), dp(18)} : new int[]{dp(5), dp(10), dp(16)})[spacing];
         position.width = width - hm * 2;
         position.height = Math.round(position.width * 9f / 16f);
         position.setMargins(hm, vm, hm, vm);
@@ -1612,10 +1669,13 @@ public final class PersonalHomeActivity extends Activity {
 
     private void themeSettings() {
         // "Dark mode" removed 2026-11-01 (user): the theme glass color covers it.
-        String[] labels = {"Theme", "Accent color", "Launcher font", "Glass intensity"};
-        String[] hints = {"Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels"};
-        int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness};
+        String[] labels = {"Visual style", "Theme", "Accent color", "Launcher font", "Glass intensity"};
+        String[] hints = {"TV Glass or Classic", "Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels"};
+        int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness};
         Runnable[] choices = {
+            () -> chooseSetting("Visual style", new String[]{"TV Glass", "Classic"}, which -> {
+                prefs.edit().putBoolean("tv_glass_style", which == 0).apply(); buildHomeSoon();
+            }),
             () -> chooseSetting("Theme", new String[]{"Midnight Cyan", "Sunset Orange", "Deep Purple", "Custom"}, which -> {
                 prefs.edit().putInt("theme_name", which).apply();
                 if (which == 3) chooseAccentColor();
@@ -1769,6 +1829,7 @@ public final class PersonalHomeActivity extends Activity {
     /** Index of the currently applied option for a settings chooser (-1 when none applies). (User 2026-11-01.) */
     private int settingCurrentIndex(String title) {
         switch (title) {
+            case "Visual style": return TvGlassStyle.enabled(prefs) ? 0 : 1;
             case "Wallpaper darkness": return Math.min(2, prefs.getInt("background_dim", 0) / 20);
             case "App colour glow": return prefs.getBoolean("focus_glow", true) ? 0 : 1;
             case "Header background": return headerBgMode();
@@ -2604,7 +2665,7 @@ public final class PersonalHomeActivity extends Activity {
         GradientDrawable border = new GradientDrawable();
         border.setColor(Color.TRANSPARENT); border.setCornerRadius(tileRadius());
         int thickness = focused ? new int[]{2, 3, 5}[Math.max(0, Math.min(2, prefs.getInt("focus_border", 1)))] : 1;
-        border.setStroke(dp(thickness), focused ? accent : 0x4028435e);
+        border.setStroke(dp(thickness), tvGlass() ? (focused ? 0xfff4f8ff : 0x50ffffff) : (focused ? accent : 0x4028435e));
         GradientDrawable bevel = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{0x20ffffff, 0x00ffffff, 0x28000000});
         bevel.setCornerRadius(tileRadius());
