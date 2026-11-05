@@ -74,7 +74,8 @@ final class GitHubUpdates {
                     install(owner,c,false);
                 } finally { part.delete(); }
             } catch(Exception failure) {
-                state(c,readyFile(c).isFile()?"Verified update ready · use Install update":"Update check unavailable · automatic retry later");
+                readyFile(c).delete();
+                state(c,"Update check unavailable · automatic retry later");
                 prefs(c).edit().putLong("next_check",System.currentTimeMillis()+15*60*1000L).apply();
                 android.util.Log.w("PersonalUpdates","Update operation unavailable ("+failure.getClass().getSimpleName()+")");
             } finally { BUSY.set(false); }
@@ -115,12 +116,13 @@ final class GitHubUpdates {
         String hash=hash(readyFile(c));
         if (!hash.equals(p.getString("ready_hash",""))) throw new IOException("Verified APK changed");
         if (VolumeAutoStart.paired(c) && !VolumeAutoStart.busy()) {
+            p.edit().putInt("install_attempts",attempts+1).apply();
             c.grantUriPermission("com.android.shell",uri(c),Intent.FLAG_GRANT_READ_URI_PERMISSION);
             try {
                 state(c,"Installing verified update through saved pairing");
                 boolean queued=VolumeAutoStart.queueUpdate(c,hash,() -> idle(owner,c) && (manual || enabled(c)));
                 if (queued) {
-                    p.edit().putInt("install_attempts",attempts+1).putLong("installing_since",System.currentTimeMillis()).apply();
+                    p.edit().putLong("installing_since",System.currentTimeMillis()).apply();
                     state(c,"Update installer started"); return;
                 }
             } catch(Exception unavailable) { state(c,"Local pairing unavailable · Android installer fallback"); }
