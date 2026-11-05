@@ -12,7 +12,7 @@ final class NotificationAccessSetup {
     static final String ASKED = "notification_access_prompted";
     private NotificationAccessSetup() { }
     static void offer(Activity host) {
-        SharedPreferences prefs = host.getSharedPreferences("personal_home", 0);
+        SharedPreferences prefs = ThemePreferences.get(host);
         if (host.isFinishing() || host.isDestroyed() || prefs.getBoolean(ASKED, false)) return;
         if (HomeNotificationsUi.approved(host)) { prefs.edit().putBoolean(ASKED, true).apply(); return; }
         prefs.edit().putBoolean(ASKED, true).apply();

@@ -163,8 +163,8 @@ final class AppLibraryDialog {
         panel.setLayoutDirection(rtl ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(12), dp(8), dp(12), dp(12));
-        if (TvGlassStyle.enabled(activity.getSharedPreferences("personal_home", 0))) {
-            panel.setBackground(TvGlassStyle.surface(dp(28), dp(1), false, activity.getSharedPreferences("personal_home", 0)));
+        if (TvGlassStyle.enabled(ThemePreferences.get(activity))) {
+            panel.setBackground(TvGlassStyle.surface(dp(28), dp(1), false, ThemePreferences.get(activity)));
             panel.setClipToOutline(true);
         } else panel.setBackgroundResource(R.drawable.glass_panel);
         if (activity instanceof PersonalHomeActivity) ((PersonalHomeActivity) activity).liquidPanel(panel, 28);
@@ -528,8 +528,8 @@ final class AppLibraryDialog {
         String pkg = selectedPackage;
         if (spring != null) spring.cancel();
         View menuPanel = activity.getLayoutInflater().inflate(R.layout.popup_inputs, panel, false);
-        if (TvGlassStyle.enabled(activity.getSharedPreferences("personal_home", 0))) {
-            menuPanel.setBackground(TvGlassStyle.surface(dp(24), dp(1), false, activity.getSharedPreferences("personal_home", 0)));
+        if (TvGlassStyle.enabled(ThemePreferences.get(activity))) {
+            menuPanel.setBackground(TvGlassStyle.surface(dp(24), dp(1), false, ThemePreferences.get(activity)));
             menuPanel.setClipToOutline(true);
         }
         LinearLayout rows = menuPanel.findViewById(R.id.rows);

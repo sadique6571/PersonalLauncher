@@ -14,6 +14,10 @@ import android.widget.TextView;
 
 /** Shared remote-friendly glass cards for settings and every launcher option page. */
 final class GlassSettings {
+    static void dismiss(Activity host) {
+        java.lang.ref.WeakReference<Panel> ref=PANELS.get(host);
+        Panel panel=ref==null?null:ref.get(); if(panel!=null) panel.dialog.dismiss();
+    }
     private static void bindSymbol(ImageView view, Activity host, int resource) {
         view.setTag(R.id.theme_symbol_resource, resource);
         view.setImageDrawable(TvSymbols.icon(host, resource));
@@ -27,7 +31,7 @@ final class GlassSettings {
     static int dp(Activity host, float n) { return Math.round(n * host.getResources().getDisplayMetrics().density); }
     /** Theme accent color, mirrored from the launcher's theme picker. */
     static int themeAccent(android.content.Context ctx) {
-        android.content.SharedPreferences prefs = ctx.getSharedPreferences("personal_home", 0);
+        android.content.SharedPreferences prefs = ThemePreferences.get(ctx);
         switch (prefs.getInt("theme_name", 0)) {
             case 1: return 0xffff9a5c; // Sunset Orange
             case 2: return 0xffb388ff; // Deep Purple
@@ -37,7 +41,7 @@ final class GlassSettings {
     }
 
     static GradientDrawable background(Activity host, boolean focused) {        java.util.Calendar now = java.util.Calendar.getInstance();
-        android.content.SharedPreferences prefs = host.getSharedPreferences("personal_home", 0);
+        android.content.SharedPreferences prefs = ThemePreferences.get(host);
         if (TvGlassStyle.enabled(prefs)) return TvGlassStyle.surface(dp(host, 18), dp(host, focused ? 2 : 1), focused, prefs);
         float day = HomeAppearance.daylight(prefs.getString("theme_mode", "dark"),
                 now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE));
@@ -52,7 +56,7 @@ final class GlassSettings {
         shape.setStroke(dp(host, focused ? 2 : 1), focused ? themeAccent(host) : 0x55415a72);
         // Glass intensity: 0=airy, 100=solid.
         int intensity = Math.max(0, Math.min(100, prefs.getInt("glass_alpha", 70)));
-        shape.setAlpha(100 + intensity * 155 / 100);
+        shape.setAlpha(ClassicGlassAlpha.card(intensity,focused));
         return shape;
     }
     /** Mixes a glass base color 30% toward the theme accent. */
@@ -66,7 +70,7 @@ final class GlassSettings {
     /** Runtime support can change under power-saving or compositor restrictions. */
     static boolean frostedAvailable(android.content.Context context) {
         if (android.os.Build.VERSION.SDK_INT < 31) return false;
-        if (MemoryProfile.effectiveTier(context, context.getSharedPreferences("personal_home", 0)) == MemoryProfile.TIER_LIGHT) return false;
+        if (MemoryProfile.effectiveTier(context, ThemePreferences.get(context)) == MemoryProfile.TIER_LIGHT) return false;
         try {
             android.view.WindowManager manager = context.getSystemService(android.view.WindowManager.class);
             return manager != null && manager.isCrossWindowBlurEnabled();
@@ -75,10 +79,10 @@ final class GlassSettings {
     static void applyBlur(android.app.Dialog dialog) {
         if (dialog == null || dialog.getWindow() == null) return;
         android.content.Context context = dialog.getContext();
-        android.content.SharedPreferences prefs = context.getSharedPreferences("personal_home", 0);
+        android.content.SharedPreferences prefs = ThemePreferences.get(context);
         boolean glass = TvGlassStyle.enabled(prefs);
-        boolean frosted = glass && TvGlassStyle.finish(prefs) == 2;
-        boolean blur = frostedAvailable(context) && (!glass || frosted);
+        boolean frosted = TvGlassStyle.finish(prefs) == 2;
+        boolean blur = frostedAvailable(context) && frosted;
         android.view.Window window = dialog.getWindow();
         if (android.os.Build.VERSION.SDK_INT >= 31) {
             android.view.WindowManager.LayoutParams attrs = window.getAttributes();
@@ -123,7 +127,7 @@ final class GlassSettings {
 
     /** Launcher-wide font (Settings → Theme → Launcher font) for settings UI text. (User 2026-11-01.) */
     static void applyAppFont(android.content.Context ctx, TextView view) {
-        android.content.SharedPreferences prefs = ctx.getSharedPreferences("personal_home", 0);
+        android.content.SharedPreferences prefs = ThemePreferences.get(ctx);
         String[] fonts = {"sans-serif", "serif", "monospace", "sans-serif-light"};
         view.setTypeface(android.graphics.Typeface.create(
                 TvGlassStyle.enabled(prefs) ? "sans-serif" : fonts[Math.max(0, Math.min(3, prefs.getInt("app_font", 0)))], android.graphics.Typeface.NORMAL));
@@ -150,7 +154,7 @@ final class GlassSettings {
     }
     private static GradientDrawable cardBackground(Activity host, boolean focused) {
         GradientDrawable shape = background(host, focused);
-        shape.setCornerRadius(dp(host, TvGlassStyle.enabled(host.getSharedPreferences("personal_home", 0)) ? 20 : 16));
+        shape.setCornerRadius(dp(host, TvGlassStyle.enabled(ThemePreferences.get(host)) ? 20 : 16));
         return shape;
     }
     /** Landscape tile: the icon and label share one row instead of stacking into a square. */
@@ -226,7 +230,7 @@ final class GlassSettings {
                 window.setLayout(width, tv ? -1 : Math.round(host.getResources().getDisplayMetrics().heightPixels * .88f));
                 window.setWindowAnimations(0);
                 window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-                boolean glass = TvGlassStyle.enabled(host.getSharedPreferences("personal_home", 0));
+                boolean glass = TvGlassStyle.enabled(ThemePreferences.get(host));
                 window.setBackgroundDrawableResource(android.R.color.transparent);
                 window.setDimAmount(glass ? .32f : .12f);
             }
@@ -310,8 +314,8 @@ final class GlassSettings {
         applyBlur(state.dialog);
     }
     static void styleDialog(Activity host, AlertDialog dialog) {
-        if (!TvGlassStyle.enabled(host.getSharedPreferences("personal_home", 0)) || dialog.getWindow() == null) return;
-        GradientDrawable shell = TvGlassStyle.surface(dp(host, 24), dp(host, 1), false, host.getSharedPreferences("personal_home", 0));
+        if (dialog.getWindow() == null) return;
+        GradientDrawable shell = shellBackground(host);
         dialog.getWindow().setBackgroundDrawable(shell);
         styleDialogText(host, dialog.getWindow().getDecorView());
         applyBlur(dialog);
@@ -332,17 +336,24 @@ final class GlassSettings {
             for (int i = 0; i < group.getChildCount(); i++) styleDialogText(host, group.getChildAt(i));
         }
     }
-    private static android.content.SharedPreferences prefsFor(Activity host) { return host.getSharedPreferences("personal_home", 0); }
+    private static android.content.SharedPreferences prefsFor(Activity host) { return ThemePreferences.get(host); }
     private static void styleShell(Activity host, View page) {
-        boolean glass = TvGlassStyle.enabled(host.getSharedPreferences("personal_home", 0));
+        boolean glass = TvGlassStyle.enabled(ThemePreferences.get(host));
+        page.setBackground(shellBackground(host));
+        page.setClipToOutline(true);
+        page.setElevation(dp(host, glass ? 6 : 0));
+    }
+    private static GradientDrawable shellBackground(Activity host) {
+        boolean glass = TvGlassStyle.enabled(ThemePreferences.get(host));
         GradientDrawable shell = glass ? TvGlassStyle.surface(dp(host, 28), dp(host, 1), false, prefsFor(host))
                 : new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xff122338, 0xff09182a});
         shell.setCornerRadius(dp(host, glass ? 28 : 24));
-        android.content.SharedPreferences prefs = host.getSharedPreferences("personal_home", 0);
-        if (!glass) shell.setStroke(dp(host, 1), 0x55415a72);
-        page.setBackground(shell);
-        page.setClipToOutline(true);
-        page.setElevation(dp(host, glass ? 6 : 0));
+        android.content.SharedPreferences prefs = ThemePreferences.get(host);
+        if (!glass) {
+            shell.setStroke(dp(host, 1), 0x55415a72);
+            shell.setAlpha(ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs)));
+        }
+        return shell;
     }
     private static void refreshViews(Activity host, View view) {
         if ("settings_shell".equals(view.getTag())) styleShell(host, view);

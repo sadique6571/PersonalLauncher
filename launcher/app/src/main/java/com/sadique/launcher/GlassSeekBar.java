@@ -9,7 +9,7 @@ final class GlassSeekBar extends SeekBar {
     private final GlassCapsule capsule;
     GlassSeekBar(Context context) {
         super(context);
-        capsule = TvGlassStyle.enabled(context.getSharedPreferences("personal_home", 0)) ? new GlassCapsule(context) : null;
+        capsule = TvGlassStyle.enabled(ThemePreferences.get(context)) ? new GlassCapsule(context) : null;
         if (capsule != null) {
             setBackground(null); setThumb(null); setThumbOffset(0); setPadding(0, 0, 0, 0);
             setSplitTrack(false);
