@@ -44,6 +44,7 @@ final class VolumeSlider {
     private static long directUntil;
     private static int observedVolume = -1;
     private static int maximum;
+    private static int drawnStyle;
 
     private VolumeSlider() { }
 
@@ -124,25 +125,39 @@ final class VolumeSlider {
         if (observerOwner != null) context = observerOwner;
         if (!(context instanceof AccessibilityService) && !(context instanceof Activity)) return false;
         try {
-            if (owner != context) dispose();
+            android.content.SharedPreferences prefs = context.getSharedPreferences("personal_home", 0);
+            boolean glass = TvGlassStyle.enabled(prefs);
+            int style = glass ? 1 : 0;
+            style = style * 31 + prefs.getInt("glass_finish", 0);
+            style = style * 31 + prefs.getInt("glass_alpha", 70);
+            style = style * 31 + prefs.getInt("glass_edge", 1);
+            style = style * 31 + prefs.getInt("theme_name", 0);
+            style = style * 31 + prefs.getInt("custom_accent", 0);
+            if (owner != context || drawnStyle != style) dispose();
             if (panel == null) {
-                owner = context;
+                owner = context; drawnStyle = style;
                 window = context.getSystemService(WindowManager.class);
                 panel = new LinearLayout(context); panel.setOrientation(LinearLayout.VERTICAL);
                 panel.setGravity(Gravity.CENTER_HORIZONTAL);
                 panel.setPadding(dp(context, 5), dp(context, 5), dp(context, 5), dp(context, 5));
-                // Transparent container: only the wide track, output icon and level are drawn.
+                if (glass) {
+                    panel.setBackground(TvGlassStyle.surface(dp(context, 38), dp(context, 1), false, prefs));
+                    panel.setClipToOutline(true);
+                    panel.setPadding(dp(context, 10), dp(context, 12), dp(context, 10), dp(context, 8));
+                }
+                // Glass uses a white fill in a rounded capsule; Classic retains the accent track.
                 slider = new VolumeBar(context);
                 slider.setContentDescription(context.getString(R.string.h_sound));
-                panel.addView(slider, new LinearLayout.LayoutParams(dp(context, 44), dp(context, 210)));
+                panel.addView(slider, new LinearLayout.LayoutParams(dp(context, glass ? 52 : 44), dp(context, glass ? 178 : 210)));
                 outputIcon = new ImageView(context);
                 outputIcon.setPadding(0, dp(context, 8), 0, 0);
                 panel.addView(outputIcon, new LinearLayout.LayoutParams(dp(context, 28), dp(context, 36)));
                 level = new TextView(context); level.setTextColor(Color.WHITE); level.setTextSize(14);
                 level.setShadowLayer(dp(context, 2), 0, dp(context, 1), Color.BLACK);
                 level.setGravity(Gravity.CENTER);
+                level.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
                 panel.addView(level, new LinearLayout.LayoutParams(-1, dp(context, 24)));
-                WindowManager.LayoutParams position = new WindowManager.LayoutParams(dp(context, 64), -2,
+                WindowManager.LayoutParams position = new WindowManager.LayoutParams(dp(context, glass ? 80 : 64), -2,
                         context instanceof AccessibilityService ? WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
                                 : WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
                         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
@@ -163,14 +178,14 @@ final class VolumeSlider {
         int value = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
         boolean muted = audio.isStreamMute(AudioManager.STREAM_MUSIC);
         observedVolume = value; observedMute = muted;
-        int accent = GlassSettings.themeAccent(owner);
+        int accent = TvGlassStyle.enabled(owner.getSharedPreferences("personal_home", 0)) ? 0xfff4f6fa : GlassSettings.themeAccent(owner);
         slider.level(VolumeLevel.fraction(value, maximum, muted), accent);
         long now = SystemClock.uptimeMillis();
         if (routeChecked == 0 || now - routeChecked >= 500) {
             routeIcon = AudioOutputIcon.resource(audio); routeChecked = now;
         }
         int icon = muted || value == 0 ? R.drawable.ic_volume_muted : routeIcon;
-        if (drawnIcon != icon) { outputIcon.setImageResource(icon); drawnIcon = icon; }
+        if (drawnIcon != icon) { outputIcon.setImageDrawable(TvSymbols.icon(owner, icon)); drawnIcon = icon; }
         if (drawnAccent != accent) { outputIcon.setColorFilter(accent); drawnAccent = accent; }
         int percent = VolumeLevel.percent(value, maximum, muted);
         if (drawnPercent != percent) {

@@ -11,7 +11,7 @@ import android.widget.Toast;
 import java.util.Collections;
 import java.util.List;
 
-/** The bell opens alerts with an always-available notification access shortcut. */
+/** Alerts only. Notification approval is requested separately during first-run setup. */
 final class HomeNotificationsUi {
     private HomeNotificationsUi() { }
     static boolean approved(Activity host) {
@@ -29,18 +29,11 @@ final class HomeNotificationsUi {
             if (host.isDestroyed() || !panel.isShowing()) return;
             View oldFocus = rows.findFocus(); Object focusedKey = oldFocus == null ? null : oldFocus.getTag();
             rows.removeAllViews();
-            View access = GlassSettings.row(host, host.getString(R.string.h_access_title),
-                    host.getString(R.string.h_open_access), R.drawable.ic_settings,
-                    GlassSettings.themeAccent(host), () -> {
-                        try { host.startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); panel.dismiss(); }
-                        catch (RuntimeException unavailable) { Toast.makeText(host, R.string.h_unavailable, Toast.LENGTH_LONG).show(); }
-                    });
-            access.setTag("notification_access"); rows.addView(access);
             if (!approved(host)) rows.addView(GlassSettings.label(host,
-                    host.getString(R.string.h_notification_access_hint), 13, 0xffb5cadd));
+                    "Notification access is off.", 13, 0xffb5cadd));
             List<HomeNotificationService.Entry> entries = HomeNotificationService.snapshot(); Collections.reverse(entries);
             if (entries.isEmpty()) rows.addView(GlassSettings.label(host, host.getString(R.string.h_notifications_empty), 14, 0xffb5cadd));
-            View restore = "notification_access".equals(focusedKey) ? access : null, first = access;
+            View restore = null, first = null;
             for (HomeNotificationService.Entry entry : entries) {
                 View row = GlassSettings.row(host, entry.title, entry.text, R.drawable.ic_notifications,
                         GlassSettings.themeAccent(host), () -> {

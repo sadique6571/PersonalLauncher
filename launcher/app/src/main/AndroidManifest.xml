@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- User-requested online landscape screensaver and city weather. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- User-requested self-update fallback uses Android installation approval. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Runtime consent for searchable/shared TV Watch Next rows, when the TV exposes this permission. -->
     <uses-permission android:name="android.permission.READ_TV_LISTINGS" />
@@ -308,5 +310,9 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/input_key_service" />
         </service>
+        <provider android:name=".UpdateApkProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

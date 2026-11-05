@@ -263,7 +263,7 @@ public final class PersonalHomeActivity extends Activity {
 
     private GradientDrawable avatarSurface(boolean focused) {
         GradientDrawable shape = surface(focused);
-        if (prefs.getInt("avatar_shape", 0) == 0) shape.setShape(GradientDrawable.OVAL);
+        if (tvGlass() || prefs.getInt("avatar_shape", 0) == 0) shape.setShape(GradientDrawable.OVAL);
         else shape.setCornerRadius(dp(16));
         return shape;
     }
@@ -274,6 +274,7 @@ public final class PersonalHomeActivity extends Activity {
         view.setText(value);
         view.setTextSize(size);
         view.setTextColor(color);
+        applyAppFont(view);
         return view;
     }
 
@@ -300,11 +301,11 @@ public final class PersonalHomeActivity extends Activity {
 
     private android.widget.ImageButton iconAction(String title, int resource, Runnable action) {
         android.widget.ImageButton icon = new android.widget.ImageButton(this);
-        icon.setImageResource(resource);
+        icon.setImageDrawable(TvSymbols.icon(this, resource));
         icon.setColorFilter(TEXT);
         icon.setContentDescription(title);
         icon.setTooltipText(title);
-        icon.setPadding(dp(11), dp(11), dp(11), dp(11));
+        icon.setPadding(dp(tvGlass() ? 13 : 11), dp(tvGlass() ? 13 : 11), dp(tvGlass() ? 13 : 11), dp(tvGlass() ? 13 : 11));
         icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
         icon.setBackground(toolbarSurface(false));
         icon.setClipToOutline(true);
@@ -396,15 +397,19 @@ public final class PersonalHomeActivity extends Activity {
         avatar.setScaleType(ImageView.ScaleType.CENTER_CROP);
         avatar.setBackground(avatarSurface(false));
         avatar.setClipToOutline(true);
+        if (tvGlass()) { avatar.setPadding(dp(2), dp(2), dp(2), dp(2)); avatar.setElevation(dp(2)); }
         avatar.setFocusable(false);
         avatar.setOnClickListener(v -> LauncherPin.require(this, this::editProfile));
         avatar.setOnFocusChangeListener((v, focus) -> v.setBackground(avatarSurface(focus)));
-        header.addView(avatar, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        LinearLayout identityCard = new LinearLayout(this); identityCard.setGravity(Gravity.CENTER_VERTICAL);
+        if (tvGlass()) { identityCard.setBackground(TvGlassStyle.surface(dp(28), dp(1), false, prefs)); identityCard.setPadding(dp(6), dp(5), dp(14), dp(5)); }
+        identityCard.setOnClickListener(v -> LauncherPin.require(this, this::editProfile));
+        identityCard.addView(avatar, new LinearLayout.LayoutParams(dp(44), dp(44)));
         LinearLayout identity = new LinearLayout(this);
         identity.setPadding(dp(12), 0, dp(4), 0);
         identity.setOrientation(LinearLayout.VERTICAL);
-        userName = text("", tv ? 24 : 20, TEXT);
-        userName.setMaxLines(2);
+        userName = text("", tvGlass() ? 20 : tv ? 24 : 20, TEXT);
+        userName.setMaxLines(1);
         userName.setEllipsize(android.text.TextUtils.TruncateAt.END);
         applyAppFont(userName);
         identity.addView(userName);
@@ -412,7 +417,9 @@ public final class PersonalHomeActivity extends Activity {
         applyAppFont(greeting);
         if (prefs.getBoolean("hide_greeting", false)) greeting.setVisibility(View.GONE);
         identity.addView(greeting);
-        header.addView(identity, new LinearLayout.LayoutParams(0, -2, 1));
+        identityCard.addView(identity, new LinearLayout.LayoutParams(0, -2, 1));
+        LinearLayout.LayoutParams identityParams = new LinearLayout.LayoutParams(0, -2, 1);
+        identityParams.setMarginEnd(dp(10)); header.addView(identityCard, identityParams);
         networkStatus = text("", 13, MUTED);
         networkStatus.setGravity(Gravity.CENTER_VERTICAL | Gravity.CENTER);
         networkStatus.setCompoundDrawablePadding(dp(5));
@@ -433,6 +440,7 @@ public final class PersonalHomeActivity extends Activity {
         actions.addView(homeWeather, 0, new LinearLayout.LayoutParams(-2, dp(44)));
         searchButton = iconAction(getString(R.string.h_search), R.drawable.ic_search, this::searchApps);
         iconAction(getString(R.string.h_notifications), R.drawable.ic_notifications, this::showNotifications);
+        iconAction(getString(R.string.h_screensaver), R.drawable.ic_picture, () -> launch(new Intent(this, LandscapeActivity.class)));
         iconAction("Settings", R.drawable.ic_settings, this::showSettings);
         if (tv) {
             header.addView(actions, new LinearLayout.LayoutParams(-2, -2));
@@ -467,7 +475,7 @@ public final class PersonalHomeActivity extends Activity {
         // Use the regular family with bold weight; the light family overrides the intended weight.
         String[] clockFonts = {"sans-serif", "serif", "monospace"};
         time.setTypeface(android.graphics.Typeface.create(
-                clockFonts[Math.max(0, Math.min(2, prefs.getInt("clock_font", 0)))], android.graphics.Typeface.BOLD));
+                tvGlass() ? "sans-serif" : clockFonts[Math.max(0, Math.min(2, prefs.getInt("clock_font", 0)))], android.graphics.Typeface.BOLD));
         // Analog mode: hide the digital time (keeps layout for clockY), SkyClock draws the face.
         boolean analogClock = prefs.getInt("clock_style", 0) == 1;
         // AM/PM is a separate view, not a span: it can never be clipped when
@@ -524,13 +532,13 @@ public final class PersonalHomeActivity extends Activity {
         appBody.setOrientation(LinearLayout.VERTICAL);
         // Grid backdrop: soft panel behind the apps so tiles stand out from the wallpaper.
         GradientDrawable gridBackdrop = new GradientDrawable();
-        gridBackdrop.setColor(tvGlass() ? 0x00000000 : 0x33000000);
+        gridBackdrop.setColor(0x33000000);
         gridBackdrop.setCornerRadius(dp(20));
-        appBody.setBackground(gridBackdrop);
+        appBody.setBackground(tvGlass() ? TvGlassStyle.surface(dp(24), dp(1), false, prefs) : gridBackdrop);
         appBody.setPadding(dp(tvGlass() ? 12 : 8), dp(tvGlass() ? 8 : 4), dp(tvGlass() ? 12 : 8), dp(8));
         // The drawer panel stays fixed on screen; only the tiles scroll inside it,
         // clipped to the rounded corners so scrolling stops under the header.
-        final int drawerRadius = dp(20);
+        final int drawerRadius = dp(tvGlass() ? 24 : 20);
         appBody.setOutlineProvider(new ViewOutlineProvider() {
             @Override public void getOutline(View view, Outline outline) {
                 outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), drawerRadius);
@@ -764,6 +772,13 @@ public final class PersonalHomeActivity extends Activity {
                 ? prefs.getString("weather_cached", null) : null;
         long cachedAt = prefs.getLong("weather_cached_at", 0);
         String cacheKey = weatherCacheKey();
+        Network weatherNetwork = connectivity == null ? null : connectivity.getActiveNetwork();
+        NetworkCapabilities weatherCaps = weatherNetwork == null ? null : connectivity.getNetworkCapabilities(weatherNetwork);
+        boolean weatherOnline = weatherCaps != null && weatherCaps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+        if (!weatherOnline) {
+            homeWeather.setText("Unavailable"); homeWeather.setAlpha(1f); homeWeather.setVisibility(View.VISIBLE);
+            handler.removeCallbacks(weatherRefresh); handler.postDelayed(weatherRefresh, 60_000L); return;
+        }
         boolean cacheValid = cached != null
                 && System.currentTimeMillis() - cachedAt < WEATHER_CACHE_MS
                 && cacheKey.equals(prefs.getString("weather_cache_key", ""));
@@ -779,8 +794,8 @@ public final class PersonalHomeActivity extends Activity {
         }
         // Show stale cache while fetching (with reduced opacity to indicate staleness).
         if (cached != null) {
-            homeWeather.setText(weatherLabel(cached, cachedAt));
-            homeWeather.setAlpha(0.6f);
+            homeWeather.setText("Unavailable");
+            homeWeather.setAlpha(1f);
             homeWeather.setVisibility(View.VISIBLE);
         }
         worker.execute(() -> {
@@ -806,9 +821,8 @@ public final class PersonalHomeActivity extends Activity {
                     homeWeather.setText(weatherLabel(text, System.currentTimeMillis()));
                     homeWeather.setAlpha(1f);
                     homeWeather.setVisibility(View.VISIBLE);
-                } else if (cached == null) {
-                    // No cache and fetch failed: hide.
-                    homeWeather.setVisibility(View.GONE);
+                } else {
+                    homeWeather.setText("Unavailable"); homeWeather.setAlpha(1f); homeWeather.setVisibility(View.VISIBLE);
                 }
                 // If fetch failed but we have stale cache, keep showing it (dimmed).
                 handler.removeCallbacks(weatherRefresh);
@@ -826,8 +840,7 @@ public final class PersonalHomeActivity extends Activity {
 
     private String weatherLabel(String value, long fetchedAt) {
         if (fetchedAt <= 0) return value;
-        return value + " · updated " + new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
-                .format(new java.util.Date(fetchedAt));
+        return value;
     }
 
     private final Runnable weatherRefresh = this::refreshHomeWeather;
@@ -1270,6 +1283,8 @@ public final class PersonalHomeActivity extends Activity {
         EditText input = new EditText(this); input.setSingleLine(true); input.setHint("Search installed apps");
         searchInput = input;
         input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+        input.setTextColor(TEXT); input.setHintTextColor(MUTED); applyAppFont(input);
+        input.setPadding(dp(16), dp(10), dp(16), dp(10)); input.setBackground(toolbarSurface(false));
         form.addView(input);
         LinearLayout results = new LinearLayout(this); results.setOrientation(LinearLayout.VERTICAL);
         ScrollView matches = new ScrollView(this); matches.addView(results);
@@ -1285,11 +1300,16 @@ public final class PersonalHomeActivity extends Activity {
             int count = 0;
             if (cachedApps != null) for (App app : cachedApps) {
                 if (hidden.contains(app.info.activityInfo.packageName) || !(app.name + " " + app.info.activityInfo.packageName).toLowerCase(Locale.ROOT).contains(query)) continue;
-                Button result = button(app.name, () -> {
+                View result = GlassSettings.row(this, app.name, null, R.drawable.ic_apps, GlassSettings.themeAccent(this), () -> {
                     if (searchDialog != null) searchDialog.dismiss();
                     launch(new Intent(Intent.ACTION_MAIN).setClassName(app.info.activityInfo.packageName, app.info.activityInfo.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
                 });
                 LinearLayout.LayoutParams position = new LinearLayout.LayoutParams(-1, -2); position.setMargins(0, dp(4), 0, dp(4));
+                if (result instanceof LinearLayout && app.icon != null) {
+                    ImageView resultIcon = (ImageView) ((LinearLayout) result).getChildAt(0);
+                    resultIcon.setImageDrawable(app.icon.getConstantState() == null ? app.icon : app.icon.getConstantState().newDrawable(getResources()));
+                    resultIcon.clearColorFilter(); resultIcon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                }
                 results.addView(result, position);
                 if (++count == 16) break;
             }
@@ -1301,7 +1321,7 @@ public final class PersonalHomeActivity extends Activity {
             @Override public void afterTextChanged(android.text.Editable value) { }
         });
         searchDialog.setOnDismissListener(dialog -> { searchRefresh = null; searchDialog = null; searchInput = null; });
-        searchDialog.show(); searchRefresh.run();
+        searchDialog.show(); GlassSettings.styleDialog(this, searchDialog); searchRefresh.run();
     }
 
     private boolean launchAssistant() {
@@ -1461,7 +1481,7 @@ public final class PersonalHomeActivity extends Activity {
                 case HomeDashboard.SETTINGS: launcherSettings(); break;
                 case HomeDashboard.SEARCH: searchApps(); break;
                 case HomeDashboard.STORE: openStore(""); break;
-                case HomeDashboard.SCREENSAVER: screensaverSettings(); break;
+                case HomeDashboard.SCREENSAVER: launch(new Intent(this, LandscapeActivity.class)); break;
                 case HomeDashboard.CATEGORIES: chooseCategoryFilter(); break;
                 case HomeDashboard.WIFI: openSetting(Settings.ACTION_WIFI_SETTINGS); break;
                 case HomeDashboard.BLUETOOTH: launch(SystemSettings.bluetoothAccessoriesIntent(this)); break;
@@ -1488,8 +1508,9 @@ public final class PersonalHomeActivity extends Activity {
 
     /** Custom accent color picker (8 colors). Applies the Custom theme. */
     private void chooseAccentColor() {
-        String[] names = {"Cyan", "Orange", "Purple", "Green", "Red", "Yellow", "Pink", "White"};
-        int[] colors = {0xff40d9ff, 0xffff9a5c, 0xffb388ff, 0xff69f0ae, 0xffff5252, 0xffffea00, 0xffff80ab, 0xffffffff};
+        String[] names = {"Cyan", "Orange", "Purple", "Green", "Red", "Yellow", "Pink", "White", "Black", "Graphite", "Silver", "Blue", "Teal", "Gold", "Rose", "Indigo"};
+        int[] colors = {0xff40d9ff, 0xffff9a5c, 0xffb388ff, 0xff69f0ae, 0xffff5252, 0xffffea00, 0xffff80ab, 0xffffffff,
+                0xff000000, 0xff343b46, 0xffcbd3df, 0xff508dff, 0xff44c6bc, 0xffe8c66a, 0xffd890a5, 0xff7986ed};
         chooseSetting("Accent color", names, which -> {
             prefs.edit().putInt("theme_name", 3).putInt("custom_accent", colors[which]).apply();
             applyAppearance(); refreshApps();
@@ -1555,7 +1576,9 @@ public final class PersonalHomeActivity extends Activity {
         if (header == null) return;
         int mode = headerBgMode();
         GradientDrawable bg = null;
-        if (mode == 1) {
+        if (tvGlass()) {
+            bg = TvGlassStyle.surface(dp(24), dp(1), false, prefs);
+        } else if (mode == 1) {
             bg = new GradientDrawable();
             bg.setColor(0x40000000);
         } else if (mode == 2) {
@@ -1577,12 +1600,23 @@ public final class PersonalHomeActivity extends Activity {
     private void applyAppFont(TextView view) {
         String[] fonts = {"sans-serif", "serif", "monospace", "sans-serif-light"};
         view.setTypeface(android.graphics.Typeface.create(
-                fonts[Math.max(0, Math.min(3, prefs.getInt("app_font", 0)))], android.graphics.Typeface.NORMAL));
+                tvGlass() ? "sans-serif" : fonts[Math.max(0, Math.min(3, prefs.getInt("app_font", 0)))], android.graphics.Typeface.NORMAL));
     }
 
     /** Submenu helper with per-row icons. */
     private void subMenu(String title, String[] labels, String[] hints, int[] icons, Runnable[] choices) {
-        GlassSettings.options(this, title, labels, hints, icons, which -> choices[which].run());
+        if (!tvGlass()) { GlassSettings.options(this, title, labels, hints, icons, which -> choices[which].run()); return; }
+        List<Integer> visible = new ArrayList<>();
+        for (int i=0;i<labels.length;i++) {
+            if ("Launcher font".equals(labels[i]) || "Clock font".equals(labels[i]) || "Clock alignment".equals(labels[i])) continue;
+            visible.add(i);
+        }
+        String[] names = new String[visible.size()], descriptions = new String[visible.size()];
+        int[] symbols = new int[visible.size()];
+        for (int i=0;i<visible.size();i++) {
+            int source = visible.get(i); names[i]=labels[source]; descriptions[i]=hints[source]; symbols[i]=icons[source];
+        }
+        GlassSettings.options(this, title, names, descriptions, symbols, which -> choices[visible.get(which)].run());
     }
 
     private void tileSettings() {
@@ -1746,29 +1780,20 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void systemMenu() {
-        String[] labels = {"Screensaver & weather", "Profile name & photo", "Avatar shape", "Header background", "Performance", "Volume auto-start", "Export settings", "Import settings", "Home & remote setup", "Reset layout & unhide apps"};
-        String[] hints = {"Slideshow, weather & idle timer", "Name and local profile picture", "Circle or rounded square", "Subtle panel behind header", "Light, Balanced or Full", "One-time pairing and reboot recovery", "Save to a file", "Restore from a file", "Automatic Home repair and permission status", "Restore the default layout"};
-        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_person, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_volume, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_home_settings, R.drawable.ic_settings};
+        String[] labels = {"Screensaver & weather", "Profile name & photo", "Performance", "Updates", "Export settings", "Import settings", "Reset layout & unhide apps"};
+        String[] hints = {"Photos, weather & idle timer", "Name and local profile picture", "Light, Balanced or Full", "Automatic GitHub updates", "Save to a file", "Restore from a file", "Restore the default layout"};
+        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_settings, R.drawable.ic_internet, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_settings};
         Runnable[] choices = {
             this::screensaverSettings,
             this::editProfile,
-            () -> chooseSetting("Avatar shape", new String[]{"Circle", "Rounded square"}, which -> {
-                prefs.edit().putInt("avatar_shape", which).apply();
-                avatar.setBackground(avatarSurface(false));
-            }),
-            () -> chooseSetting("Header background", new String[]{"Off", "Panel", "Frosted"}, which -> {
-                prefs.edit().putInt("header_bg_mode", which).apply();
-                applyHeaderBackground();
-            }),
             () -> chooseSetting("Performance", new String[]{"Auto", "Light", "Balanced", "Full"}, which -> {
                 prefs.edit().putInt("perf_mode", which).apply();
                 applyPerformanceProfile();
                 buildHomeSoon();
             }),
-            () -> VolumeAutoUi.show(this),
+            () -> LauncherUpdatesUi.show(this),
             this::exportSettings,
             this::importSettings,
-            () -> LauncherSetupUi.show(this),
             () -> new AlertDialog.Builder(this).setTitle("Reset layout and show all apps?").setPositiveButton("Reset", (dialog, which) -> {
                 prefs.edit().remove("app_order").remove("hidden_apps").remove("tv_columns").remove("phone_columns").remove("large_tiles")
                         .remove("focus_title_size").remove("clock_size").remove("background_dim").remove("theme_mode")
@@ -1968,6 +1993,8 @@ public final class PersonalHomeActivity extends Activity {
         name.setHint("Your name");
         name.setText(prefs.getString("name", "Sadique Sadiq"));
         name.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS);
+        name.setTextColor(TEXT); name.setHintTextColor(MUTED); applyAppFont(name);
+        name.setPadding(dp(16), dp(12), dp(16), dp(12)); name.setBackground(toolbarSurface(false));
         form.addView(name);
         // Choose / Remove side by side (user 2026-11-01).
         LinearLayout photoRow = new LinearLayout(this);
@@ -2019,8 +2046,8 @@ public final class PersonalHomeActivity extends Activity {
         form.addView(actionRow);
         profile = new AlertDialog.Builder(this).setTitle(prefs.getBoolean("setup", false) ? "Your profile" : "Welcome · set up your Home")
                 .setView(form).create();
-        profile.setOnDismissListener(d -> profileAvatarPreview = null);
-        profile.show();
+        profile.setOnDismissListener(d -> { profileAvatarPreview = null; handler.postDelayed(notificationOffer, 1200); });
+        profile.show(); GlassSettings.styleDialog(this, profile);
     }
 
     /**
@@ -2029,6 +2056,21 @@ public final class PersonalHomeActivity extends Activity {
      * the prompt never came back. Now the offer reappears whenever we are not the default
      * (with a short snooze after "Later" so it doesn't nag every launch).
      */
+    private final Runnable updateCheck = new Runnable() {
+        @Override public void run() {
+            if (!resumed) return;
+            if ((profile == null || !profile.isShowing()) && !homeOfferShowing && (searchDialog == null || !searchDialog.isShowing()))
+                GitHubUpdates.check(PersonalHomeActivity.this, false);
+            handler.postDelayed(this, 60_000L);
+        }
+    };
+    private final Runnable notificationOffer = this::maybeOfferNotificationAccess;
+    private boolean homeOfferShowing;
+    private void maybeOfferNotificationAccess() {
+        if (!resumed || homeOfferShowing || (profile != null && profile.isShowing()) || (searchDialog != null && searchDialog.isShowing()) || GlassSettings.showing(this)) return;
+        NotificationAccessSetup.offer(this);
+    }
+
     private void maybeOfferDefaultHome() {
         if (isDestroyed() || isFinishing()) return;
         boolean alreadyDefault = false;
@@ -2037,17 +2079,21 @@ public final class PersonalHomeActivity extends Activity {
             if (rm != null && rm.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME))
                 alreadyDefault = rm.isRoleHeld(android.app.role.RoleManager.ROLE_HOME);
         }
-        if (alreadyDefault || !HomeSettingsActivity.available(this)) return;
+        if (homeOfferShowing || (HomeAutomation.enabled(this) && VolumeAutoStart.paired(this))) return;
+        if (alreadyDefault && VolumeAutoStart.paired(this)) return;
+        if (!HomeSettingsActivity.available(this) && VolumeAutoStart.paired(this)) return;
         // One-time migration: drop the old permanent flag so installs that lost the
         // default-home status on update get the offer again.
         if (prefs.contains("home_offer_done")) prefs.edit().remove("home_offer_done").apply();
         if (System.currentTimeMillis() < prefs.getLong("home_offer_snooze", 0)) return;
+        homeOfferShowing = true;
         new AlertDialog.Builder(this)
             .setTitle("Use as Home screen?")
             .setMessage("Set Personal Launcher as your default launcher so the Home button opens it.")
             .setPositiveButton("Set as default", (d, w) -> LauncherSetupUi.show(this))
             .setNegativeButton("Later", (d, w) -> prefs.edit().putLong("home_offer_snooze",
                     System.currentTimeMillis() + 3L * 24 * 60 * 60 * 1000).apply())
+            .setOnDismissListener(d -> { homeOfferShowing = false; handler.postDelayed(notificationOffer, 1200); })
             .show();
     }
 
@@ -2055,7 +2101,7 @@ public final class PersonalHomeActivity extends Activity {
         String name = prefs.getString("name", "Sadique Sadiq");
         userName.setText(name.isEmpty() ? "Your name" : name);
         if (avatarBitmap != null) avatar.setImageBitmap(avatarBitmap);
-        else avatar.setImageResource(R.drawable.ic_person);
+        else avatar.setImageDrawable(TvSymbols.icon(this, R.drawable.ic_person));
     }
 
     private void loadAvatar() {
@@ -2075,7 +2121,7 @@ public final class PersonalHomeActivity extends Activity {
             for (java.util.Map.Entry<String, ?> e : all.entrySet()) {
                 String k = e.getKey();
                 // Skip secrets, caches, and transient state.
-                if (k.contains("key") || k.contains("secret") || k.contains("token")
+                if (k.equals(NotificationAccessSetup.ASKED) || k.contains("key") || k.contains("secret") || k.contains("token")
                         || k.contains("password") || k.startsWith("weather_cached")) continue;
                 Object v = e.getValue();
                 if (v instanceof String || v instanceof Integer || v instanceof Boolean
@@ -2152,6 +2198,7 @@ public final class PersonalHomeActivity extends Activity {
                     java.util.Iterator<String> keys = settings.keys();
                     while (keys.hasNext()) {
                         String k = keys.next();
+                        if (k.equals(NotificationAccessSetup.ASKED)) continue;
                         Object v = settings.get(k);
                         if (v instanceof String) ed.putString(k, (String) v);
                         else if (v instanceof Integer) ed.putInt(k, (Integer) v);
@@ -2237,6 +2284,8 @@ public final class PersonalHomeActivity extends Activity {
         resumed = true;
         VolumeAutoStart.request(this);
         HomeAutomation.onResume(this);
+        handler.removeCallbacks(notificationOffer); handler.postDelayed(notificationOffer, 1200);
+        handler.removeCallbacks(updateCheck); handler.postDelayed(updateCheck, 12000);
         armIdleScreensaver();
         handler.removeCallbacks(tick);
         tick.run();
@@ -2271,6 +2320,8 @@ public final class PersonalHomeActivity extends Activity {
         handler.removeCallbacks(tick);
         handler.removeCallbacks(secondTick);
         handler.removeCallbacks(weatherRefresh);
+        handler.removeCallbacks(notificationOffer);
+        handler.removeCallbacks(updateCheck);
         handler.removeCallbacks(slideshowStep);
         if (connectivity != null && networkRegistered) {
             connectivity.unregisterNetworkCallback(networkCallback);
