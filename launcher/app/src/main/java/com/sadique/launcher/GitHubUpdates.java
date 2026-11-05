@@ -94,6 +94,12 @@ final class GitHubUpdates {
         });
     }
     private static boolean idle(WeakReference<Activity> owner,Context c) {
+        if (Looper.myLooper()!=Looper.getMainLooper()) {
+            java.util.concurrent.FutureTask<Boolean> task=new java.util.concurrent.FutureTask<>(() -> idle(owner,c));
+            MAIN.post(task);
+            try { return task.get(2,java.util.concurrent.TimeUnit.SECONDS); }
+            catch(Exception unavailable) { task.cancel(false); return false; }
+        }
         Activity host=owner.get();
         AudioManager audio=c.getSystemService(AudioManager.class);
         return host!=null && !host.isFinishing() && !host.isDestroyed() && host.hasWindowFocus()
