@@ -866,7 +866,7 @@ public final class PersonalHomeActivity extends Activity {
         networkStatus.setTextColor(color);
         int iconId = wifi || caps == null ? R.drawable.ic_wifi
                 : caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ? R.drawable.ic_ethernet : R.drawable.ic_internet;
-        android.graphics.drawable.Drawable icon = getDrawable(iconId).mutate();
+        android.graphics.drawable.Drawable icon = TvSymbols.icon(this, iconId);
         icon.setTint(color);
         icon.setBounds(0, 0, dp(28), dp(24));
         networkStatus.setCompoundDrawables(icon, null, null, null);
@@ -2291,6 +2291,7 @@ public final class PersonalHomeActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         resumed = true;
+        GitHubUpdates.resume(this);
         VolumeAutoStart.request(this);
         HomeAutomation.onResume(this);
         handler.removeCallbacks(notificationOffer); handler.postDelayed(notificationOffer, 1200);
@@ -2749,4 +2750,5 @@ public final class PersonalHomeActivity extends Activity {
                 (int) (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * part));
     }
 }
+
 

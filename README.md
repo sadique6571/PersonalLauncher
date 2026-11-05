@@ -2,7 +2,7 @@
 
 **Personal Launcher by Sadique Sadiq** — a customizable Home launcher for Android TV / Google TV.
 
-- **Version:** 7.0 · **Android version code:** 51 · Release build numbers increase independently.
+- **Version:** 7.0 · **Android version code:** 52 · Release build numbers increase independently.
 - **Package:** `com.sadique.launcher` · **Minimum Android:** 8.0 / API 26
 - Plain Java and Android Views, with performance profiles for low-memory TVs.
 - Internet access is used for daily Bing wallpaper, Picsum screensaver photos, weather and city lookup.
@@ -28,6 +28,11 @@ the Android installer is the fallback; one-time unknown-source approval and inst
 
 Open **Launcher settings → System → Updates** to toggle automatic updates, check now, inspect status or install
 a verified download. Installation attempts are bounded, and an update can remain ready until Home is idle.
+Manual **Check now** shows one progress capsule above Home's toolbar. Repeated checks join the current
+download. The percentage stops at 99 while SHA-256, package and signing checks run; after verification,
+100% removes the capsule and opens Android's APK installer. If Android requests unknown-source approval,
+granting it and returning to Home continues that explicit install request. Leaving Home does not launch
+an installer over another app; the verified APK remains ready in Updates. Automatic checks remain quiet.
 Disabling auto-update prevents automatic installation. The old APK needs one manual update to receive this feature.
 
 ## Home screen
@@ -38,6 +43,7 @@ The default **TV Glass** style is inspired by Apple TV's visual layout:
   This is app artwork, not a streaming recommendation feed.
 - The app icon and Android TV banner use the selected silver **PL Monogram**. Home toolbar actions are larger, standalone white symbols; remote focus uses colour and scale without a surrounding box.
 - Glass surfaces use translucent neutral tint, a fine reflected rim and rounded corners. Volume uses one bottom-filled white capsule with the output icon inside; Picture/Sound preview sliders use matching broad horizontal capsules.
+- Apple-style controls share one rounded line-symbol family, including network, Bluetooth and audio output icons. Switching to Classic refreshes icons on open and saved settings pages. Classic panels have consistently rounded outer corners and an inset from the screen edge.
 - Floating 16:9 app cards use original app icons, rounded corners, a white focus outline and subtle focus zoom. Header, drawer, search results, profile editor and volume capsule share the selected glass appearance.
   Light performance mode applies focus changes without the zoom animation.
 - The profile photo and name sit at the top left. Weather, network status, Search, the notification bell and
@@ -238,3 +244,4 @@ a new APK release. The download above follows the latest signed release.
 
 The [volume-hold bridge guide](docs/volume-hold-bridge.md) documents the optional shell helper and
 diagnostic commands for firmware with slow or missing held-volume repeat.
+
