@@ -382,7 +382,7 @@ public final class PersonalHomeActivity extends Activity {
         root.addView(page, new ViewGroup.LayoutParams(-1, -1));
         // Cinematic shade: subtle dark gradients top and bottom for a film-like frame.
         GradientDrawable topShade = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{0x66000000, 0x00000000});
+                new int[]{TvGlassStyle.enabled(prefs) ? 0x22000000 : 0x66000000, 0x00000000});
         View topBar = new View(this);
         topBar.setBackground(topShade);
         topBar.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -413,7 +413,8 @@ public final class PersonalHomeActivity extends Activity {
         avatar.setOnClickListener(v -> LauncherPin.require(this, this::editProfile));
         avatar.setOnFocusChangeListener((v, focus) -> v.setBackground(avatarSurface(focus)));
         LinearLayout identityCard = new LinearLayout(this); identityCard.setGravity(Gravity.CENTER_VERTICAL);
-        if (tvGlass()) { identityCard.setBackground(TvGlassStyle.surface(dp(28), dp(1), false, prefs)); identityCard.setPadding(dp(6), dp(5), dp(14), dp(5)); }
+        // The header already supplies the glass; a second profile-card fill hid the wallpaper detail.
+        if (tvGlass()) identityCard.setPadding(dp(6), dp(5), dp(14), dp(5));
         identityCard.setOnClickListener(v -> LauncherPin.require(this, this::editProfile));
         identityCard.addView(avatar, new LinearLayout.LayoutParams(dp(44), dp(44)));
         LinearLayout identity = new LinearLayout(this);
