@@ -17,7 +17,7 @@ set where `HomeKeyService` breaks held-volume repeat
 | Firmware build | `BRAVIA_VH22_EU-user 12 STT2.230505.001.S136 682241 release-keys` |
 | Remote | `SONY TV VRC 001`, vendor `054c`, product `0x0eae` (Bluetooth) |
 
-The retail model was not recorded. The launcher is CleanYourTV v3.0.0 as Home,
+The retail model was not recorded. The launcher is the reference launcher v3.0.0 as Home,
 with no accessibility service enabled.
 
 ## The problem it works around

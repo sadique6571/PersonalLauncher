@@ -107,7 +107,7 @@ Publish the APK's own SHA-256 next to it as well.
 ## Reference module
 
 Retro, an NES library for the TV, declares a card exactly as above:
-<https://github.com/udhaykumarbala/tv-vibehack-retro>.
+a separate retro-gaming module project.
 
 A launcher that wants other apps' Continue watching rows can read them, see
 [`docs/watch-next.md`](watch-next.md).

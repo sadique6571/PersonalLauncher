@@ -235,7 +235,7 @@ validated repair for this firmware merely because an app shortcut opens.
 
 ### Accepted workaround: an IR-device KCM overlay, without key filtering
 
-After reviewing the [Sony X9000H Apps-layout companion source](https://github.com/Lzchyi/cleanyourtv/tree/ad1c9badcf745acbd86332c40004e53d54fc09a6/companions/sony-apps-layout)
+After reviewing the Sony X9000H Apps-layout companion source (external companion source)
 and the [VH22 layout reports](https://github.com/sadique6571/PersonalLauncher/issues/1680),
 the owner approved a bounded local trial of that approach on this Android 9 TV.
 The reference Bluetooth device identifiers and HID usage were **not** copied.

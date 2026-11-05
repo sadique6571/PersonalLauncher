@@ -18,7 +18,7 @@ this file repeats their rules in the form an agent needs, and links to them for 
 - **Disable, never uninstall.** `pm disable-user --user 0`, one package per shell call. No
   `pm uninstall`, no root, nothing flashed. Every step must be undone by `tools/restore.sh`.
 - **Back up first.** Package list, disabled list, `getprop` and settings into `backup/` before the first
-  change. `tools/disable.sh` also writes its own record in `~/.cleanyourtv/`; keep the list you applied.
+  change. `tools/disable.sh` also writes its own record in `~/.personallauncher/`; keep the list you applied.
 - **Leave alone what the TV needs to work:** the TV app and input services behind HDMI and the tuner,
   the input/source menu, remote and Bluetooth pairing, the on-screen keyboard, Play Store and Play
   Services. When a package name says nothing, read `dumpsys package <name>`, then ask.
@@ -59,8 +59,7 @@ this file repeats their rules in the form an agent needs, and links to them for 
   fails verification, or an SDK below the launcher's `minSdk` 26. Do not retry in a loop, and do not lower
   `minSdk` or hand over an APK built elsewhere.
 - **Not an Android TV?** No ADB port at all, or the set identifies as Tizen, webOS, Roku OS, VIDAA or
-  SmartCast: stop, nothing here applies. Send the person to https://cleanyour.tv/not-android, which turns
-  off the tracking with the remote.
+  SmartCast: stop, nothing here applies. Use the platform vendor's supported settings and instructions instead.
 
 The person's backups (`backup/`), screenshots (`shots/`), notes (`work/`) and the ADB key
 (`tools/adbkey/`) are listed in `.gitignore` and must never be committed. If the person wants to
@@ -124,7 +123,7 @@ use it and ends with the check to run.
 
 | Check | Command or rule |
 |---|---|
-| Tests, as CI runs them | `tools/venv/bin/python -m unittest discover -s tests -v` after `python3 -m venv tools/venv` and `tools/venv/bin/pip install -r tools/requirements.txt`. On `main`, CI sets `CLEANYOURTV_STRICT=1`, and its "README tables" job checks that the TV tables and counts are what `tools/gen_tables.py` writes. On Windows the suites that drive `tools/*.sh` report as skipped: they need a POSIX shell, and CI runs them. |
+| Tests, as CI runs them | `tools/venv/bin/python -m unittest discover -s tests -v` after `python3 -m venv tools/venv` and `tools/venv/bin/pip install -r tools/requirements.txt`. The legacy documentation/table jobs are disabled in this fork; launcher CI remains required. On Windows the suites that drive `tools/*.sh` report as skipped: they need a POSIX shell, and CI runs them. |
 | Launcher, if you touched `launcher/` | JDK 17, Android SDK platform 34, build-tools 34.0.0. In `launcher/`: `./gradlew --no-daemon testReleaseUnitTest lintRelease assembleRelease`. Lint must stay at zero errors. |
 | README rows | A new list adds only its folder, with a `tv.json`: the TV tables, the brand grid and the counts are generated after merging, so leave them alone. A theme has its row in `themes/README.md`; an add-on in `addons/README.md`. |
 | One topic per PR | A TV list never rides inside a launcher feature PR. A device's list plus small fixes for that same device can be one PR. |

@@ -361,11 +361,11 @@ Things that bit us or contributors, so they don't bite you. Commands use `tools/
   launcher. Android's build tools reject a checkout under a localized folder such as `桌面` (Desktop).
   This was seen while installing on a Sony KM-55X85J (Google TV 12, Taiwan firmware); the TV is not
   changed when the build stops here ([#1777](https://github.com/sadique6571/PersonalLauncher/issues/1777)).
-  Clone the repo into an ASCII-only path such as `C:\cleanyourtv`, or map a drive letter to the
+  Clone the repo into an ASCII-only path such as `C:\PersonalLauncher`, or map a drive letter to the
   checkout's parent directory and run the build through it:
   ```powershell
   subst X: 'C:\Users\<user>\OneDrive\桌面\sideproject'
-  Set-Location X:\cleanyourtv
+  Set-Location X:\PersonalLauncher
   powershell -ExecutionPolicy Bypass -File launcher\build-and-install.ps1 -TvHost <tv ip>
   Set-Location C:\
   subst X: /D  # after the build is finished
@@ -802,7 +802,7 @@ Things that bit us or contributors, so they don't bite you. Commands use `tools/
   the TV or pass `STOCK_LAUNCHER=<package>`.
 - **`tools/restore.sh` leaves the packages an earlier batch disabled off, after the TV changed its
   address mid-cleanup.** The recovery record is one file per list and address
-  (`~/.cleanyourtv/recovery-<address>-<list hash>.json`), so a new DHCP lease - a router restart, or
+  (`~/.personallauncher/recovery-<address>-<list hash>.json`), so a new DHCP lease - a router restart, or
   the Wi-Fi forget and re-join the setupwraith step asks for itself - makes the next
   `tools/disable.sh` run find no record and write a fresh one from a TV that is already partly
   cleaned: every package the earlier batches disabled is in it as "already disabled, left alone by

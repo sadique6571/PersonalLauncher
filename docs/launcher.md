@@ -125,14 +125,14 @@ The launcher's own page has these rows, top to bottom:
   page.
 
 **Change the default home:** Launcher settings and the optional Default-home tile
-(`show_home_settings_shortcut`) request the Home role on Android 10 and newer when CleanYourTV is not
-already the default. Accept the system prompt to make the remote's standard Home button open CleanYourTV.
-If the role request is unavailable, or CleanYourTV already holds it, they open Android's home settings.
+(`show_home_settings_shortcut`) request the Home role on Android 10 and newer when Personal Launcher is not
+already the default. Accept the system prompt to make the remote's standard Home button open Personal Launcher.
+If the role request is unavailable, or Personal Launcher already holds it, they open Android's home settings.
 Choose the original launcher to stop using
-CleanYourTV as Home, or CleanYourTV to return. The original launcher must be enabled; if the install
+Personal Launcher as Home, or Personal Launcher to return. The original launcher must be enabled; if the install
 script disabled it, run the [restore script](../README.md#restoring-your-tv) first. Some TVs provide no
 home picker. Choosing Home does not disable the original launcher. Keep it enabled until the real remote's
-Home button and a reboot both return to CleanYourTV. Some firmware depends on the original launcher even
+Home button and a reboot both return to Personal Launcher. Some firmware depends on the original launcher even
 when another app is Home; disabling it can leave a black screen or break remote buttons. A successful
 system prompt alone does not establish that a particular TV supports disabling its stock launcher.
 
@@ -158,8 +158,7 @@ weekends, festival greetings and the Shamsi date. Other languages keep their ori
 Any TV app can declare its own tile (label, caption, glow). The launcher asks you once per app, keeps it
 hidden by default, and remembers the answer for that app's signing key and card name. Hold OK on Settings
 and choose Module cards to change your mind. How to make one: [`docs/modules.md`](modules.md); the
-contract: [`docs/specs/card.md`](specs/card.md). Ready-made ones are in [`addons/`](../addons/), and
-[cleanyour.tv/addons](https://cleanyour.tv/addons) shows the themes, switches and add-ons together.
+contract: [`docs/specs/card.md`](specs/card.md). Module availability depends on the separately installed apps; no external catalogue is bundled.
 
 ## Clock screensaver
 

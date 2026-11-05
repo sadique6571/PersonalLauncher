@@ -17,7 +17,7 @@ in two ways: it covers the remote's five app buttons as well as Settings, and it
 | Firmware build | `BRAVIA_AE2_EU-user 14 UKN4.250422.001 603100 release-keys` |
 | Remote | `SONY TV VRC 001`, vendor `054c`, product `0x0eae` (Bluetooth), `KeyboardType: 1` in `dumpsys input` |
 
-The launcher is CleanYourTV v3.1 as Home. `launcherx` and `setupwraith` are disabled, no accessibility
+The launcher is the reference launcher v3.1 as Home. `launcherx` and `setupwraith` are disabled, no accessibility
 service is bound, and `setupwraith` did not own the saved Wi-Fi network (`cname=android.uid.system`).
 
 ## The problem

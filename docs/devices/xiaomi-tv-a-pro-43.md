@@ -16,11 +16,11 @@ an initial compatibility report, not a multi-day debloat list.
 
 ## Setup wizard and Home
 
-CleanYourTV Setup left the stock Home screen alone and reported that the setup wizard owned the saved
+the setup tool left the stock Home screen alone and reported that the setup wizard owned the saved
 Wi-Fi network. The owner had already forgotten Wi-Fi and connected Ethernet, but the warning remained.
 ADB inspection showed `com.google.android.tungsten.setupwraith` as the Wi-Fi config owner. After
 Ethernet was confirmed as the active default network, the setup wizard was disabled; the launcher
-build-and-install script installed and started CleanYourTV, made it Home, and only then disabled the
+build-and-install script installed and started the reference launcher, made it Home, and only then disabled the
 stock launcher. After one reboot, Home still resolved to `com.sadique.launcher/.MainActivity`.
 
 Do not disable the setup wizard while the TV is still relying on its saved Wi-Fi network. Confirm

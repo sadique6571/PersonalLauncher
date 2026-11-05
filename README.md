@@ -2,7 +2,7 @@
 
 **Personal Launcher by Sadique Sadiq** — a customizable Home launcher for Android TV / Google TV.
 
-- **Version:** 7.0 · **Android version code:** 54 · Release build numbers increase independently.
+- **Version:** 7.0 · **Android version code:** 55 · Release build numbers increase independently.
 - **Package:** `com.sadique.launcher` · **Minimum Android:** 8.0 / API 26
 - Plain Java and Android Views, with performance profiles for low-memory TVs.
 - Internet access is used for daily Bing wallpaper, Picsum screensaver photos, weather and city lookup.
@@ -14,6 +14,11 @@
 [Release page](https://github.com/sadique6571/PersonalLauncher/releases/latest)
 
 Release tags retain the older `v4.7-build-N` naming format; the APK's displayed version remains **7.0**.
+
+## Contact us
+
+For changes, feature requests and suggestions, email [sadique6571@gmail.com](mailto:sadique6571@gmail.com).
+Report security issues privately using [SECURITY.md](SECURITY.md).
 
 ## Automatic GitHub updates
 

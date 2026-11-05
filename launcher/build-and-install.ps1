@@ -125,9 +125,9 @@ function Undo-Handover {
     $back = Get-HomeNow
     if ($enableExit -eq 0 -and $setHomeExit -eq 0 -and $back -like "$StockLauncher/*") { Write-Warning "$StockLauncher owns Home again."; return $true }
     $homeDir = if ($env:USERPROFILE) { $env:USERPROFILE } elseif ($env:HOME) { $env:HOME } else { (Get-Location).Path }
-    $rec = Join-Path $homeDir ("cleanyourtv-handover-" + ($TvHost -replace '[^A-Za-z0-9._-]', '_') + '.txt')
+    $rec = Join-Path $homeDir ("personallauncher-handover-" + ($TvHost -replace '[^A-Za-z0-9._-]', '_') + '.txt')
     $lines = @(
-        "# cleanyourtv: the launcher handover on $TvHost did not finish. From the repo root:",
+        "# PersonalLauncher: the launcher handover on $TvHost did not finish. From the repo root:",
         "tools\venv\Scripts\python.exe tools\tv.py 'pm enable --user 0 $StockLauncher'   # with `$env:TV_HOST='$TvHost'",
         "tools\venv\Scripts\python.exe tools\tv.py 'cmd package set-home-activity --user 0 `$(cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME $StockLauncher | tail -n 1)'",
         "# then check: tools\venv\Scripts\python.exe tools\tv.py '$homeQuery'"

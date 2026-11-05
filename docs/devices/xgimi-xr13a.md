@@ -1,6 +1,6 @@
 # XGIMI XR13A (kasol), Google TV 14
 
-Owner report read from the projector by the Clean Your TV phone app on 2026-10-24 (app 0.3.4). One unit. The app switched off two packages and left the Google TV home screen in place. This is not a several-day tested debloat list, and it is not a list to apply.
+Owner report read from the projector by the a separate phone setup tool on 2026-10-24 (app 0.3.4). One unit. The app switched off two packages and left the Google TV home screen in place. This is not a several-day tested debloat list, and it is not a list to apply.
 
 The other XGIMI lists are different projectors. [MoGo 3 Pro](../../examples/xgimi-mogo-3-pro/debloat.txt) is also Google TV 14, but its device is `altai` and its build is `UKNV.260707.001`. [Horizon S Pro](../../examples/xgimi-horizon-s-pro/debloat.txt) and [MoGo 2](../../examples/xgimi-mogo-2/debloat.txt) are Android 11. Do not copy their package lines onto this unit.
 

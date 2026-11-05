@@ -27,7 +27,7 @@ Before `tools/disable.sh` changes anything it writes down what the TV looked lik
 - which component owned Home;
 - the three animation scales.
 
-That record lives in `~/.cleanyourtv/`, one file per TV and list.
+That record lives in `~/.personallauncher/`, one file per TV and list.
 
 - A second run of the same list keeps the first record instead of saving the cleaned-up state over it.
 - If you added packages to the list since, that run adds them to the record before disabling them, and
