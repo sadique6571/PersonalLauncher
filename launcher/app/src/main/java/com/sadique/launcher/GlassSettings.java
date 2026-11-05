@@ -14,6 +14,11 @@ import android.widget.TextView;
 
 /** Shared remote-friendly glass cards for settings and every launcher option page. */
 final class GlassSettings {
+    static boolean showing(Activity host) {
+        java.lang.ref.WeakReference<Panel> ref = PANELS.get(host);
+        Panel panel = ref == null ? null : ref.get();
+        return panel != null && panel.dialog.isShowing();
+    }
     static int dp(Activity host, float n) { return Math.round(n * host.getResources().getDisplayMetrics().density); }
     /** Theme accent color, mirrored from the launcher's theme picker. */
     static int themeAccent(android.content.Context ctx) {
@@ -21,7 +26,7 @@ final class GlassSettings {
         switch (prefs.getInt("theme_name", 0)) {
             case 1: return 0xffff9a5c; // Sunset Orange
             case 2: return 0xffb388ff; // Deep Purple
-            case 3: return prefs.getInt("custom_accent", 0xff40d9ff);
+            case 3: return TvGlassStyle.readable(prefs.getInt("custom_accent", 0xff40d9ff));
             default: return 0xff40d9ff; // Midnight Cyan
         }
     }
@@ -116,7 +121,7 @@ final class GlassSettings {
         android.content.SharedPreferences prefs = ctx.getSharedPreferences("personal_home", 0);
         String[] fonts = {"sans-serif", "serif", "monospace", "sans-serif-light"};
         view.setTypeface(android.graphics.Typeface.create(
-                fonts[Math.max(0, Math.min(3, prefs.getInt("app_font", 0)))], android.graphics.Typeface.NORMAL));
+                TvGlassStyle.enabled(prefs) ? "sans-serif" : fonts[Math.max(0, Math.min(3, prefs.getInt("app_font", 0)))], android.graphics.Typeface.NORMAL));
     }
     static View row(Activity host, String title, String subtitle, int icon, int tint, Runnable action) {
         LinearLayout row = new LinearLayout(host); row.setGravity(Gravity.CENTER_VERTICAL);
@@ -124,7 +129,7 @@ final class GlassSettings {
         row.setMinimumHeight(dp(host, 49)); row.setFocusable(true); row.setFocusableInTouchMode(true); row.setClickable(true);
         row.setBackground(background(host, false));
         row.setOnFocusChangeListener((v, focus) -> row.setBackground(background(host, focus || row.isSelected())));
-        ImageView symbol = new ImageView(host); symbol.setImageResource(icon); symbol.setColorFilter(tint);
+        ImageView symbol = new ImageView(host); symbol.setImageDrawable(TvSymbols.icon(host, icon)); symbol.setColorFilter(tint);
         if (tint == themeAccent(host)) symbol.setTag("theme_accent");
         row.addView(symbol, new LinearLayout.LayoutParams(dp(host, 24), dp(host, 24)));
         LinearLayout copy = new LinearLayout(host); copy.setOrientation(LinearLayout.VERTICAL);
@@ -155,7 +160,7 @@ final class GlassSettings {
             card.setBackground(cardBackground(host, focus));
             card.setTranslationZ(focus ? dp(host, 3) : 0);
         });
-        ImageView symbol = new ImageView(host); symbol.setImageResource(icon); symbol.setColorFilter(tint);
+        ImageView symbol = new ImageView(host); symbol.setImageDrawable(TvSymbols.icon(host, icon)); symbol.setColorFilter(tint);
         if (tint == themeAccent(host)) symbol.setTag("theme_accent");
         LinearLayout.LayoutParams image = new LinearLayout.LayoutParams(dp(host, 26), dp(host, 26));
         image.setMarginEnd(dp(host, 9)); card.addView(symbol, image);
@@ -237,7 +242,7 @@ final class GlassSettings {
         TextView heading = label(host, title, 21, Color.WHITE); heading.setTypeface(heading.getTypeface(), Typeface.BOLD);
         bar.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
         ImageView settings = new ImageView(host);
-        settings.setImageResource(R.drawable.ic_settings); settings.setColorFilter(0xffc9dfef);
+        settings.setImageDrawable(TvSymbols.icon(host, R.drawable.ic_settings)); settings.setColorFilter(0xffc9dfef);
         settings.setPadding(dp(host, 7), dp(host, 7), dp(host, 7), dp(host, 7));
         settings.setContentDescription(host.getString(R.string.tv_settings));
         settings.setId(View.generateViewId()); settings.setFocusable(true); settings.setClickable(true);
@@ -297,10 +302,34 @@ final class GlassSettings {
         for (Page page : state.pages) refreshViews(host, page.root);
         applyBlur(state.dialog);
     }
+    static void styleDialog(Activity host, AlertDialog dialog) {
+        if (!TvGlassStyle.enabled(host.getSharedPreferences("personal_home", 0)) || dialog.getWindow() == null) return;
+        GradientDrawable shell = TvGlassStyle.surface(dp(host, 24), dp(host, 1), false, host.getSharedPreferences("personal_home", 0));
+        dialog.getWindow().setBackgroundDrawable(shell);
+        styleDialogText(host, dialog.getWindow().getDecorView());
+        applyBlur(dialog);
+        for (int which : new int[]{AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_NEUTRAL}) {
+            TextView button = dialog.getButton(which);
+            if (button != null) { applyAppFont(host, button); button.setTextColor(0xfff1f5fb); }
+        }
+    }
+    private static void styleDialogText(Activity host, View view) {
+        if (view instanceof TextView) {
+            TextView text = (TextView) view;
+            int weight = text.getTypeface() == null ? Typeface.NORMAL : text.getTypeface().getStyle();
+            applyAppFont(host, text); text.setTypeface(text.getTypeface(), weight);
+            text.setTextColor(0xfff1f5fb);
+        }
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) styleDialogText(host, group.getChildAt(i));
+        }
+    }
+    private static android.content.SharedPreferences prefsFor(Activity host) { return host.getSharedPreferences("personal_home", 0); }
     private static void styleShell(Activity host, View page) {
         boolean glass = TvGlassStyle.enabled(host.getSharedPreferences("personal_home", 0));
         GradientDrawable shell = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                glass ? new int[]{0xf22b3442, 0xf0111927} : new int[]{0xff122338, 0xff09182a});
+                glass ? new int[]{TvGlassStyle.tinted(0xff2b3442, prefsFor(host)), TvGlassStyle.tinted(0xff111927, prefsFor(host))} : new int[]{0xff122338, 0xff09182a});
         shell.setCornerRadius(dp(host, glass ? 26 : 10));
         android.content.SharedPreferences prefs = host.getSharedPreferences("personal_home", 0);
         shell.setStroke(dp(host, 1), glass ? TvGlassStyle.edge(prefs) : 0x55415a72);

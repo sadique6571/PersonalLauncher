@@ -20,9 +20,8 @@ final class HomeDashboard {
                 R.string.h_bluetooth, android.R.drawable.stat_sys_data_bluetooth, BLUETOOTH);
         pair(host, rows, panel, actions, R.string.h_inputs, R.drawable.ic_input, INPUTS,
                 R.string.h_display, R.drawable.ic_picture, DISPLAY);
-        LinearLayout sound = new LinearLayout(host);
-        card(host, sound, R.string.h_sound, R.drawable.ic_volume, () -> { panel.dismiss(); actions.open(SOUND); });
-        rows.addView(sound);
+        pair(host, rows, panel, actions, R.string.h_sound, R.drawable.ic_volume, SOUND,
+                R.string.h_screensaver, R.drawable.ic_picture, SCREENSAVER);
         section(host, rows, R.string.h_personalize);
         row(host, rows, R.string.h_launcher_settings, R.string.h_layout_hint, R.drawable.ic_palette, () -> actions.open(SETTINGS));
         row(host, rows, R.string.h_single_identity, 0, R.drawable.ic_person, () -> { panel.dismiss(); actions.open(IDENTITY); });
@@ -36,8 +35,6 @@ final class HomeDashboard {
         section(host, rows, R.string.h_more_tools);
         pair(host, rows, panel, actions, R.string.h_search, R.drawable.ic_search, SEARCH,
                 R.string.h_store, R.drawable.ic_apps, STORE);
-        pair(host, rows, panel, actions, R.string.h_screensaver, R.drawable.ic_picture, SCREENSAVER,
-                R.string.h_categories, R.drawable.ic_categories, CATEGORIES);
         panel.show(); return panel;
     }
     private static void pair(Activity host, LinearLayout rows, AlertDialog panel, Actions actions,

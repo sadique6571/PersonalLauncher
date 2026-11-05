@@ -79,7 +79,7 @@ public final class LandscapeView extends FrameLayout {
         center.setGravity(Gravity.CENTER);
         center.setOrientation(LinearLayout.VERTICAL);
         clock = label(88);
-        clock.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
+        clock.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
         clock.setSingleLine(true);
         // Bigger screensaver clock (user 2026-11-01).
         clock.setAutoSizeTextTypeUniformWithConfiguration(44, 132, 2, android.util.TypedValue.COMPLEX_UNIT_SP);
@@ -130,6 +130,7 @@ public final class LandscapeView extends FrameLayout {
         TextView label = new TextView(getContext());
         label.setTextColor(Color.WHITE);
         label.setTextSize(size);
+        if (TvGlassStyle.enabled(prefs)) label.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
         label.setGravity(Gravity.CENTER);
         label.setShadowLayer(3, 0, 1, Color.BLACK);
         return label;
