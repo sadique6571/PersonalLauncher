@@ -88,6 +88,8 @@ Open **Launcher settings → Theme**:
 | Visual style | TV Glass / Classic | Switch the Home arrangement and shared panel style |
 | Glass finish | Soft / Clear / Frosted | Change TV Glass surface appearance |
 | Glass intensity | Airy / Normal / Solid | Adjust surface opacity |
+| Avatar shape | Round / Rounded square | Shape of the status-bar photo and profile preview, saved per theme |
+| Header background | Off / Glass / Frosted | Status-bar wallpaper glass in TV Glass and Classic; transparency Off makes it solid |
 | Panel transparency | On / Off | Make panels, status bar and capsules solid when off; app drawer glass stays at its own saved intensity. Each theme saves this toggle independently |
 | Glass edge | Off / Subtle / Bright | Adjust the unfocused glass outline; focused controls remain visible |
 | Theme | Midnight Cyan / Sunset Orange / Deep Purple / Custom | Choose accent colours for controls and icons, including Black, Graphite, Silver, Blue, Teal, Gold, Rose and Indigo |
@@ -285,3 +287,10 @@ diagnostic commands for firmware with slow or missing held-volume repeat.
 Manual update progress uses a centered, full-height filling capsule up to 440 dp wide, constrained by
 the screen width. TV Glass uses its reflective shell and white fill; Classic uses its accent fill and
 border. Style changes update a visible capsule too. Verified completion opens the installer as before.
+
+Status-bar glass is restored once for existing theme profiles that inherited the missing-background
+default. After that, Header background → Off is honored in both styles. Classic retains a darker blue
+glass material. Its wallpaper blend and the header Frosted choice use a separate bounded 256 px cache,
+so header blur does not change drawer blur. Sharp/Rounded/Round app-card corners now use one radius
+for the shell, clipped artwork and focus edge; Subtle and Bright outlines retain different strengths.
+Profile photo shape is also available directly in the profile editor.

@@ -64,8 +64,8 @@ final class GlassSurface extends GradientDrawable {
             canvas.drawOval(outer, rim); canvas.drawOval(inset, inner);
         } else {
             float r = getCornerRadius();
-            canvas.drawRoundRect(outer, r, r, rim);
-            canvas.drawRoundRect(inset, Math.max(0, r - width * 1.5f), Math.max(0, r - width * 1.5f), inner);
+            canvas.drawRoundRect(outer, HomeGeometry.insetRadius(r,width/2f), HomeGeometry.insetRadius(r,width/2f), rim);
+            canvas.drawRoundRect(inset, HomeGeometry.insetRadius(r,width*2f), HomeGeometry.insetRadius(r,width*2f), inner);
         }
     }
 }

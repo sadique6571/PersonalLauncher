@@ -78,6 +78,33 @@ public class ThemePreferencesTest {
         prefs.edit().putBoolean("panel_transparency",true).apply();
         assertEquals(24,PanelTransparency.alpha(24,prefs,false));
     }
+    @Test public void missingHeaderGlassReturnsOnceAndExplicitOffSurvivesThemeChanges() {
+        ThemePreferences prefs=new ThemePreferences(new Memory());
+        prefs.edit().putInt("header_bg_mode",0).apply();
+        assertEquals(1,HeaderAppearance.mode(prefs));
+        prefs.edit().putInt("header_bg_mode",0).putInt("avatar_shape",1).apply();
+        assertEquals(0,HeaderAppearance.mode(prefs));
+        prefs.edit().putBoolean("tv_glass_style",false).apply();
+        assertEquals(1,HeaderAppearance.mode(prefs));
+        assertEquals(0,prefs.getInt("avatar_shape",0));
+        prefs.edit().putInt("header_bg_mode",2).apply();
+        assertEquals(2,HeaderAppearance.mode(prefs));
+        prefs.edit().putBoolean("tv_glass_style",true).apply();
+        assertEquals(0,HeaderAppearance.mode(prefs));
+        assertEquals(1,prefs.getInt("avatar_shape",0));
+    }
+    @Test public void edgeSettingsRetainDistinctStrengthsInBothThemes() {
+        ThemePreferences prefs=new ThemePreferences(new Memory());
+        for (boolean glass:new boolean[]{true,false}) {
+            prefs.edit().putBoolean("tv_glass_style",glass).apply();
+            int last=-1;
+            for(int edge=0;edge<3;edge++) {
+                prefs.edit().putInt("glass_edge",edge).apply();
+                int alpha=TvGlassStyle.edge(prefs)>>>24;
+                assertTrue(alpha>last); last=alpha;
+            }
+        }
+    }
     private static final class Memory implements SharedPreferences {
         final Map<String,Object> data=new HashMap<>(); final Set<OnSharedPreferenceChangeListener> listeners=new HashSet<>();
         public Map<String,?> getAll(){return new HashMap<>(data);}

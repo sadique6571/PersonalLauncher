@@ -33,8 +33,22 @@ final class TvGlassStyle {
     static GradientDrawable drawer(int radius, int strokeWidth, SharedPreferences prefs) {
         return surface(radius, strokeWidth, false, prefs, true, true);
     }
+    static GradientDrawable header(int radius,int strokeWidth,SharedPreferences prefs,boolean frosted) {
+        int finish=frosted ? 2 : finish(prefs), intensity=intensity(prefs);
+        if (enabled(prefs)) return surface(radius,strokeWidth,false,prefs,true,false,finish);
+        GlassSurface shape=new GlassSurface(strokeWidth,edge(prefs));
+        int alpha=GlassTransparency.tintAlpha(finish,intensity);
+        shape.setColors(new int[]{
+                (PanelTransparency.alpha(alpha,prefs,false)<<24) | (tinted(0xff132539,prefs)&0xffffff),
+                (PanelTransparency.alpha(Math.max(0,alpha-12),prefs,false)<<24) | (tinted(0xff09182a,prefs)&0xffffff)});
+        shape.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
+        shape.backdropOpacity(GlassTransparency.backdropAlpha(finish,intensity));
+        shape.setCornerRadius(radius); return shape;
+    }
     private static GradientDrawable surface(int radius, int strokeWidth, boolean focused, SharedPreferences prefs, boolean liquid, boolean drawer) {
-        int finish = finish(prefs);
+        return surface(radius,strokeWidth,focused,prefs,liquid,drawer,finish(prefs));
+    }
+    private static GradientDrawable surface(int radius,int strokeWidth,boolean focused,SharedPreferences prefs,boolean liquid,boolean drawer,int finish) {
         float strength = intensity(prefs) / 100f;
         int base = finish == 1 ? 24 : finish == 2 ? 96 : 48;
         int alpha = base + Math.round((245 - base) * strength * strength);
@@ -44,7 +58,6 @@ final class TvGlassStyle {
         int middle = (PanelTransparency.alpha(Math.max(0, alpha - 28),prefs,drawer) << 24) | (tinted(0xff494451, prefs) & 0xffffff);
         int bottom = (PanelTransparency.alpha(Math.max(0, alpha - 16),prefs,drawer) << 24) | (tinted(0xff393541, prefs) & 0xffffff);
         int edge = edge(prefs);
-        if (liquid && edge != 0) edge = 0xaaffffff;
         GlassSurface shape = new GlassSurface(strokeWidth, focused ? 0xccffffff : edge);
         if (liquid) shape.backdropOpacity(GlassTransparency.backdropAlpha(finish,intensity(prefs)));
         shape.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
