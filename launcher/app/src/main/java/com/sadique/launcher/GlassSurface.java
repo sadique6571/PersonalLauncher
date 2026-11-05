@@ -10,6 +10,9 @@ import android.graphics.drawable.GradientDrawable;
 
 /** Lightweight translucent lens: cached gradients, a bright upper lip and a soft lower reflection. */
 final class GlassSurface extends GradientDrawable {
+    private final Paint backdrop = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    private final android.graphics.Matrix backdropMatrix = new android.graphics.Matrix();
+    private android.graphics.Bitmap backdropImage;
     private final Paint rim = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint inner = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF outer = new RectF(), inset = new RectF();
@@ -20,6 +23,15 @@ final class GlassSurface extends GradientDrawable {
         this.width = Math.max(1, width); this.edge = edge;
         rim.setStyle(Paint.Style.STROKE); rim.setStrokeWidth(this.width);
         inner.setStyle(Paint.Style.STROKE); inner.setStrokeWidth(this.width);
+    }
+    void backdrop(android.graphics.Bitmap image, int sceneWidth, int sceneHeight, int x, int y) {
+        if (backdropImage != image) {
+            backdropImage=image;
+            backdrop.setShader(new android.graphics.BitmapShader(image, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
+        }
+        backdropMatrix.setScale(sceneWidth / (float) image.getWidth(), sceneHeight / (float) image.getHeight());
+        backdropMatrix.postTranslate(-x,-y); backdrop.getShader().setLocalMatrix(backdropMatrix);
+        invalidateSelf();
     }
     @Override protected void onBoundsChange(Rect bounds) {
         super.onBoundsChange(bounds);
@@ -35,6 +47,11 @@ final class GlassSurface extends GradientDrawable {
                 new float[]{0, .35f, 1}, Shader.TileMode.CLAMP));
     }
     @Override public void draw(Canvas canvas) {
+        if (backdropImage != null) {
+            float radius=getCornerRadius();
+            if (getShape()==OVAL) canvas.drawOval(outer,backdrop);
+            else canvas.drawRoundRect(outer,radius,radius,backdrop);
+        }
         super.draw(canvas);
         drawRim(canvas);
     }
@@ -49,3 +66,4 @@ final class GlassSurface extends GradientDrawable {
         }
     }
 }
+

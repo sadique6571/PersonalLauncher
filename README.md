@@ -2,7 +2,7 @@
 
 **Personal Launcher by Sadique Sadiq** — a customizable Home launcher for Android TV / Google TV.
 
-- **Version:** 7.0 · **Android version code:** 53 · Release build numbers increase independently.
+- **Version:** 7.0 · **Android version code:** 54 · Release build numbers increase independently.
 - **Package:** `com.sadique.launcher` · **Minimum Android:** 8.0 / API 26
 - Plain Java and Android Views, with performance profiles for low-memory TVs.
 - Internet access is used for daily Bing wallpaper, Picsum screensaver photos, weather and city lookup.
@@ -34,6 +34,8 @@ download. The percentage stops at 99 while SHA-256, package and signing checks r
 granting it and returning to Home continues that explicit install request. Leaving Home does not launch
 an installer over another app; the verified APK remains ready in Updates. Automatic checks remain quiet.
 While the manual capsule is visible, Home postpones its idle screensaver and keeps the display awake.
+Download progress fills the capsule's entire height from left to right, using the volume capsule renderer.
+The text changes colour over the white fill; there is no separate thin progress line.
 Disabling auto-update prevents automatic installation. The old APK needs one manual update to receive this feature.
 
 ## Home screen
@@ -44,6 +46,7 @@ The default **TV Glass** style is inspired by Apple TV's visual layout:
   This is app artwork, not a streaming recommendation feed.
 - The app icon and Android TV banner use the selected silver **PL Monogram**. Home toolbar actions are larger, standalone white symbols; remote focus uses colour and scale without a surrounding box.
 - Glass surfaces use translucent neutral tint, a fine reflected rim and rounded corners. Volume uses one bottom-filled white capsule with the output icon inside; Picture/Sound preview sliders use matching broad horizontal capsules.
+- Apple-style status bar, app drawer and app-picker panels sample a cached blur of Home's actual wallpaper plane, with a lighter glass tint and reflected edges. This works without Android 12 window-blur support and includes the phone layout. One thumbnail, at most 256 pixels on its longest edge, is blurred off the UI thread when the wallpaper or layout changes; it is not captured every frame. Classic retains its original panel backgrounds. This is a wallpaper blur and lens finish, not Apple's proprietary optical refraction implementation.
 - Apple-style controls share one rounded line-symbol family, including network, Bluetooth and audio output icons. Switching to Classic refreshes icons on open and saved settings pages. Classic panels have consistently rounded outer corners and an inset from the screen edge.
 - Floating 16:9 app cards use original app icons, rounded corners, a white focus outline and subtle focus zoom. Header, drawer, search results, profile editor and volume capsule share the selected glass appearance.
   Light performance mode applies focus changes without the zoom animation.
@@ -245,4 +248,5 @@ a new APK release. The download above follows the latest signed release.
 
 The [volume-hold bridge guide](docs/volume-hold-bridge.md) documents the optional shell helper and
 diagnostic commands for firmware with slow or missing held-volume repeat.
+
 
