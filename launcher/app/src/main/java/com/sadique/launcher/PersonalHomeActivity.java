@@ -83,7 +83,7 @@ public final class PersonalHomeActivity extends Activity {
     private ImageView avatar;
     private Bitmap avatarBitmap;
     private Bitmap customWallpaper;
-    private LiquidBackdrop liquidBackdrop;
+    private LiquidBackdrop liquidBackdrop, headerBackdrop;
     private ContinueWatchingView continueWatching;
     private SkyClock sky;
     private ConnectivityManager connectivity;
@@ -249,11 +249,11 @@ public final class PersonalHomeActivity extends Activity {
 
     /** Tile corner radius from settings: sharp / rounded / round. */
     private int tileRadius() {
-        return dp(new int[]{4, 16, 28}[Math.max(0, Math.min(2, prefs.getInt("tile_corners", 1)))]);
+        return dp(HomeGeometry.tileRadius(prefs.getInt("tile_corners",1)));
     }
 
     private GradientDrawable surface(boolean focused) {
-        if (TvGlassStyle.enabled(prefs)) return TvGlassStyle.surface(Math.max(dp(22), tileRadius()), dp(focused ? 2 : 1), focused, prefs);
+        if (TvGlassStyle.enabled(prefs)) return TvGlassStyle.surface(tileRadius(), dp(focused ? 2 : 1), focused, prefs);
         GradientDrawable shape = new GradientDrawable();
         float day = appearanceDaylight();
         // Theme-tinted glass (user 2026-11-01): the dark base takes the theme's hue.
@@ -271,10 +271,30 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private GradientDrawable avatarSurface(boolean focused) {
-        GradientDrawable shape = surface(focused);
-        if (tvGlass() || prefs.getInt("avatar_shape", 0) == 0) shape.setShape(GradientDrawable.OVAL);
-        else shape.setCornerRadius(dp(16));
+        return avatarSurface(focused,44);
+    }
+    private GradientDrawable avatarSurface(boolean focused,int size) {
+        GradientDrawable shape=surface(focused);
+        if (prefs.getInt("avatar_shape",0)==0) shape.setShape(GradientDrawable.OVAL);
+        else shape.setCornerRadius(dp(HomeGeometry.avatarRadius(size)));
         return shape;
+    }
+    private void avatarOutline(ImageView photo) {
+        photo.setOutlineProvider(new ViewOutlineProvider() {
+            @Override public void getOutline(View view,Outline outline) {
+                if (prefs.getInt("avatar_shape",0)==0) outline.setOval(0,0,view.getWidth(),view.getHeight());
+                else outline.setRoundRect(0,0,view.getWidth(),view.getHeight(),
+                        HomeGeometry.avatarRadius(Math.min(view.getWidth(),view.getHeight())));
+            }
+        });
+        photo.setClipToOutline(true);
+    }
+    private void chooseAvatarShape() {
+        chooseSetting("Avatar shape",new String[]{"Round","Rounded square"},which->{
+            prefs.edit().putInt("avatar_shape",which).apply();
+            if (avatar!=null) { avatar.setBackground(avatarSurface(avatar.isFocused())); avatar.invalidateOutline(); }
+            refreshProfileAvatarPreview();
+        });
     }
 
     private TextView text(String value, int size, int color) {
@@ -360,6 +380,7 @@ public final class PersonalHomeActivity extends Activity {
 
     private void buildHome() {
         if (liquidBackdrop != null) { liquidBackdrop.close(); liquidBackdrop=null; }
+        if (headerBackdrop != null) { headerBackdrop.close(); headerBackdrop=null; }
         long buildMs = android.os.SystemClock.elapsedRealtime();
         handler.removeCallbacks(buildHomeTask);
         buildHomePending = false;
@@ -415,7 +436,7 @@ public final class PersonalHomeActivity extends Activity {
         avatar.setContentDescription(getString(R.string.h_edit_profile));
         avatar.setScaleType(ImageView.ScaleType.CENTER_CROP);
         avatar.setBackground(avatarSurface(false));
-        avatar.setClipToOutline(true);
+        avatarOutline(avatar);
         if (tvGlass()) { avatar.setPadding(dp(2), dp(2), dp(2), dp(2)); avatar.setElevation(dp(2)); }
         avatar.setFocusable(false);
         avatar.setOnClickListener(v -> LauncherPin.require(this, this::editProfile));
@@ -465,10 +486,7 @@ public final class PersonalHomeActivity extends Activity {
         if (tv) {
             header.addView(actions, new LinearLayout.LayoutParams(-2, -2));
         } else {
-            if (TvGlassStyle.enabled(prefs)) {
-                actions.setBackground(TvGlassStyle.liquid(dp(28), dp(1), prefs));
-                actions.setPadding(0, dp(5), 0, dp(5)); actions.setClipToOutline(true);
-            }
+            styleStatusBar(actions);
             page.addView(actions, new LinearLayout.LayoutParams(-1, -2));
         }
         clockLayout = new LinearLayout(this);
@@ -620,9 +638,10 @@ public final class PersonalHomeActivity extends Activity {
         refreshProfile();
         updateClock();
         updateNetwork();
-        if (TvGlassStyle.enabled(prefs)) liquidBackdrop = tv
-                ? new LiquidBackdrop(sky, appWorker, handler, header, appBody)
-                : new LiquidBackdrop(sky, appWorker, handler, header, actions, appBody);
+        if (TvGlassStyle.enabled(prefs)) liquidBackdrop=new LiquidBackdrop(sky,appWorker,handler,appBody);
+        if (headerBgMode()!=0) headerBackdrop=tv
+                ? new LiquidBackdrop(sky,appWorker,handler,headerBgMode()==2?2:-1,header)
+                : new LiquidBackdrop(sky,appWorker,handler,headerBgMode()==2?2:-1,header,actions);
         adaptTextColors();
         // buildHome() replaces the SkyClock instance, which drops in-memory wallpapers.
         // Re-fetch online + reload custom from disk so a settings change never
@@ -1139,6 +1158,11 @@ public final class PersonalHomeActivity extends Activity {
         requestAppIcon(app);
         android.widget.FrameLayout tile = new android.widget.FrameLayout(this);
         tile.setBackground(surface(false));
+        tile.setOutlineProvider(new ViewOutlineProvider() {
+            @Override public void getOutline(View view,Outline outline) {
+                outline.setRoundRect(0,0,view.getWidth(),view.getHeight(),tileRadius());
+            }
+        });
         tile.setClipToOutline(true);
         tile.setElevation(perfAllows("parallax") ? dp(tvGlass() ? 4 : 3) : 0);
         tile.setFocusable(true);
@@ -1524,15 +1548,8 @@ public final class PersonalHomeActivity extends Activity {
         }
     }
 
-    /** Header background mode: 0=Off, 1=Panel, 2=Frosted. Migrates the old header_bg/header_blur toggles once. */
-    private int headerBgMode() {
-        int mode = prefs.getInt("header_bg_mode", -1);
-        if (mode < 0) {
-            mode = prefs.getBoolean("header_blur", false) ? 2 : (prefs.getBoolean("header_bg", false) ? 1 : 0);
-            prefs.edit().putInt("header_bg_mode", mode).apply();
-        }
-        return mode;
-    }
+    /** Off, glass or frosted: independently saved for each visual style. */
+    private int headerBgMode() { return HeaderAppearance.mode(prefs); }
 
     void liquidPanel(View target, int radius) { liquidPanel(target,radius,false); }
     void liquidDrawerPanel(View target, int radius) { liquidPanel(target,radius,true); }
@@ -1545,28 +1562,16 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void applyHeaderBackground() {
-        if (header == null) return;
-        int mode = headerBgMode();
-        GradientDrawable bg = null;
-        if (TvGlassStyle.enabled(prefs)) {
-            bg = TvGlassStyle.liquid(dp(28), dp(1), prefs);
-        } else if (mode == 1) {
-            bg = new GradientDrawable();
-            bg.setColor(PanelTransparency.alpha(ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs)),prefs,false) << 24);
-        } else if (mode == 2) {
-            // Frosted glass: semi-transparent gradient simulating blur.
-            bg = new GradientDrawable(
-                    GradientDrawable.Orientation.TOP_BOTTOM,
-                    new int[]{PanelTransparency.alpha(ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs)),prefs,false) << 24,
-                            PanelTransparency.alpha(ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs))/2,prefs,false) << 24});
-        }
-        if (bg != null) {
-            bg.setCornerRadius(dp(TvGlassStyle.enabled(prefs) ? 28 : 18));
-            header.setPadding(dp(12), dp(8), dp(12), dp(8));
-        } else {
-            header.setPadding(0, 0, 0, 0);
-        }
-        header.setBackground(bg);
+        if (header==null) return;
+        styleStatusBar(header);
+    }
+    private void styleStatusBar(View bar) {
+        int mode=headerBgMode();
+        GradientDrawable background=mode==0 ? null : TvGlassStyle.header(dp(tvGlass()?28:18),dp(1),prefs,mode==2);
+        bar.setBackground(background); bar.setClipToOutline(background!=null);
+        if (bar==header) bar.setPadding(background==null?0:dp(12),background==null?0:dp(8),
+                background==null?0:dp(12),background==null?0:dp(8));
+        else bar.setPadding(0,background==null?0:dp(5),0,background==null?0:dp(5));
     }
 
     /** Applies the launcher-wide font to a TextView. */
@@ -1693,9 +1698,9 @@ public final class PersonalHomeActivity extends Activity {
 
     private void themeSettings() {
         // "Dark mode" removed 2026-11-01 (user): the theme glass color covers it.
-        String[] labels = {"Visual style", "Theme", "Accent color", "Launcher font", "Glass intensity", "Glass finish", "Glass edge", "Panel transparency"};
-        String[] hints = {"TV Glass or Classic", "Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels", "Soft, Clear or Frosted panels", "Reflection around glass surfaces", "Solid panels when off; app drawer stays transparent"};
-        int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness};
+        String[] labels = {"Visual style", "Theme", "Accent color", "Launcher font", "Glass intensity", "Glass finish", "Glass edge", "Panel transparency", "Header background", "Avatar shape"};
+        String[] hints = {"TV Glass or Classic", "Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels", "Soft, Clear or Frosted panels", "Reflection around glass surfaces", "Solid panels when off; app drawer stays transparent", "Status-bar glass in this theme", "Round or rounded-square profile photo"};
+        int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_person};
         Runnable[] choices = {
             () -> chooseSetting("Visual style", new String[]{"TV Glass", "Classic"}, which -> switchVisualStyle(which==0)),
             () -> chooseSetting("Theme", new String[]{"Midnight Cyan", "Sunset Orange", "Deep Purple", "Custom"}, which -> {
@@ -1721,6 +1726,10 @@ public final class PersonalHomeActivity extends Activity {
             () -> chooseSetting("Panel transparency", new String[]{"On", "Off"}, which -> {
                 prefs.edit().putBoolean("panel_transparency", which==0).apply(); buildHomeSoon();
             }),
+            () -> chooseSetting("Header background",new String[]{"Off","Glass","Frosted"},which->{
+                prefs.edit().putInt("header_bg_mode",which).apply(); buildHomeSoon();
+            }),
+            this::chooseAvatarShape,
         };
         subMenu("Theme", labels, hints, icons, choices);
     }
@@ -1838,6 +1847,7 @@ public final class PersonalHomeActivity extends Activity {
 
     private void adaptTextColors() {
         if (liquidBackdrop != null) liquidBackdrop.refresh();
+        if (headerBackdrop != null) headerBackdrop.refresh();
         // Initial pass: per-label wallpaper sampling (no theme shade factor).
         adaptVisibleTextColors();
     }
@@ -1958,6 +1968,7 @@ public final class PersonalHomeActivity extends Activity {
     /** Refreshes the avatar preview inside the profile dialog, if open. */
     private void refreshProfileAvatarPreview() {
         if (profileAvatarPreview == null) return;
+        profileAvatarPreview.setBackground(avatarSurface(false,96)); profileAvatarPreview.invalidateOutline();
         if (avatarBitmap != null) profileAvatarPreview.setImageBitmap(avatarBitmap);
         else profileAvatarPreview.setImageDrawable(TvSymbols.icon(this, R.drawable.ic_person));
     }
@@ -1970,8 +1981,8 @@ public final class PersonalHomeActivity extends Activity {
         // Avatar preview inside the dialog (user 2026-11-01).
         profileAvatarPreview = new ImageView(this);
         profileAvatarPreview.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        profileAvatarPreview.setBackground(avatarSurface(false));
-        profileAvatarPreview.setClipToOutline(true);
+        profileAvatarPreview.setBackground(avatarSurface(false,96));
+        avatarOutline(profileAvatarPreview);
         profileAvatarPreview.setContentDescription("Profile photo");
         refreshProfileAvatarPreview();
         LinearLayout previewRow = new LinearLayout(this);
@@ -1979,6 +1990,7 @@ public final class PersonalHomeActivity extends Activity {
         previewRow.setPadding(0, 0, 0, dp(8));
         previewRow.addView(profileAvatarPreview, new LinearLayout.LayoutParams(dp(96), dp(96)));
         form.addView(previewRow);
+        form.addView(button("Photo shape · Round / Rounded square",this::chooseAvatarShape));
         EditText name = new EditText(this);
         name.setSingleLine(true);
         name.setHint("Your name");
@@ -2355,6 +2367,7 @@ public final class PersonalHomeActivity extends Activity {
 
     @Override protected void onDestroy() {
         if (liquidBackdrop != null) { liquidBackdrop.close(); liquidBackdrop=null; }
+        if (headerBackdrop != null) { headerBackdrop.close(); headerBackdrop=null; }
         unregisterReceiver(appChanges);
         if (panel != null) panel.dismiss();
         if (profile != null) profile.dismiss();

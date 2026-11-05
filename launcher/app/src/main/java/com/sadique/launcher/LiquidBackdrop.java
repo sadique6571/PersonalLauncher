@@ -11,6 +11,7 @@ final class LiquidBackdrop {
     private final View source;
     private final java.util.ArrayList<java.lang.ref.WeakReference<View>> targets = new java.util.ArrayList<>();
     private final Executor worker;
+    private final int finishOverride;
     private final Handler main;
     private final int[] targetPoint = new int[2], rootPoint = new int[2];
     private Bitmap blurred;
@@ -23,7 +24,10 @@ final class LiquidBackdrop {
     private final Runnable capture = this::capture;
 
     LiquidBackdrop(View source, Executor worker, Handler main, View... targets) {
-        this.source=source; this.worker=worker; this.main=main;
+        this(source,worker,main,-1,targets);
+    }
+    LiquidBackdrop(View source, Executor worker, Handler main, int finishOverride, View... targets) {
+        this.source=source; this.worker=worker; this.main=main; this.finishOverride=finishOverride;
         for (View target : targets) bind(target);
         source.addOnLayoutChangeListener(sourceLayout);
         refresh();
@@ -41,7 +45,7 @@ final class LiquidBackdrop {
         if (closed || !source.isAttachedToWindow() || source.getWidth() <= 0 || source.getHeight() <= 0) return;
         int generation=epoch;
         android.content.SharedPreferences prefs=ThemePreferences.get(source.getContext());
-        int radius=GlassTransparency.blurRadius(TvGlassStyle.finish(prefs),TvGlassStyle.intensity(prefs));
+        int radius=GlassTransparency.blurRadius(finishOverride<0 ? TvGlassStyle.finish(prefs) : finishOverride,TvGlassStyle.intensity(prefs));
         float scale=256f / Math.max(source.getWidth(), source.getHeight());
         int w=Math.max(1,Math.round(source.getWidth()*scale)), h=Math.max(1,Math.round(source.getHeight()*scale));
         Bitmap sample;
