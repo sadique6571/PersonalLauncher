@@ -51,7 +51,7 @@ final class GitHubUpdates {
     static Uri uri(Context c) { return Uri.parse("content://"+c.getPackageName()+".updates/apk"); }
     static void check(Activity host,boolean force) {
         if ((!force && !enabled(host)) || host.isFinishing() || host.isDestroyed() || !host.hasWindowFocus()) return;
-        if (force && NATIVE_PENDING.get()) return;
+        if (NATIVE_PENDING.get()) return;
         SharedPreferences p=prefs(host);
         if (!force && !readyFile(host).isFile() && System.currentTimeMillis()<p.getLong("next_check",0)) return;
         if (!BUSY.compareAndSet(false,true)) {
