@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <style name="PersonalQuickOverlay" parent="android:Theme.Translucent.NoTitleBar.Fullscreen">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:alertDialogTheme">@style/Theme.PersonalDialog</item>
+    </style>
     <style name="Theme.TvHome" parent="android:Theme.Material.NoActionBar.Fullscreen">
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:colorBackground">@android:color/black</item>

@@ -2,7 +2,7 @@
 
 **Personal Launcher by Sadique Sadiq** — a customizable Home launcher for Android TV / Google TV.
 
-- **Version:** 7.0 · **Android version code:** 57 · Release build numbers increase independently.
+- **Version:** 7.0 · **Android version code:** 58 · Release build numbers increase independently.
 - **Package:** `com.sadique.launcher` · **Minimum Android:** 8.0 / API 26
 - Plain Java and Android Views, with performance profiles for low-memory TVs.
 - Internet access is used for daily Bing wallpaper, Picsum screensaver photos, weather and city lookup.
@@ -142,6 +142,15 @@ the page's sample values. Closing the page discards them.
 **These sliders do not change the TV's picture or sound.** Hardware integration is pending model-specific
 ADB inspection and testing. Each page includes an **Open TV picture/sound settings** shortcut to the working
 system controls. The existing remote volume control is separate and remains functional.
+
+## Settings over other apps
+
+The remote Settings action opens a separate translucent Control Center over the current app instead of
+bringing Home forward. Back or Settings again closes it. Inputs and Picture/Sound previews stay inside
+the panel's own task. Wi-Fi, Bluetooth and TV settings open their selected system page; choosing Launcher
+settings explicitly opens Home's settings. Home-only profile, app-layout and search shortcuts remain on
+Home's panel. The local PIN gate still applies. Translucent activity behavior and media playback depend
+on the foreground app and TV firmware; uninterrupted video playback has not been verified.
 
 ## Remote volume and navigation
 

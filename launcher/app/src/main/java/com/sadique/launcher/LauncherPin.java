@@ -36,14 +36,14 @@ final class LauncherPin {
         finally { spec.clearPassword(); }
     }
     private static SharedPreferences prefs(Activity host) { return host.getSharedPreferences("launcher_pin", 0); }
-    static void require(Activity host, Runnable allowed) {
+    static AlertDialog require(Activity host, Runnable allowed) {
         SharedPreferences prefs = prefs(host);
         String saved = prefs.getString("hash", "");
-        if (saved.isEmpty()) { allowed.run(); return; }
+        if (saved.isEmpty()) { allowed.run(); return null; }
         // Persisted wall time keeps the short cooldown across process death; clock changes cannot create an indefinite lock.
         long wait = prefs.getLong("retry_at", 0) - System.currentTimeMillis();
-        if (wait > 0 && wait <= 30000) { Toast.makeText(host, R.string.h_pin_wait, Toast.LENGTH_LONG).show(); return; }
-        prompt(host, R.string.h_pin_enter, (pin, dialog, input) -> {
+        if (wait > 0 && wait <= 30000) { Toast.makeText(host, R.string.h_pin_wait, Toast.LENGTH_LONG).show(); return null; }
+        return prompt(host, R.string.h_pin_enter, (pin, dialog, input) -> {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
             WORKER.execute(() -> {
                 boolean correct = matches(pin, saved);
@@ -95,7 +95,7 @@ final class LauncherPin {
         });
     }
     private interface Submission { void accept(String pin, AlertDialog dialog, EditText input); }
-    private static void prompt(Activity host, int title, Submission submit) {
+    private static AlertDialog prompt(Activity host, int title, Submission submit) {
         EditText input = new EditText(host); input.setSingleLine();
         input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
         input.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(8)});
@@ -104,5 +104,6 @@ final class LauncherPin {
         dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
                 .setOnClickListener(v -> submit.accept(input.getText().toString(), dialog, input)));
         dialog.show();
+        return dialog;
     }
 }

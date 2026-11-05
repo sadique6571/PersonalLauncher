@@ -28,6 +28,9 @@ public final class LauncherSleep extends BroadcastReceiver {
         return Math.max(0, prefs.getLong("deadline", 0) - SystemClock.elapsedRealtime());
     }
     static void show(Activity host) {
+        show(host,false);
+    }
+    static void show(Activity host, boolean closeAfterSetting) {
         LinearLayout rows = HomeLibraryUi.rows(host);
         AlertDialog panel = GlassSettings.panel(host, host.getString(R.string.h_sleep_timer), rows);
         long remain = remaining(host);
@@ -44,7 +47,7 @@ public final class LauncherSleep extends BroadcastReceiver {
                         manager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, deadline, alarm(host));
                         host.getSharedPreferences("launcher_sleep", 0).edit().putLong("deadline", deadline)
                                 .putInt("boot", Settings.Global.getInt(host.getContentResolver(), Settings.Global.BOOT_COUNT, -1)).apply();
-                        panel.dismiss(); show(host);
+                        panel.dismiss(); if (!closeAfterSetting) show(host);
                     }));
         }
         rows.addView(GlassSettings.row(host, host.getString(R.string.h_sleep_cancel), null, R.drawable.ic_settings,
