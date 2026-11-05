@@ -73,6 +73,7 @@ public final class PersonalHomeActivity extends Activity {
     private ImageView avatar;
     private Bitmap avatarBitmap;
     private Bitmap customWallpaper;
+    private LiquidBackdrop liquidBackdrop;
     private ContinueWatchingView continueWatching;
     private SkyClock sky;
     private ConnectivityManager connectivity;
@@ -350,6 +351,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void buildHome() {
+        if (liquidBackdrop != null) { liquidBackdrop.close(); liquidBackdrop=null; }
         long buildMs = android.os.SystemClock.elapsedRealtime();
         handler.removeCallbacks(buildHomeTask);
         buildHomePending = false;
@@ -454,6 +456,10 @@ public final class PersonalHomeActivity extends Activity {
         if (tv) {
             header.addView(actions, new LinearLayout.LayoutParams(-2, -2));
         } else {
+            if (TvGlassStyle.enabled(prefs)) {
+                actions.setBackground(TvGlassStyle.liquid(dp(28), dp(1), prefs));
+                actions.setPadding(0, dp(5), 0, dp(5)); actions.setClipToOutline(true);
+            }
             page.addView(actions, new LinearLayout.LayoutParams(-1, -2));
         }
         clockLayout = new LinearLayout(this);
@@ -543,11 +549,12 @@ public final class PersonalHomeActivity extends Activity {
         GradientDrawable gridBackdrop = new GradientDrawable();
         gridBackdrop.setColor(0x33000000);
         gridBackdrop.setCornerRadius(dp(20));
-        appBody.setBackground(tvGlass() ? TvGlassStyle.surface(dp(24), dp(1), false, prefs) : gridBackdrop);
-        appBody.setPadding(dp(tvGlass() ? 12 : 8), dp(tvGlass() ? 8 : 4), dp(tvGlass() ? 12 : 8), dp(8));
+        boolean liquidGlass = TvGlassStyle.enabled(prefs);
+        appBody.setBackground(liquidGlass ? TvGlassStyle.liquid(dp(28), dp(1), prefs) : gridBackdrop);
+        appBody.setPadding(dp(liquidGlass ? 12 : 8), dp(liquidGlass ? 8 : 4), dp(liquidGlass ? 12 : 8), dp(8));
         // The drawer panel stays fixed on screen; only the tiles scroll inside it,
         // clipped to the rounded corners so scrolling stops under the header.
-        final int drawerRadius = dp(tvGlass() ? 24 : 20);
+        final int drawerRadius = dp(liquidGlass ? 28 : 20);
         appBody.setOutlineProvider(new ViewOutlineProvider() {
             @Override public void getOutline(View view, Outline outline) {
                 outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), drawerRadius);
@@ -631,6 +638,9 @@ public final class PersonalHomeActivity extends Activity {
         refreshProfile();
         updateClock();
         updateNetwork();
+        if (TvGlassStyle.enabled(prefs)) liquidBackdrop = tv
+                ? new LiquidBackdrop(sky, appWorker, handler, header, appBody)
+                : new LiquidBackdrop(sky, appWorker, handler, header, actions, appBody);
         adaptTextColors();
         // buildHome() replaces the SkyClock instance, which drops in-memory wallpapers.
         // Re-fetch online + reload custom from disk so a settings change never
@@ -1581,12 +1591,19 @@ public final class PersonalHomeActivity extends Activity {
         return mode;
     }
 
+    void liquidPanel(View target, int radius) {
+        if (!TvGlassStyle.enabled(prefs)) return;
+        target.setBackground(TvGlassStyle.liquid(dp(radius), dp(1), prefs));
+        target.setClipToOutline(true);
+        if (liquidBackdrop != null) liquidBackdrop.bind(target);
+    }
+
     private void applyHeaderBackground() {
         if (header == null) return;
         int mode = headerBgMode();
         GradientDrawable bg = null;
         if (TvGlassStyle.enabled(prefs)) {
-            bg = TvGlassStyle.surface(dp(24), dp(1), false, prefs);
+            bg = TvGlassStyle.liquid(dp(28), dp(1), prefs);
         } else if (mode == 1) {
             bg = new GradientDrawable();
             bg.setColor(0x40000000);
@@ -1597,7 +1614,7 @@ public final class PersonalHomeActivity extends Activity {
                     new int[]{0x60000000, 0x30000000});
         }
         if (bg != null) {
-            bg.setCornerRadius(dp(18));
+            bg.setCornerRadius(dp(TvGlassStyle.enabled(prefs) ? 28 : 18));
             header.setPadding(dp(12), dp(8), dp(12), dp(8));
         } else {
             header.setPadding(0, 0, 0, 0);
@@ -1857,6 +1874,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void adaptTextColors() {
+        if (liquidBackdrop != null) liquidBackdrop.refresh();
         // Initial pass: per-label wallpaper sampling (no theme shade factor).
         adaptVisibleTextColors();
     }
@@ -2370,6 +2388,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     @Override protected void onDestroy() {
+        if (liquidBackdrop != null) { liquidBackdrop.close(); liquidBackdrop=null; }
         unregisterReceiver(appChanges);
         if (panel != null) panel.dismiss();
         if (profile != null) profile.dismiss();
@@ -2511,7 +2530,7 @@ public final class PersonalHomeActivity extends Activity {
                     if (f.exists()) fav = BitmapFactory.decodeFile(f.getAbsolutePath());
                 } catch (Exception ignored) {}
                 Bitmap loaded = fav;
-                handler.post(() -> { favoriteWallpaper = loaded; invalidate(); });
+                handler.post(() -> { favoriteWallpaper = loaded; invalidate(); adaptTextColors(); });
             });
         }
 
@@ -2750,5 +2769,6 @@ public final class PersonalHomeActivity extends Activity {
                 (int) (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * part));
     }
 }
+
 
 

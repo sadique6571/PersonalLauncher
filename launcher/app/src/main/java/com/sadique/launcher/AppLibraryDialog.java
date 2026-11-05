@@ -167,6 +167,7 @@ final class AppLibraryDialog {
             panel.setBackground(TvGlassStyle.surface(dp(28), dp(1), false, activity.getSharedPreferences("personal_home", 0)));
             panel.setClipToOutline(true);
         } else panel.setBackgroundResource(R.drawable.glass_panel);
+        if (activity instanceof PersonalHomeActivity) ((PersonalHomeActivity) activity).liquidPanel(panel, 28);
         View decor = activity.getWindow().getDecorView();
         catalogWidth = Math.min(dp(800), Math.max(dp(200), decor.getWidth() - dp(64)));
         int width = catalogWidth;
@@ -532,6 +533,7 @@ final class AppLibraryDialog {
             menuPanel.setClipToOutline(true);
         }
         LinearLayout rows = menuPanel.findViewById(R.id.rows);
+        if (activity instanceof PersonalHomeActivity) ((PersonalHomeActivity) activity).liquidPanel(menuPanel, 24);
         PopupWindow menu = new PopupWindow(menuPanel, dp(220), ViewGroup.LayoutParams.WRAP_CONTENT, true);
         actionPopup = menu;
         menu.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
@@ -699,4 +701,5 @@ final class AppLibraryDialog {
         Row(View view) { super(view); }
     }
 }
+
 
