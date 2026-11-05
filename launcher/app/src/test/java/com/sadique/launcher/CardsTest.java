@@ -76,7 +76,7 @@ public class CardsTest {
     public void foldDropsCaseSpacesAndPunctuation() {
         assertEquals("retro", Cards.fold("Retro"));
         assertEquals("livetv", Cards.fold("Live TV"));
-        assertEquals("tvvibehack", Cards.fold("tv-vibehack"));
+        assertEquals("personallauncher", Cards.fold("Personal Launcher"));
         assertEquals("kidstv20", Cards.fold("Kid's TV+ 2.0"));
         assertEquals("", Cards.fold(null));
         assertEquals("netflx", Cards.fold("Netflіx"));   // non ASCII letters never match anything
@@ -96,7 +96,7 @@ public class CardsTest {
         assertTrue(Cards.isReserved(Cards.fold("HDMI"), ui));
         assertTrue(Cards.isReserved(Cards.fold("HDMI 2"), ui));
         assertTrue(Cards.isReserved(Cards.fold("AV"), ui));
-        assertTrue(Cards.isReserved(Cards.fold("tv-vibehack"), ui));
+        assertTrue(Cards.isReserved(Cards.fold("Personal Launcher"), ui));
         assertFalse(Cards.isReserved(Cards.fold("Xbox"), ui));
         assertTrue(Cards.isReserved("", ui));
         assertFalse(Cards.isReserved(Cards.fold("Retro"), ui));

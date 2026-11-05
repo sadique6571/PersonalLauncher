@@ -12,7 +12,7 @@ body:
         - Debloat or restore scripts
         - tools/tv.py or b64push.py
         - The prompt (PROMPT.md)
-        - Website (cleanyour.tv)
+        - GitHub documentation
     validations:
       required: true
   - type: input

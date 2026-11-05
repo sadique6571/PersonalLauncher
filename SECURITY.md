@@ -1,17 +1,26 @@
+# Security and contact
 
-## What counts
+## Contact us
 
-- The launcher (`com.sadique.launcher`) doing something it shouldn't: reaching the network, exposing
-  data to other apps, or being made to open something it shouldn't.
-- The tools (`tools/tv.py`, `disable.sh`, `restore.sh`, `theme.sh`, `recovery.py`) running commands
-  on a device or computer they weren't pointed at, or mishandling paths and input.
-- A debloat list or the prompt leading to a TV that can't be restored with `tools/restore.sh`.
-- Anything in a pull request that runs code on a contributor's or maintainer's machine.
+For changes, feature requests and suggestions about Personal Launcher, email
+[sadique6571@gmail.com](mailto:sadique6571@gmail.com).
 
-ADB itself is powerful by design. Turning on USB or network debugging lets any computer on your
-network ask to connect, and the TV asks you to allow it. Turn debugging off when you're done.
+## Report a security issue privately
 
-## What happens next
+Send security reports to **sadique6571@gmail.com** with the subject **Personal Launcher security report**.
+Do not publish an unpatched vulnerability, credentials, pairing keys or private device details in a public issue.
 
-You'll get a reply within a few days. Fixes go into `main` with credit to you, unless you'd rather
-stay anonymous. Please give a fix a reasonable chance to ship before you publish details.
+Include the app version/build, Android version, affected feature, steps to reproduce and the expected impact.
+Redact account information, IP addresses, serial numbers and other private data from logs or screenshots.
+
+## Scope
+
+- Unexpected data exposure, unauthorized actions or unsafe input handling in `com.sadique.launcher`.
+- Update integrity, package/signing verification and temporary APK access.
+- Saved local pairing, Home/remote recovery and volume-helper behavior.
+- Commands, paths or device targeting handled incorrectly by the included scripts.
+
+Wallpaper, weather and GitHub-update network access are intentional features. Report unexpected destinations,
+leaked information or unsafe behavior rather than network access alone.
+
+ADB access is powerful. Approve only devices you control and manage debugging access in Android settings.
