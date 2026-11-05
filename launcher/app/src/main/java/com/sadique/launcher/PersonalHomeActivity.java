@@ -538,7 +538,7 @@ public final class PersonalHomeActivity extends Activity {
         appBody.setPadding(dp(tvGlass() ? 12 : 8), dp(tvGlass() ? 8 : 4), dp(tvGlass() ? 12 : 8), dp(8));
         // The drawer panel stays fixed on screen; only the tiles scroll inside it,
         // clipped to the rounded corners so scrolling stops under the header.
-        final int drawerRadius = dp(20);
+        final int drawerRadius = dp(tvGlass() ? 24 : 20);
         appBody.setOutlineProvider(new ViewOutlineProvider() {
             @Override public void getOutline(View view, Outline outline) {
                 outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), drawerRadius);
@@ -1769,9 +1769,9 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void systemMenu() {
-        String[] labels = {"Screensaver & weather", "Profile name & photo", "Performance", "Export settings", "Import settings", "Reset layout & unhide apps"};
-        String[] hints = {"Photos, weather & idle timer", "Name and local profile picture", "Light, Balanced or Full", "Save to a file", "Restore from a file", "Restore the default layout"};
-        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_settings};
+        String[] labels = {"Screensaver & weather", "Profile name & photo", "Performance", "Updates", "Export settings", "Import settings", "Reset layout & unhide apps"};
+        String[] hints = {"Photos, weather & idle timer", "Name and local profile picture", "Light, Balanced or Full", "Automatic GitHub updates", "Save to a file", "Restore from a file", "Restore the default layout"};
+        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_settings, R.drawable.ic_internet, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_settings};
         Runnable[] choices = {
             this::screensaverSettings,
             this::editProfile,
@@ -1780,6 +1780,7 @@ public final class PersonalHomeActivity extends Activity {
                 applyPerformanceProfile();
                 buildHomeSoon();
             }),
+            () -> LauncherUpdatesUi.show(this),
             this::exportSettings,
             this::importSettings,
             () -> new AlertDialog.Builder(this).setTitle("Reset layout and show all apps?").setPositiveButton("Reset", (dialog, which) -> {
@@ -2044,6 +2045,14 @@ public final class PersonalHomeActivity extends Activity {
      * the prompt never came back. Now the offer reappears whenever we are not the default
      * (with a short snooze after "Later" so it doesn't nag every launch).
      */
+    private final Runnable updateCheck = new Runnable() {
+        @Override public void run() {
+            if (!resumed) return;
+            if ((profile == null || !profile.isShowing()) && !homeOfferShowing && (searchDialog == null || !searchDialog.isShowing()))
+                GitHubUpdates.check(PersonalHomeActivity.this, false);
+            handler.postDelayed(this, 60_000L);
+        }
+    };
     private final Runnable notificationOffer = this::maybeOfferNotificationAccess;
     private boolean homeOfferShowing;
     private void maybeOfferNotificationAccess() {
@@ -2265,6 +2274,7 @@ public final class PersonalHomeActivity extends Activity {
         VolumeAutoStart.request(this);
         HomeAutomation.onResume(this);
         handler.removeCallbacks(notificationOffer); handler.postDelayed(notificationOffer, 1200);
+        handler.removeCallbacks(updateCheck); handler.postDelayed(updateCheck, 12000);
         armIdleScreensaver();
         handler.removeCallbacks(tick);
         tick.run();
@@ -2300,6 +2310,7 @@ public final class PersonalHomeActivity extends Activity {
         handler.removeCallbacks(secondTick);
         handler.removeCallbacks(weatherRefresh);
         handler.removeCallbacks(notificationOffer);
+        handler.removeCallbacks(updateCheck);
         handler.removeCallbacks(slideshowStep);
         if (connectivity != null && networkRegistered) {
             connectivity.unregisterNetworkCallback(networkCallback);

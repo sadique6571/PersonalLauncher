@@ -30,7 +30,7 @@ final class HomeNotificationsUi {
             View oldFocus = rows.findFocus(); Object focusedKey = oldFocus == null ? null : oldFocus.getTag();
             rows.removeAllViews();
             if (!approved(host)) rows.addView(GlassSettings.label(host,
-                    host.getString(R.string.h_notification_access_hint), 13, 0xffb5cadd));
+                    "Notification access is off.", 13, 0xffb5cadd));
             List<HomeNotificationService.Entry> entries = HomeNotificationService.snapshot(); Collections.reverse(entries);
             if (entries.isEmpty()) rows.addView(GlassSettings.label(host, host.getString(R.string.h_notifications_empty), 14, 0xffb5cadd));
             View restore = null, first = null;

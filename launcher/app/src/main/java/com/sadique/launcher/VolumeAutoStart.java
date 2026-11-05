@@ -164,6 +164,32 @@ final class VolumeAutoStart {
             }
         }
     }
+    /** Only called after APK identity/version/digest verification; does not restart the volume helper. */
+    static boolean queueUpdate(Context c,String hash,java.util.function.BooleanSupplier allowed) throws Exception {
+        if (!paired(c) || !BUSY.compareAndSet(false,true)) throw new IOException("Recovery busy or pairing unavailable");
+        try {
+            String command=UpdateInstallCommand.build(c.getPackageName(),android.os.Process.myUid()/100000,hash);
+            if (c.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS)==PackageManager.PERMISSION_GRANTED)
+                Settings.Global.putInt(c.getContentResolver(),"adb_wifi_enabled",1);
+            Exception last=null;
+            for (int port:LocalAdbPort.discover(c)) {
+                try (Manager manager=new Manager(c); PairingRelay relay=new PairingRelay(port,true)) {
+                    if (!manager.connect("127.0.0.1",relay.port())) throw new IOException("Local TLS unavailable");
+                    if (!allowed.getAsBoolean()) throw new IOException("Home is no longer idle");
+                    ScheduledFuture<?> deadline=LIMITS.schedule(relay::close,25,TimeUnit.SECONDS);
+                    try (AdbStream stream=manager.openStream("shell:"+command); InputStream input=stream.openInputStream()) {
+                        return UpdateInstallCommand.OK.equals(VolumeStartupResponse.awaitResult(input,32768,UpdateInstallCommand.OK,UpdateInstallCommand.FAILED));
+                    } finally { deadline.cancel(false); }
+                } catch (Exception failed) { last=failed; }
+            }
+            if (last!=null) throw last;
+            return false;
+        } finally {
+            BUSY.set(false);
+            if (HOME_PENDING.getAndSet(false) && HomeAutomation.enabled(c)) requestHome(c);
+        }
+    }
+
     private static boolean homeShell(Manager manager,PairingRelay relay,String command) throws Exception {
         ScheduledFuture<?> deadline=LIMITS.schedule(relay::close,20,TimeUnit.SECONDS);
         try (AdbStream stream=manager.openStream("shell:"+command); InputStream input=stream.openInputStream()) {
