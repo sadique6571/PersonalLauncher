@@ -28,7 +28,7 @@ final class GlassSettings {
 
     static GradientDrawable background(Activity host, boolean focused) {        java.util.Calendar now = java.util.Calendar.getInstance();
         android.content.SharedPreferences prefs = host.getSharedPreferences("personal_home", 0);
-        if (TvGlassStyle.enabled(prefs)) return TvGlassStyle.surface(dp(host, 18), dp(host, focused ? 2 : 1), focused, prefs.getInt("glass_alpha", 70));
+        if (TvGlassStyle.enabled(prefs)) return TvGlassStyle.surface(dp(host, 18), dp(host, focused ? 2 : 1), focused, prefs);
         float day = HomeAppearance.daylight(prefs.getString("theme_mode", "dark"),
                 now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE));
         boolean light = day >= .5f;
@@ -53,20 +53,57 @@ final class GlassSettings {
                 (int) (android.graphics.Color.blue(base) + (android.graphics.Color.blue(accent) - android.graphics.Color.blue(base)) * 0.3f));
     }
 
-    /** Background blur behind dialogs (Android 12+; older versions keep the dim). */
+    /** Runtime support can change under power-saving or compositor restrictions. */
+    static boolean frostedAvailable(android.content.Context context) {
+        if (android.os.Build.VERSION.SDK_INT < 31) return false;
+        if (MemoryProfile.effectiveTier(context, context.getSharedPreferences("personal_home", 0)) == MemoryProfile.TIER_LIGHT) return false;
+        try {
+            android.view.WindowManager manager = context.getSystemService(android.view.WindowManager.class);
+            return manager != null && manager.isCrossWindowBlurEnabled();
+        } catch (RuntimeException unavailable) { return false; }
+    }
     static void applyBlur(android.app.Dialog dialog) {
         if (dialog == null || dialog.getWindow() == null) return;
         android.content.Context context = dialog.getContext();
-        int tier = MemoryProfile.effectiveTier(context, context.getSharedPreferences("personal_home", 0));
-        if (android.os.Build.VERSION.SDK_INT >= 31 && tier != MemoryProfile.TIER_LIGHT && !TvGlassStyle.enabled(context.getSharedPreferences("personal_home", 0))) {
-            dialog.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
-            android.view.WindowManager.LayoutParams attrs = dialog.getWindow().getAttributes();
-            attrs.setBlurBehindRadius(40); dialog.getWindow().setAttributes(attrs);
-        } else if (android.os.Build.VERSION.SDK_INT >= 31) {
-            dialog.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
-            android.view.WindowManager.LayoutParams attrs = dialog.getWindow().getAttributes();
-            attrs.setBlurBehindRadius(0); dialog.getWindow().setAttributes(attrs);
+        android.content.SharedPreferences prefs = context.getSharedPreferences("personal_home", 0);
+        boolean glass = TvGlassStyle.enabled(prefs);
+        boolean frosted = glass && TvGlassStyle.finish(prefs) == 2;
+        boolean blur = frostedAvailable(context) && (!glass || frosted);
+        android.view.Window window = dialog.getWindow();
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            android.view.WindowManager.LayoutParams attrs = window.getAttributes();
+            if (blur) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
+            else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
+            attrs.setBlurBehindRadius(blur ? (frosted ? 28 : 40) : 0);
+            // Preserve the updated flags when assigning the attributes again.
+            attrs.flags = window.getAttributes().flags;
+            window.setAttributes(attrs);
         }
+        window.setDimAmount(glass ? (frosted && !blur ? .4f : (TvGlassStyle.finish(prefs) == 1 ? .22f : .32f)) : .12f);
+    }
+    private static void watchBlur(Activity host, LinearLayout container, AlertDialog dialog) {
+        if (android.os.Build.VERSION.SDK_INT < 31) return;
+        android.view.WindowManager manager = host.getSystemService(android.view.WindowManager.class);
+        if (manager == null) return;
+        java.util.function.Consumer<Boolean> listener = available -> {
+            if (dialog.isShowing()) refresh(host);
+        };
+        container.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+            private boolean registered;
+            @Override public void onViewAttachedToWindow(View view) {
+                if (registered || android.os.Build.VERSION.SDK_INT < 31) return;
+                try {
+                    manager.addCrossWindowBlurEnabledListener(host.getMainExecutor(), listener);
+                    registered = true;
+                } catch (RuntimeException unavailable) { /* The opaque fallback is already applied. */ }
+            }
+            @Override public void onViewDetachedFromWindow(View view) {
+                if (!registered || android.os.Build.VERSION.SDK_INT < 31) return;
+                try { manager.removeCrossWindowBlurEnabledListener(listener); }
+                catch (RuntimeException ignored) { }
+                registered = false;
+            }
+        });
     }
     static TextView label(Activity host, String text, int size, int color) {
         TextView view = new TextView(host); view.setText(text); view.setTextSize(size); view.setTextColor(color);
@@ -168,6 +205,7 @@ final class GlassSettings {
             });
             // Configure BEFORE show: no center-to-right reposition on the first visible frame.
             dialog.create();
+            watchBlur(host, container, dialog);
             android.view.Window window = dialog.getWindow();
             if (window != null) {
                 boolean tv = (host.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_TYPE_MASK) == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION;
@@ -227,6 +265,7 @@ final class GlassSettings {
         };
         current.dialog.setOnShowListener(d -> initialFocus.run());
         if (current.dialog.isShowing()) rows.post(initialFocus);
+        applyBlur(current.dialog);
         return current.dialog;
     }
     private static void focusRows(LinearLayout rows) {
@@ -263,7 +302,14 @@ final class GlassSettings {
         GradientDrawable shell = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 glass ? new int[]{0xf22b3442, 0xf0111927} : new int[]{0xff122338, 0xff09182a});
         shell.setCornerRadius(dp(host, glass ? 26 : 10));
-        shell.setStroke(dp(host, 1), glass ? 0x55ffffff : 0x55415a72);
+        android.content.SharedPreferences prefs = host.getSharedPreferences("personal_home", 0);
+        shell.setStroke(dp(host, 1), glass ? TvGlassStyle.edge(prefs) : 0x55415a72);
+        if (glass) {
+            int finish = TvGlassStyle.finish(prefs);
+            boolean blur = finish == 2 && frostedAvailable(host);
+            int base = finish == 1 ? 175 : (blur ? 155 : 225);
+            shell.setAlpha(base + TvGlassStyle.intensity(prefs) * (255 - base) / 100);
+        }
         page.setBackground(shell);
         page.setClipToOutline(true);
         page.setElevation(dp(host, glass ? 6 : 0));
