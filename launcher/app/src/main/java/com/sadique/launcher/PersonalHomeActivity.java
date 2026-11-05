@@ -85,6 +85,7 @@ public final class PersonalHomeActivity extends Activity {
     /** Effective clock text size in sp (after the compact-screen cap), for fitClockText(). */
     private int clockTextSize = 68;
     private ImageView focusedArtwork;
+    private String featuredPkg;
     private boolean tvGlass() { return tv && TvGlassStyle.enabled(prefs); }
     /** Entrance animation plays only on the very first grid render, never on rebuilds. */
     private boolean firstGridRender = true;
@@ -513,7 +514,7 @@ public final class PersonalHomeActivity extends Activity {
         appHeading.setSingleLine(true);
         appHeading.setEllipsize(android.text.TextUtils.TruncateAt.END);
         appHeading.setPadding(dp(4), dp(8), 0, dp(12));
-        focusedArtwork = null;
+        focusedArtwork = null; featuredPkg = null;
         grid = new HomeAppGrid<>(this, app -> app.info.activityInfo.packageName,
                 (app, width) -> createAppTile(app, width, carriedApp != null && app.info.activityInfo.packageName.equals(carriedApp.info.activityInfo.packageName)));
         grid.setUpFromApps(() -> { if (searchButton != null) searchButton.requestFocus(); });
@@ -955,7 +956,7 @@ public final class PersonalHomeActivity extends Activity {
         return new android.graphics.drawable.BitmapDrawable(getResources(), bitmap);
     }
 
-    /** Swaps a finished icon into the live tile and the cached App. Runs on the UI thread. */
+    /** Share the bitmap through a separate drawable callback for the top shelf. */
     private void setFocusedArtwork(android.graphics.drawable.Drawable icon) {
         if (focusedArtwork == null) return;
         if (icon == null) focusedArtwork.setImageResource(R.drawable.ic_apps);
@@ -965,6 +966,7 @@ public final class PersonalHomeActivity extends Activity {
         }
     }
 
+    /** Swaps a finished icon into the live tile and the cached App. Runs on the UI thread. */
     private void updateTileIcon(String pkg, android.graphics.drawable.Drawable icon, int accent) {
         if (cachedApps != null) {
             for (App app : cachedApps) {
@@ -979,7 +981,7 @@ public final class PersonalHomeActivity extends Activity {
         if (tile instanceof android.widget.FrameLayout) {
             View iconView = ((android.widget.FrameLayout) tile).getChildAt(0);
             if (iconView instanceof ImageView) ((ImageView) iconView).setImageDrawable(icon);
-            if (focusedArtwork != null && pkg.equals(focusedPkg)) setFocusedArtwork(icon);
+            if (focusedArtwork != null && pkg.equals(featuredPkg)) setFocusedArtwork(icon);
             tile.setForeground(tileBorder(accent, tile.isFocused()));
             tile.setTag(accent);
         }
@@ -1024,11 +1026,13 @@ public final class PersonalHomeActivity extends Activity {
         if (gridState != null) { grid.getLayoutManager().onRestoreInstanceState(gridState); gridState = null; }
         if (visible.isEmpty()) {
             appHeading.setText(R.string.h_no_apps);
+            featuredPkg = null;
             setFocusedArtwork(null);
         } else if (focusedArtwork != null) {
             App featured = visible.get(0);
             for (App app : visible) if (app.info.activityInfo.packageName.equals(focusedPkg)) { featured = app; break; }
             appHeading.setText(featured.name);
+            featuredPkg = featured.info.activityInfo.packageName;
             setFocusedArtwork(featured.icon);
         }
         if (restoreFocus && (panel == null || !panel.isShowing()) && (searchDialog == null || !searchDialog.isShowing()))
@@ -1198,7 +1202,7 @@ public final class PersonalHomeActivity extends Activity {
             }
             if (focus) {
                 appHeading.setText(app.name);
-                if (focusedArtwork != null) setFocusedArtwork(app.icon);
+                if (focusedArtwork != null) { featuredPkg = app.info.activityInfo.packageName; setFocusedArtwork(app.icon); }
                 appHeading.setTextColor(TEXT);
                 int[] position = new int[2], origin = new int[2];
                 tile.getLocationInWindow(position); sky.getLocationInWindow(origin);
