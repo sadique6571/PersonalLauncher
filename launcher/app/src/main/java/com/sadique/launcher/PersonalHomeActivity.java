@@ -243,7 +243,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private GradientDrawable surface(boolean focused) {
-        if (tvGlass()) return TvGlassStyle.surface(tileRadius(), dp(focused ? 2 : 1), focused, prefs.getInt("glass_alpha", 70));
+        if (tvGlass()) return TvGlassStyle.surface(tileRadius(), dp(focused ? 2 : 1), focused, prefs);
         GradientDrawable shape = new GradientDrawable();
         float day = appearanceDaylight();
         // Theme-tinted glass (user 2026-11-01): the dark base takes the theme's hue.
@@ -1669,9 +1669,9 @@ public final class PersonalHomeActivity extends Activity {
 
     private void themeSettings() {
         // "Dark mode" removed 2026-11-01 (user): the theme glass color covers it.
-        String[] labels = {"Visual style", "Theme", "Accent color", "Launcher font", "Glass intensity"};
-        String[] hints = {"TV Glass or Classic", "Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels"};
-        int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness};
+        String[] labels = {"Visual style", "Theme", "Accent color", "Launcher font", "Glass intensity", "Glass finish", "Glass edge"};
+        String[] hints = {"TV Glass or Classic", "Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels", "Soft, Clear or Frosted panels", "Reflection around glass surfaces"};
+        int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness};
         Runnable[] choices = {
             () -> chooseSetting("Visual style", new String[]{"TV Glass", "Classic"}, which -> {
                 prefs.edit().putBoolean("tv_glass_style", which == 0).apply(); buildHomeSoon();
@@ -1688,6 +1688,15 @@ public final class PersonalHomeActivity extends Activity {
             () -> chooseSetting("Glass intensity", new String[]{"Airy", "Normal", "Solid"}, which -> {
                 prefs.edit().putInt("glass_alpha", new int[]{30, 70, 100}[which]).apply();
                 buildHomeSoon();
+            }),
+            () -> chooseSetting("Glass finish", new String[]{"Soft", "Clear", "Frosted"}, which -> {
+                prefs.edit().putInt("glass_finish", which).apply();
+                if (which == 2 && !GlassSettings.frostedAvailable(this))
+                    Toast.makeText(this, "Frosted surface selected. This TV uses the no-blur fallback.", Toast.LENGTH_LONG).show();
+                buildHomeSoon();
+            }),
+            () -> chooseSetting("Glass edge", new String[]{"Off", "Subtle", "Bright"}, which -> {
+                prefs.edit().putInt("glass_edge", which).apply(); buildHomeSoon();
             }),
         };
         subMenu("Theme", labels, hints, icons, choices);
@@ -1829,6 +1838,8 @@ public final class PersonalHomeActivity extends Activity {
     /** Index of the currently applied option for a settings chooser (-1 when none applies). (User 2026-11-01.) */
     private int settingCurrentIndex(String title) {
         switch (title) {
+            case "Glass finish": return TvGlassStyle.finish(prefs);
+            case "Glass edge": return Math.max(0, Math.min(2, prefs.getInt("glass_edge", 1)));
             case "Visual style": return TvGlassStyle.enabled(prefs) ? 0 : 1;
             case "Wallpaper darkness": return Math.min(2, prefs.getInt("background_dim", 0) / 20);
             case "App colour glow": return prefs.getBoolean("focus_glow", true) ? 0 : 1;
@@ -2665,7 +2676,7 @@ public final class PersonalHomeActivity extends Activity {
         GradientDrawable border = new GradientDrawable();
         border.setColor(Color.TRANSPARENT); border.setCornerRadius(tileRadius());
         int thickness = focused ? new int[]{2, 3, 5}[Math.max(0, Math.min(2, prefs.getInt("focus_border", 1)))] : 1;
-        border.setStroke(dp(thickness), tvGlass() ? (focused ? 0xfff4f8ff : 0x50ffffff) : (focused ? accent : 0x4028435e));
+        border.setStroke(dp(thickness), tvGlass() ? (focused ? 0xfff4f8ff : TvGlassStyle.edge(prefs)) : (focused ? accent : 0x4028435e));
         GradientDrawable bevel = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{0x20ffffff, 0x00ffffff, 0x28000000});
         bevel.setCornerRadius(tileRadius());
