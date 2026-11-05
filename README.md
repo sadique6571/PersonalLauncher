@@ -2,19 +2,33 @@
 
 **Personal Launcher by Sadique Sadiq** — a customizable Home launcher for Android TV / Google TV.
 
-- **Version:** 7.0 · **Release build:** 75 · **Android version code:** 48
+- **Version:** 7.0 · **Android version code:** 49 · Release build numbers increase independently.
 - **Package:** `com.sadique.launcher` · **Minimum Android:** 8.0 / API 26
 - Plain Java and Android Views, with performance profiles for low-memory TVs.
 - Internet access is used for daily Bing wallpaper, Picsum screensaver photos, weather and city lookup.
 
 ## Download
 
-[**Download PersonalLauncher.apk — version 7.0, build 75**](https://github.com/sadique6571/PersonalLauncher/releases/download/v4.7-build-75/PersonalLauncher.apk)
+[**Download PersonalLauncher.apk — latest signed release**](https://github.com/sadique6571/PersonalLauncher/releases/latest/download/PersonalLauncher.apk)
 
-[Release page](https://github.com/sadique6571/PersonalLauncher/releases/tag/v4.7-build-75)
+[Release page](https://github.com/sadique6571/PersonalLauncher/releases/latest)
 
-The release tag uses the older `v4.7-build-75` naming format; the APK's displayed version is **7.0**.
-This README update does not replace or rebuild that APK. App auto-update is not implemented yet.
+Release tags retain the older `v4.7-build-N` naming format; the APK's displayed version remains **7.0**.
+
+## Automatic GitHub updates
+
+After this updater-enabled APK is installed once, Home checks this repository's latest stable GitHub release.
+Checks are limited to once every six hours while Home is open, with a delayed retry after network errors.
+APK downloads are bounded and checked against GitHub's SHA-256 digest, package identity, signing certificate
+and a strictly newer Android version code. Drafts, prereleases, foreign packages/signers and downgrades are rejected.
+
+When Home is idle and media audio is inactive, saved local ADB pairing can install the verified APK and reopen
+Home. Startup recovery is allowed to finish first. No background polling service is added. If pairing is unavailable,
+the Android installer is the fallback; one-time unknown-source approval and installation confirmation may be required.
+
+Open **Launcher settings → System → Updates** to toggle automatic updates, check now, inspect status or install
+a verified download. Installation attempts are bounded, and an update can remain ready until Home is idle.
+Disabling auto-update prevents automatic installation. The old APK needs one manual update to receive this feature.
 
 ## Home screen
 
@@ -22,10 +36,10 @@ The default **TV Glass** style is inspired by Apple TV's visual layout:
 
 - A top shelf shows the selected installed app's artwork and name beside the existing bold clock.
   This is app artwork, not a streaming recommendation feed.
-- Floating 16:9 app cards use original app icons, rounded corners, a white focus outline and subtle focus zoom.
+- Floating 16:9 app cards use original app icons, rounded corners, a white focus outline and subtle focus zoom. Header, drawer, search results, profile editor and volume capsule share the selected glass appearance.
   Light performance mode applies focus changes without the zoom animation.
 - The profile photo and name sit at the top left. Weather, network status, Search, the notification bell and
-  Settings are in the top toolbar.
+  Settings and a direct Screensaver shortcut are in the top toolbar.
 - Daily Bing wallpaper stays behind the Home interface. Wallpaper and profile snapshots avoid reloading
   the default background on each Home return.
 - The digital clock supports a separate AM/PM label, date, seconds, font, size, glow and shadow options.
@@ -49,7 +63,7 @@ Open **Launcher settings → Theme**:
 | Glass finish | Soft / Clear / Frosted | Change TV Glass surface appearance |
 | Glass intensity | Airy / Normal / Solid | Adjust surface opacity |
 | Glass edge | Off / Subtle / Bright | Adjust the unfocused glass outline; focused controls remain visible |
-| Theme | Midnight Cyan / Sunset Orange / Deep Purple / Custom | Choose accent colours for controls and icons |
+| Theme | Midnight Cyan / Sunset Orange / Deep Purple / Custom | Choose accent colours for controls and icons, including Black, Graphite, Silver, Blue, Teal, Gold, Rose and Indigo |
 | Launcher font | Default / Serif / Mono / Light | Choose the interface font |
 
 For a more transparent appearance, try **TV Glass + Frosted + Airy + Subtle**.
@@ -62,7 +76,8 @@ guarantee real blur on every TV. Soft and Clear use lightweight gradients withou
 ## Control Center and settings
 
 The Settings button opens **Control Center** in TV Glass, with Network, Bluetooth, Inputs, Display and
-Sound cards. Its header gear opens the original TV settings. Bluetooth opens the firmware's Bluetooth /
+Sound cards, with Screensaver beside Sound for direct access. The toolbar also has a direct Screensaver button.
+The trailing Categories card is removed. Its header gear opens the original TV settings. Bluetooth opens the firmware's Bluetooth /
 remote-accessory settings when available.
 
 Settings pages use a shared panel with Back navigation, preserving the previous row focus and scroll
@@ -75,8 +90,8 @@ Launcher settings are grouped into:
 - **Theme** — visual style, accents, interface font and glass appearance.
 - **Wallpaper** — source, custom image, slideshow interval, darkness and bottom shade.
 - **Apps** — visibility and available content-row preferences.
-- **System** — screensaver/weather, profile, performance, volume auto-start, Home/remote setup,
-  settings export/import and layout reset.
+- **System** — screensaver/weather, profile, performance, Updates, settings export/import and layout reset.
+  Routine volume/Home automation shortcuts are hidden; first-run authorization and recovery remain available.
 
 Search filters installed, non-hidden apps inside the launcher. Play Store search opens Google's normal
 search/install screen. Voice search uses the TV's configured Assistant or speech activity; the launcher
@@ -100,8 +115,8 @@ system controls. The existing remote volume control is separate and remains func
 ## Remote volume and navigation
 
 The launcher provides its own volume indicator and an optional fast-volume helper for firmware with
-unreliable held-key repeat. **Launcher settings → System → Volume auto-start** shows saved pairing and
-startup status. With configured local pairing, recovery is requested at boot and after app updates.
+unreliable held-key repeat. With configured local pairing, recovery is requested at boot and after app updates;
+the routine Volume auto-start menu entry is hidden.
 
 The working helper and launcher key services handle volume without requiring a manual start command
 after every normal reboot. Recovery still depends on this TV's saved authorization, permissions and
@@ -113,10 +128,9 @@ are in the toolbar's remote focus path. Continue Watching is entered with Down f
 
 ## Automatic Home and remote setup
 
-Open **Launcher settings → System → Home & remote setup** for the actual default Home,
-saved pairing, settings grant, accessibility permissions, Home-listener connection and last setup result.
-Enable or retry automatic setup, disable future Home repair, open Android's Home picker or accessibility
-settings, and inspect local pairing/volume recovery from the same guide.
+Initial Home setup handles one-time authorization and saved local pairing. Routine Home/remote and volume
+setup entries are hidden from the normal System menu once using automatic recovery. Existing pairing,
+permissions and bounded recovery continue to work; hiding the shortcuts does not remove their backend.
 
 Saved local ADB pairing can set this package as the real Home app and restore only its Home/Settings
 helpers while preserving other enabled accessibility services. The system Home resolver is checked
@@ -143,7 +157,7 @@ Screensaver images are not stored on disk.
 
 Photographer, resolution and provider labels are hidden. Picsum does not supply scene descriptions,
 so the app does not invent them. Weather sits at bottom-left and shows “Unavailable” on failure or
-offline, without refresh timestamps. Clock/date placement is configurable.
+offline, without refresh timestamps. The screensaver clock is bold; clock/date placement is configurable.
 
 Home uses Bing's daily image and retains one private, atomic snapshot for the first frame after an
 activity/process restart. The cached image is restored before drawing; an online Home never draws the
@@ -166,7 +180,9 @@ image or an app-icon fallback. Access and available entries depend on the TV and
 private Netflix/other app histories cannot be read, and no resume items are invented.
 
 The notification bell shows eligible clearable alerts. Ongoing, playback, foreground-service and active
-progress notifications are filtered out. Notification access is requested separately. Alert content stays
+progress notifications are filtered out. Notification access is requested once on the first idle Home after installation/upgrade and still requires Android approval.
+The bell contains alerts only, without an access-settings shortcut. Skipping approval does not trigger repeated prompts.
+Alert content stays
 in bounded memory and is not stored or uploaded.
 
 ## Performance
@@ -186,7 +202,7 @@ update timestamp. No performance benchmark improvement is claimed for the glass 
 For an existing installation with working ADB:
 
 ```sh
-curl -fL https://github.com/sadique6571/PersonalLauncher/releases/download/v4.7-build-75/PersonalLauncher.apk -o launcher.apk &&
+curl -fL https://github.com/sadique6571/PersonalLauncher/releases/latest/download/PersonalLauncher.apk -o launcher.apk &&
 adb shell 'if [ -f /data/local/tmp/fast-volume-bridge.sh ]; then sh /data/local/tmp/fast-volume-bridge.sh stop; fi' &&
 adb install -r launcher.apk &&
 adb shell am start -n com.sadique.launcher/.MainActivity
@@ -214,7 +230,7 @@ publishing. Published APKs use the persistent release keystore. CI can use a tem
 validation; that is different from the published APK.
 
 A push to `main` touching `launcher/**` triggers APK publication. README-only changes do not trigger
-a new APK release. Build 75 remains the download linked above.
+a new APK release. The download above follows the latest signed release.
 
 ## Volume troubleshooting
 
