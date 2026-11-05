@@ -243,7 +243,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private GradientDrawable surface(boolean focused) {
-        if (tvGlass()) return TvGlassStyle.surface(tileRadius(), dp(focused ? 2 : 1), focused, prefs);
+        if (TvGlassStyle.enabled(prefs)) return TvGlassStyle.surface(Math.max(dp(22), tileRadius()), dp(focused ? 2 : 1), focused, prefs);
         GradientDrawable shape = new GradientDrawable();
         float day = appearanceDaylight();
         // Theme-tinted glass (user 2026-11-01): the dark base takes the theme's hue.
@@ -305,13 +305,21 @@ public final class PersonalHomeActivity extends Activity {
         icon.setColorFilter(TEXT);
         icon.setContentDescription(title);
         icon.setTooltipText(title);
-        int symbolInset = TvGlassStyle.enabled(prefs) ? dp(tv ? 10 : 9) : dp(11);
+        boolean glassIcons = TvGlassStyle.enabled(prefs);
+        int symbolInset = glassIcons ? dp(tv ? 7 : 6) : dp(11);
         icon.setPadding(symbolInset, symbolInset, symbolInset, symbolInset);
-        icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        icon.setBackground(toolbarSurface(false));
-        icon.setClipToOutline(true);
+        // CENTER_INSIDE capped these custom 24px drawables at their intrinsic size on dense screens.
+        icon.setScaleType(glassIcons ? ImageView.ScaleType.FIT_CENTER : ImageView.ScaleType.CENTER_INSIDE);
+        icon.setBackground(glassIcons ? null : toolbarSurface(false));
+        icon.setClipToOutline(!glassIcons);
         icon.setFocusable(true);
-        icon.setOnFocusChangeListener((v, focus) -> v.setBackground(toolbarSurface(focus)));
+        icon.setOnFocusChangeListener((v, focus) -> {
+            if (glassIcons) {
+                // Remote focus is visible through scale and colour, never a surrounding box.
+                icon.setColorFilter(focus ? 0xff8fddff : Color.WHITE);
+                icon.setScaleX(focus ? 1.14f : 1f); icon.setScaleY(focus ? 1.14f : 1f);
+            } else v.setBackground(toolbarSurface(focus));
+        });
         icon.setOnClickListener(v -> action.run());
         icon.setOnKeyListener((v, code, event) -> toolbarKey(v, event));
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(tv ? 48 : 44), dp(tv ? 48 : 44));
@@ -1577,7 +1585,7 @@ public final class PersonalHomeActivity extends Activity {
         if (header == null) return;
         int mode = headerBgMode();
         GradientDrawable bg = null;
-        if (tvGlass()) {
+        if (TvGlassStyle.enabled(prefs)) {
             bg = TvGlassStyle.surface(dp(24), dp(1), false, prefs);
         } else if (mode == 1) {
             bg = new GradientDrawable();
@@ -2741,3 +2749,4 @@ public final class PersonalHomeActivity extends Activity {
                 (int) (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * part));
     }
 }
+

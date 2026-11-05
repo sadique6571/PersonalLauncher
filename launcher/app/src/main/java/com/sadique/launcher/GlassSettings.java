@@ -328,17 +328,11 @@ final class GlassSettings {
     private static android.content.SharedPreferences prefsFor(Activity host) { return host.getSharedPreferences("personal_home", 0); }
     private static void styleShell(Activity host, View page) {
         boolean glass = TvGlassStyle.enabled(host.getSharedPreferences("personal_home", 0));
-        GradientDrawable shell = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                glass ? new int[]{TvGlassStyle.tinted(0xff2b3442, prefsFor(host)), TvGlassStyle.tinted(0xff111927, prefsFor(host))} : new int[]{0xff122338, 0xff09182a});
+        GradientDrawable shell = glass ? TvGlassStyle.surface(dp(host, 28), dp(host, 1), false, prefsFor(host))
+                : new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xff122338, 0xff09182a});
         shell.setCornerRadius(dp(host, glass ? 26 : 10));
         android.content.SharedPreferences prefs = host.getSharedPreferences("personal_home", 0);
-        shell.setStroke(dp(host, 1), glass ? TvGlassStyle.edge(prefs) : 0x55415a72);
-        if (glass) {
-            int finish = TvGlassStyle.finish(prefs);
-            boolean blur = finish == 2 && frostedAvailable(host);
-            int base = finish == 1 ? 175 : (blur ? 155 : 225);
-            shell.setAlpha(base + TvGlassStyle.intensity(prefs) * (255 - base) / 100);
-        }
+        if (!glass) shell.setStroke(dp(host, 1), 0x55415a72);
         page.setBackground(shell);
         page.setClipToOutline(true);
         page.setElevation(dp(host, glass ? 6 : 0));
@@ -396,3 +390,4 @@ final class GlassSettings {
         dialog.show();
     }
 }
+

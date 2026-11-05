@@ -2,7 +2,7 @@
 
 **Personal Launcher by Sadique Sadiq** — a customizable Home launcher for Android TV / Google TV.
 
-- **Version:** 7.0 · **Android version code:** 49 · Release build numbers increase independently.
+- **Version:** 7.0 · **Android version code:** 51 · Release build numbers increase independently.
 - **Package:** `com.sadique.launcher` · **Minimum Android:** 8.0 / API 26
 - Plain Java and Android Views, with performance profiles for low-memory TVs.
 - Internet access is used for daily Bing wallpaper, Picsum screensaver photos, weather and city lookup.
@@ -36,6 +36,8 @@ The default **TV Glass** style is inspired by Apple TV's visual layout:
 
 - A top shelf shows the selected installed app's artwork and name beside the existing bold clock.
   This is app artwork, not a streaming recommendation feed.
+- The app icon and Android TV banner use the selected silver **PL Monogram**. Home toolbar actions are larger, standalone white symbols; remote focus uses colour and scale without a surrounding box.
+- Glass surfaces use translucent neutral tint, a fine reflected rim and rounded corners. Volume uses one bottom-filled white capsule with the output icon inside; Picture/Sound preview sliders use matching broad horizontal capsules.
 - Floating 16:9 app cards use original app icons, rounded corners, a white focus outline and subtle focus zoom. Header, drawer, search results, profile editor and volume capsule share the selected glass appearance.
   Light performance mode applies focus changes without the zoom animation.
 - The profile photo and name sit at the top left. Weather, network status, Search, the notification bell and

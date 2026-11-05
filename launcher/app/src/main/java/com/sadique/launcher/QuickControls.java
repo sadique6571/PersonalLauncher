@@ -22,14 +22,16 @@ final class QuickControls {
         card.setGravity(android.view.Gravity.CENTER_VERTICAL);
         card.setBackground(GlassSettings.background(host, false));
         card.setPadding(GlassSettings.dp(host, 12), GlassSettings.dp(host, 7), GlassSettings.dp(host, 10), GlassSettings.dp(host, 7));
-        android.widget.ImageView icon = new android.widget.ImageView(host); icon.setImageResource(symbol); icon.setColorFilter(0xffb9d5e8);
+        android.widget.ImageView icon = new android.widget.ImageView(host); icon.setImageDrawable(TvSymbols.icon(host, symbol)); icon.setColorFilter(0xfff1f5fb);
+        icon.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
         card.addView(icon, new LinearLayout.LayoutParams(GlassSettings.dp(host, 24), GlassSettings.dp(host, 24)));
         LinearLayout controls = new LinearLayout(host); controls.setOrientation(LinearLayout.VERTICAL);
         controls.setPadding(GlassSettings.dp(host, 12), 0, 0, 0); controls.addView(label);
         slider.setProgressTintList(android.content.res.ColorStateList.valueOf(0xff55baff));
         slider.setThumbTintList(android.content.res.ColorStateList.valueOf(0xffd4efff));
         slider.setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff2a3d56));
-        controls.addView(slider, new LinearLayout.LayoutParams(-1, GlassSettings.dp(host, 27)));
+        boolean glass = TvGlassStyle.enabled(host.getSharedPreferences("personal_home", 0));
+        controls.addView(slider, new LinearLayout.LayoutParams(-1, GlassSettings.dp(host, glass ? 36 : 27)));
         slider.setOnFocusChangeListener((v, focus) -> card.setBackground(GlassSettings.background(host, focus)));
         card.addView(controls, new LinearLayout.LayoutParams(0, -2, 1));
         LinearLayout.LayoutParams position = new LinearLayout.LayoutParams(-1, -2);
@@ -40,7 +42,7 @@ final class QuickControls {
         int maximum = audio == null ? 0 : audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
         boolean fixed = audio == null || maximum <= 0 || audio.isVolumeFixed();
         TextView volumeLabel = label(host, fixed ? "Media volume · fixed by device" : "Media volume");
-        SeekBar volume = new SeekBar(host); volume.setMax(Math.max(1, maximum)); volume.setEnabled(!fixed);
+        SeekBar volume = new GlassSeekBar(host); volume.setMax(Math.max(1, maximum)); volume.setEnabled(!fixed);
         volume.setContentDescription("Media volume");
         if (audio != null) volume.setProgress(audio.getStreamVolume(AudioManager.STREAM_MUSIC));
         if (!fixed) volumeLabel.setText("Media volume · " + Math.round(volume.getProgress() * 100f / maximum) + "%");
@@ -71,3 +73,4 @@ final class QuickControls {
         return () -> { if (listening) try { host.unregisterReceiver(changed); } catch (RuntimeException ignored) { } };
     }
 }
+
