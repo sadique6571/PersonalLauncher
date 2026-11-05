@@ -112,7 +112,7 @@ final class TvControlPreview {
             header.addView(number);
             header.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
             addView(header);
-            slider = new SeekBar(host);
+            slider = new GlassSeekBar(host);
             slider.setMax(max - min);
             slider.setKeyProgressIncrement(1);
             slider.setProgressTintList(ColorStateList.valueOf(GlassSettings.themeAccent(host)));
@@ -124,7 +124,11 @@ final class TvControlPreview {
                 @Override public void onStartTrackingTouch(SeekBar bar) { requestFocus(); }
                 @Override public void onStopTrackingTouch(SeekBar bar) { }
             });
-            addView(slider, new LinearLayout.LayoutParams(-1, GlassSettings.dp(host, 32)));
+            boolean glass = TvGlassStyle.enabled(host.getSharedPreferences("personal_home", 0));
+            LinearLayout.LayoutParams trackPosition = new LinearLayout.LayoutParams(-1, GlassSettings.dp(host, glass ? 36 : 32));
+            trackPosition.topMargin = GlassSettings.dp(host, glass ? 6 : 0);
+            trackPosition.bottomMargin = GlassSettings.dp(host, glass ? 6 : 0);
+            addView(slider, trackPosition);
             LinearLayout.LayoutParams position = new LinearLayout.LayoutParams(-1, -2);
             position.setMargins(0, GlassSettings.dp(host, 3), 0, GlassSettings.dp(host, 3));
             setLayoutParams(position);
@@ -175,3 +179,4 @@ final class TvControlPreview {
         }
     }
 }
+

@@ -26,15 +26,18 @@ final class TvGlassStyle {
     }
     static GradientDrawable surface(int radius, int strokeWidth, boolean focused, SharedPreferences prefs) {
         int finish = finish(prefs);
-        int top = focused ? 0xff596575 : (finish == 2 ? 0xff596575 : 0xff2d3541);
-        int bottom = focused ? 0xff374455 : (finish == 2 ? 0xff344152 : 0xff18202d);
-        top = tinted(top, prefs); bottom = tinted(bottom, prefs);
-        GradientDrawable shape = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{top, bottom});
+        float strength = intensity(prefs) / 100f;
+        int base = finish == 1 ? 24 : finish == 2 ? 96 : 48;
+        int alpha = base + Math.round((245 - base) * strength * strength);
+        if (focused) alpha = Math.min(245, alpha + 30);
+        int top = (alpha << 24) | (tinted(focused ? 0xffaaa7b5 : 0xff797580, prefs) & 0xffffff);
+        int middle = (Math.max(0, alpha - 28) << 24) | (tinted(0xff494451, prefs) & 0xffffff);
+        int bottom = (Math.max(0, alpha - 16) << 24) | (tinted(0xff393541, prefs) & 0xffffff);
+        GradientDrawable shape = new GlassSurface(strokeWidth, focused ? 0xccffffff : edge(prefs));
+        shape.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
+        shape.setColors(new int[]{top, middle, bottom});
         shape.setCornerRadius(radius);
-        shape.setStroke(strokeWidth, focused ? 0xffedf5ff : edge(prefs));
-        int base = finish == 1 ? 130 : (finish == 2 ? 185 : 180);
-        int range = 255 - base;
-        shape.setAlpha(base + intensity(prefs) * range / 100);
         return shape;
     }
 }
+
