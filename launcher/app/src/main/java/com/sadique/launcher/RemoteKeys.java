@@ -36,9 +36,7 @@ import java.util.regex.Pattern;
  * of "inputs" opens the input switcher, for a remote whose source button sends a key Android does not map,
  * one of the action words (back, home, recents, mute, sleep, screensaver, settings, wifi, home_settings) does that action, and
  * "package/.Activity" opens that activity rather than the app's launcher entry (an add-on's quick bar, say).
- * "home_settings" opens the Home settings popup itself: the stable MainActivity alias with
- * MainActivity.ACTION_SHOW_SETTINGS, the same panel
- * `adb shell am start -n <pkg>/.MainActivity -a com.sadique.launcher.action.SHOW_SETTINGS` opens.
+ * "home_settings" opens the translucent QuickSettingsActivity over the current app, without raising Home.
  */
 final class RemoteKeys {
 
@@ -402,7 +400,7 @@ final class RemoteKeys {
     /**
      * Whether a target is an action word rather than an app or an input. A package name always has a dot.
      * "ignore" does nothing on purpose: the button is swallowed, for a remote shortcut that is pressed by accident.
-     * "home_settings" opens the Home settings popup (the MainActivity alias with ACTION_SHOW_SETTINGS).
+     * "home_settings" opens the translucent quick panel over the foreground app.
      */
     static boolean isAction(String target) {
         switch (target) {
@@ -453,12 +451,7 @@ final class RemoteKeys {
         return true;
     }
 
-    /**
-     * Opens the Home settings popup, exactly as
-     * {@code adb shell am start -n <pkg>/.MainActivity -a com.sadique.launcher.action.SHOW_SETTINGS} does:
-     * the stable MainActivity alias (not a concrete settings activity) with ACTION_SHOW_SETTINGS, as a new
-     * task so it opens over whatever app is in front. Returns false when the launch failed.
-     */
+    /** Opens the separate translucent panel task; Home is not part of this route. */
     static boolean launchHomeSettings(Context ctx) {
         Intent intent = homeSettingsIntent(ctx.getPackageName());
         try {
@@ -474,7 +467,7 @@ final class RemoteKeys {
     /** The intent launchHomeSettings sends; package-visible so tests can check it without a Context. */
     static Intent homeSettingsIntent(String packageName) {
         return new Intent()
-                .setComponent(new ComponentName(packageName, packageName + ".MainActivity"))
+                .setComponent(new ComponentName(packageName, packageName + ".QuickSettingsActivity"))
                 .setAction(MainActivity.ACTION_SHOW_SETTINGS)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
     }

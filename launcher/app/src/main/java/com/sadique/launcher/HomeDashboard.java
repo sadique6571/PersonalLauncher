@@ -9,9 +9,15 @@ import android.widget.LinearLayout;
 final class HomeDashboard {
     static final int SETTINGS=0, SEARCH=1, STORE=2, SCREENSAVER=3, CATEGORIES=5,
             WIFI=7, BLUETOOTH=8, INPUTS=9, SYSTEM=10, DISPLAY=11, SOUND=12, IDENTITY=13;
-    interface Actions { void open(int action); }
+    interface Actions {
+        void open(int action);
+        default boolean keepPanel(int action) { return false; }
+    }
     private HomeDashboard() { }
     static AlertDialog show(Activity host, String network, Runnable rebuild, Actions actions) {
+        return show(host,network,rebuild,actions,false);
+    }
+    static AlertDialog show(Activity host, String network, Runnable rebuild, Actions actions, boolean floating) {
         LinearLayout rows = HomeLibraryUi.rows(host);
         AlertDialog panel = GlassSettings.panel(host, TvGlassStyle.enabled(ThemePreferences.get(host)) ? "Control Center" : host.getString(R.string.h_dashboard), rows, true);
         rows.addView(GlassSettings.label(host, network, 12, 0xffb5cadd));
@@ -24,24 +30,25 @@ final class HomeDashboard {
                 R.string.h_screensaver, R.drawable.ic_picture, SCREENSAVER);
         section(host, rows, R.string.h_personalize);
         row(host, rows, R.string.h_launcher_settings, R.string.h_layout_hint, R.drawable.ic_palette, () -> actions.open(SETTINGS));
-        row(host, rows, R.string.h_single_identity, 0, R.drawable.ic_person, () -> { panel.dismiss(); actions.open(IDENTITY); });
+        if (!floating) row(host, rows, R.string.h_single_identity, 0, R.drawable.ic_person, () -> { panel.dismiss(); actions.open(IDENTITY); });
         boolean appsOnly = ThemePreferences.get(host).getBoolean("apps_only", false);
-        row(host, rows, R.string.h_apps_only, appsOnly ? R.string.h_on : R.string.h_off, R.drawable.ic_apps, () -> {
+        if (!floating) row(host, rows, R.string.h_apps_only, appsOnly ? R.string.h_on : R.string.h_off, R.drawable.ic_apps, () -> {
             ThemePreferences.get(host).edit().putBoolean("apps_only", !appsOnly).apply();
             panel.dismiss(); rebuild.run();
         });
-        row(host, rows, R.string.h_local_pin, R.string.h_local_pin_hint, R.drawable.ic_person, () -> { panel.dismiss(); LauncherPin.settings(host); });
-        row(host, rows, R.string.h_sleep_timer, R.string.h_sleep_timer_hint, R.drawable.ic_media_pause, () -> { panel.dismiss(); LauncherSleep.show(host); });
+        row(host, rows, R.string.h_local_pin, R.string.h_local_pin_hint, R.drawable.ic_person, () -> { if (!floating) panel.dismiss(); LauncherPin.settings(host); });
+        row(host, rows, R.string.h_sleep_timer, R.string.h_sleep_timer_hint, R.drawable.ic_media_pause, () -> { if (!floating) panel.dismiss(); LauncherSleep.show(host,floating); });
         section(host, rows, R.string.h_more_tools);
-        pair(host, rows, panel, actions, R.string.h_search, R.drawable.ic_search, SEARCH,
+        if (!floating) pair(host, rows, panel, actions, R.string.h_search, R.drawable.ic_search, SEARCH,
                 R.string.h_store, R.drawable.ic_apps, STORE);
+        else row(host,rows,R.string.h_store,0,R.drawable.ic_apps,()-> { panel.dismiss(); actions.open(STORE); });
         panel.show(); return panel;
     }
     private static void pair(Activity host, LinearLayout rows, AlertDialog panel, Actions actions,
             int first, int firstIcon, int firstAction, int second, int secondIcon, int secondAction) {
         LinearLayout strip = new LinearLayout(host);
-        card(host, strip, first, firstIcon, () -> { panel.dismiss(); actions.open(firstAction); });
-        card(host, strip, second, secondIcon, () -> { panel.dismiss(); actions.open(secondAction); });
+        card(host, strip, first, firstIcon, () -> { if (!actions.keepPanel(firstAction)) panel.dismiss(); actions.open(firstAction); });
+        card(host, strip, second, secondIcon, () -> { if (!actions.keepPanel(secondAction)) panel.dismiss(); actions.open(secondAction); });
         rows.addView(strip);
     }
     private static void card(Activity host, LinearLayout strip, int title, int icon, Runnable action) {
