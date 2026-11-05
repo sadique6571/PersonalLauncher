@@ -1409,8 +1409,8 @@ public final class PersonalHomeActivity extends Activity {
                 case HomeDashboard.WIFI: openSetting(Settings.ACTION_WIFI_SETTINGS); break;
                 case HomeDashboard.BLUETOOTH: launch(SystemSettings.bluetoothAccessoriesIntent(this)); break;
                 case HomeDashboard.INPUTS: showInputs(); break;
-                case HomeDashboard.DISPLAY: openSetting(Settings.ACTION_DISPLAY_SETTINGS); break;
-                case HomeDashboard.SOUND: openSetting(Settings.ACTION_SOUND_SETTINGS); break;
+                case HomeDashboard.DISPLAY: panel = TvControlPreview.show(this, true); break;
+                case HomeDashboard.SOUND: panel = TvControlPreview.show(this, false); break;
                 case HomeDashboard.IDENTITY: editProfile(); break;
                 default: openSetting(Settings.ACTION_SETTINGS); break;
             }
