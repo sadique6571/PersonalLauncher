@@ -45,6 +45,7 @@ final class UpdateDownloadUi {
             GradientDrawable surface = GlassSettings.background(host, false); surface.setCornerRadius(dp(host, 26));
             shell.setBackground(surface); shell.setClipToOutline(true); shell.setElevation(dp(host, 8));
             shell.setFocusable(false); shell.setClickable(false);
+            shell.setKeepScreenOn(true);
             TextView text = GlassSettings.label(host, "", 14, 0xffffffff); text.setGravity(Gravity.CENTER);
             text.setSingleLine(true); text.setEllipsize(android.text.TextUtils.TruncateAt.END);
             text.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE); shell.addView(text);

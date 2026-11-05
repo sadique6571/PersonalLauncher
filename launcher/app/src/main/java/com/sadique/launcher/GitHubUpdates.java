@@ -43,6 +43,7 @@ final class GitHubUpdates {
     private GitHubUpdates() { }
     static SharedPreferences prefs(Context c) { return c.getSharedPreferences("github_updates",0); }
     static boolean enabled(Context c) { return prefs(c).getBoolean("enabled",true); }
+    static boolean manualActive() { Operation operation=active; return NATIVE_PENDING.get() || (operation!=null && operation.manual); }
     static void enabled(Context c,boolean value) { prefs(c).edit().putBoolean("enabled",value).apply(); }
     static String status(Context c) { return prefs(c).getString("status","Checks GitHub while Home is open"); }
     private static void state(Context c,String value) { prefs(c).edit().putString("status",value).apply(); }
@@ -50,7 +51,7 @@ final class GitHubUpdates {
     static Uri uri(Context c) { return Uri.parse("content://"+c.getPackageName()+".updates/apk"); }
     static void check(Activity host,boolean force) {
         if ((!force && !enabled(host)) || host.isFinishing() || host.isDestroyed() || !host.hasWindowFocus()) return;
-        if (force && NATIVE_PENDING.get()) return;
+        if (NATIVE_PENDING.get()) return;
         SharedPreferences p=prefs(host);
         if (!force && !readyFile(host).isFile() && System.currentTimeMillis()<p.getLong("next_check",0)) return;
         if (!BUSY.compareAndSet(false,true)) {

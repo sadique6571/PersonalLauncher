@@ -2,7 +2,7 @@
 
 **Personal Launcher by Sadique Sadiq** — a customizable Home launcher for Android TV / Google TV.
 
-- **Version:** 7.0 · **Android version code:** 52 · Release build numbers increase independently.
+- **Version:** 7.0 · **Android version code:** 53 · Release build numbers increase independently.
 - **Package:** `com.sadique.launcher` · **Minimum Android:** 8.0 / API 26
 - Plain Java and Android Views, with performance profiles for low-memory TVs.
 - Internet access is used for daily Bing wallpaper, Picsum screensaver photos, weather and city lookup.
@@ -33,6 +33,7 @@ download. The percentage stops at 99 while SHA-256, package and signing checks r
 100% removes the capsule and opens Android's APK installer. If Android requests unknown-source approval,
 granting it and returning to Home continues that explicit install request. Leaving Home does not launch
 an installer over another app; the verified APK remains ready in Updates. Automatic checks remain quiet.
+While the manual capsule is visible, Home postpones its idle screensaver and keeps the display awake.
 Disabling auto-update prevents automatic installation. The old APK needs one manual update to receive this feature.
 
 ## Home screen
