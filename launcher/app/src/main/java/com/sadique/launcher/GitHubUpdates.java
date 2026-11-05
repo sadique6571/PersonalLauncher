@@ -43,6 +43,7 @@ final class GitHubUpdates {
     private GitHubUpdates() { }
     static SharedPreferences prefs(Context c) { return c.getSharedPreferences("github_updates",0); }
     static boolean enabled(Context c) { return prefs(c).getBoolean("enabled",true); }
+    static boolean manualActive() { Operation operation=active; return NATIVE_PENDING.get() || (operation!=null && operation.manual); }
     static void enabled(Context c,boolean value) { prefs(c).edit().putBoolean("enabled",value).apply(); }
     static String status(Context c) { return prefs(c).getString("status","Checks GitHub while Home is open"); }
     private static void state(Context c,String value) { prefs(c).edit().putString("status",value).apply(); }

@@ -111,7 +111,7 @@ public final class PersonalHomeActivity extends Activity {
     private EditText searchInput;
     private Runnable searchRefresh;
     private final Runnable idleScreensaver = () -> {
-        if (resumed && hasWindowFocus()) launch(new Intent(this, LandscapeActivity.class));
+        if (resumed && hasWindowFocus() && !GitHubUpdates.manualActive()) launch(new Intent(this, LandscapeActivity.class));
         else armIdleScreensaver();
     };
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
@@ -571,7 +571,7 @@ public final class PersonalHomeActivity extends Activity {
             shelf.setGravity(Gravity.CENTER_VERTICAL);
             shelf.setPadding(dp(12), dp(16), dp(12), dp(16));
             focusedArtwork = new ImageView(this);
-            focusedArtwork.setImageResource(R.drawable.ic_apps);
+            focusedArtwork.setImageDrawable(TvSymbols.icon(this, R.drawable.ic_apps));
             focusedArtwork.setScaleType(ImageView.ScaleType.FIT_XY);
             focusedArtwork.setBackground(surface(false));
             focusedArtwork.setClipToOutline(true);
@@ -981,7 +981,7 @@ public final class PersonalHomeActivity extends Activity {
     /** Share the bitmap through a separate drawable callback for the top shelf. */
     private void setFocusedArtwork(android.graphics.drawable.Drawable icon) {
         if (focusedArtwork == null) return;
-        if (icon == null) focusedArtwork.setImageResource(R.drawable.ic_apps);
+        if (icon == null) focusedArtwork.setImageDrawable(TvSymbols.icon(this, R.drawable.ic_apps));
         else {
             android.graphics.drawable.Drawable.ConstantState state = icon.getConstantState();
             focusedArtwork.setImageDrawable(state == null ? icon : state.newDrawable(getResources()));
@@ -1200,7 +1200,7 @@ public final class PersonalHomeActivity extends Activity {
         }
         ImageView icon = new ImageView(this);
         if (app.icon != null) icon.setImageDrawable(app.icon);
-        else icon.setImageResource(R.drawable.ic_apps);
+        else icon.setImageDrawable(TvSymbols.icon(this, R.drawable.ic_apps));
         // Artwork is composed at the card's 16:9 ratio; no second inset or crop here.
         icon.setScaleType(ImageView.ScaleType.FIT_XY);
         icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -1977,7 +1977,7 @@ public final class PersonalHomeActivity extends Activity {
     private void refreshProfileAvatarPreview() {
         if (profileAvatarPreview == null) return;
         if (avatarBitmap != null) profileAvatarPreview.setImageBitmap(avatarBitmap);
-        else profileAvatarPreview.setImageResource(R.drawable.ic_person);
+        else profileAvatarPreview.setImageDrawable(TvSymbols.icon(this, R.drawable.ic_person));
     }
 
     private void editProfile() {
