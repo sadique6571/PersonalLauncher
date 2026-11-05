@@ -131,6 +131,7 @@ final class VolumeSlider {
             style = style * 31 + prefs.getInt("glass_finish", 0);
             style = style * 31 + prefs.getInt("glass_alpha", 70);
             style = style * 31 + prefs.getInt("glass_edge", 1);
+            style = style * 31 + (PanelTransparency.enabled(prefs) ? 1 : 0);
             style = style * 31 + prefs.getInt("theme_name", 0);
             style = style * 31 + prefs.getInt("custom_accent", 0);
             if (owner != context || drawnStyle != style) dispose();

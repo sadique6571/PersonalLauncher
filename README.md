@@ -88,13 +88,15 @@ Open **Launcher settings → Theme**:
 | Visual style | TV Glass / Classic | Switch the Home arrangement and shared panel style |
 | Glass finish | Soft / Clear / Frosted | Change TV Glass surface appearance |
 | Glass intensity | Airy / Normal / Solid | Adjust surface opacity |
+| Panel transparency | On / Off | Make panels, status bar and capsules solid when off; app drawer glass stays at its own saved intensity. Each theme saves this toggle independently |
 | Glass edge | Off / Subtle / Bright | Adjust the unfocused glass outline; focused controls remain visible |
 | Theme | Midnight Cyan / Sunset Orange / Deep Purple / Custom | Choose accent colours for controls and icons, including Black, Graphite, Silver, Blue, Teal, Gold, Rose and Indigo |
 | Launcher font | Default / Serif / Mono / Light | Choose the interface font |
 
 Both the wallpaper-blur layer and tint follow Glass intensity; Airy keeps the actual wallpaper detail visible.
 Clear does not add blur, Soft uses a small blur, and Frosted is stronger. The cached image never replaces
-the original wallpaper with an opaque layer.
+the original wallpaper with an opaque layer while transparency is on. Turning panel transparency off
+keeps the drawer transparent and preserves finish/intensity, so turning it on restores the previous glass.
 
 For a more transparent appearance, try **TV Glass + Clear + Airy + Subtle**.
 
@@ -279,3 +281,7 @@ diagnostic commands for firmware with slow or missing held-volume repeat.
 
 
 
+
+Manual update progress uses a centered, full-height filling capsule up to 440 dp wide, constrained by
+the screen width. TV Glass uses its reflective shell and white fill; Classic uses its accent fill and
+border. Style changes update a visible capsule too. Verified completion opens the installer as before.

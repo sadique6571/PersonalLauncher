@@ -25,21 +25,24 @@ final class TvGlassStyle {
         return android.graphics.Color.luminance(color) < .15 ? 0xffdce5f2 : color;
     }
     static GradientDrawable surface(int radius, int strokeWidth, boolean focused, SharedPreferences prefs) {
-        return surface(radius, strokeWidth, focused, prefs, false);
+        return surface(radius, strokeWidth, focused, prefs, false, false);
     }
     static GradientDrawable liquid(int radius, int strokeWidth, SharedPreferences prefs) {
-        return surface(radius, strokeWidth, false, prefs, true);
+        return surface(radius, strokeWidth, false, prefs, true, false);
     }
-    private static GradientDrawable surface(int radius, int strokeWidth, boolean focused, SharedPreferences prefs, boolean liquid) {
+    static GradientDrawable drawer(int radius, int strokeWidth, SharedPreferences prefs) {
+        return surface(radius, strokeWidth, false, prefs, true, true);
+    }
+    private static GradientDrawable surface(int radius, int strokeWidth, boolean focused, SharedPreferences prefs, boolean liquid, boolean drawer) {
         int finish = finish(prefs);
         float strength = intensity(prefs) / 100f;
         int base = finish == 1 ? 24 : finish == 2 ? 96 : 48;
         int alpha = base + Math.round((245 - base) * strength * strength);
         if (liquid) alpha = GlassTransparency.tintAlpha(finish,intensity(prefs));
         if (focused) alpha = Math.min(245, alpha + 30);
-        int top = (alpha << 24) | (tinted(focused ? 0xffaaa7b5 : 0xff797580, prefs) & 0xffffff);
-        int middle = (Math.max(0, alpha - 28) << 24) | (tinted(0xff494451, prefs) & 0xffffff);
-        int bottom = (Math.max(0, alpha - 16) << 24) | (tinted(0xff393541, prefs) & 0xffffff);
+        int top = (PanelTransparency.alpha(alpha,prefs,drawer) << 24) | (tinted(focused ? 0xffaaa7b5 : 0xff797580, prefs) & 0xffffff);
+        int middle = (PanelTransparency.alpha(Math.max(0, alpha - 28),prefs,drawer) << 24) | (tinted(0xff494451, prefs) & 0xffffff);
+        int bottom = (PanelTransparency.alpha(Math.max(0, alpha - 16),prefs,drawer) << 24) | (tinted(0xff393541, prefs) & 0xffffff);
         int edge = edge(prefs);
         if (liquid && edge != 0) edge = 0xaaffffff;
         GlassSurface shape = new GlassSurface(strokeWidth, focused ? 0xccffffff : edge);
