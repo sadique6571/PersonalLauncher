@@ -13,7 +13,7 @@ final class MaterialSurface extends GlassSurface {
     private final RectF frame=new RectF();
     private final int accent;
     MaterialSurface(int radius,int stroke,boolean focused,SharedPreferences prefs,boolean drawer) {
-        super(stroke,0); pearl=ThemeStyle.pearl(prefs); this.focused=focused; accent=ThemeStyle.accent(prefs);
+        super(stroke,0); pearl=ThemeStyle.pearl(prefs); this.focused=focused; accent=ThemeStyle.focusAccent(prefs);
         float strength=TvGlassStyle.intensity(prefs)/100f;
         int alpha=drawer?Math.round((pearl?180:155)*strength):Math.round((pearl?190:175)+55*strength);
         alpha=PanelTransparency.alpha(alpha,prefs,drawer);

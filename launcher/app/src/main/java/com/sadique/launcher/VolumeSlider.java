@@ -152,8 +152,12 @@ final class VolumeSlider {
                 outputIcon.setPadding(0, dp(context, 8), 0, 0);
                 panel.addView(outputIcon, new LinearLayout.LayoutParams(dp(context, 28), dp(context, 36)));
                 if (glass) outputIcon.setVisibility(View.GONE);
-                level = new TextView(context); level.setTextColor(Color.WHITE); level.setTextSize(14);
+                level = new TextView(context); level.setTextColor(ThemeStyle.foreground(prefs)); level.setTextSize(14);
                 level.setShadowLayer(dp(context, 2), 0, dp(context, 1), Color.BLACK);
+                if(ThemeStyle.pearl(prefs)) {
+                    level.setShadowLayer(0,0,0,Color.TRANSPARENT);
+                    level.setBackground(TvGlassStyle.surface(dp(context,8),dp(context,1),false,prefs));
+                }
                 level.setGravity(Gravity.CENTER);
                 level.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
                 panel.addView(level, new LinearLayout.LayoutParams(-1, dp(context, 24)));

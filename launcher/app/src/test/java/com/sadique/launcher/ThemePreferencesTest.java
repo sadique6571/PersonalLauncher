@@ -160,6 +160,15 @@ public class ThemePreferencesTest {
         prefs.edit().putBoolean("tv_glass_style",false).apply(); assertEquals(ThemeStyle.CLASSIC,ThemeStyle.id(prefs));
         prefs.edit().putBoolean("tv_glass_style",true).apply(); assertEquals(ThemeStyle.GLASS,ThemeStyle.id(prefs));
     }
+    @Test public void customBlackOrWhiteAccentCannotHideMaterialFocusIndicator() {
+        ThemePreferences prefs=new ThemePreferences(new Memory());
+        for(int style:new int[]{ThemeStyle.DUNE,ThemeStyle.PEARL}) for(int color:new int[]{0xff000000,0xffffffff,0xffedab75,0xff006d72}) {
+            prefs.edit().putInt("visual_style",style).putInt("theme_name",3).putInt("custom_accent",color).apply();
+            int background=style==ThemeStyle.PEARL?0xffe9e4dc:0xff111e24;
+            double a=ThemeStyle.luminance(background),b=ThemeStyle.luminance(ThemeStyle.focusAccent(prefs));
+            assertTrue((Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=3);
+        }
+    }
     private static final class Memory implements SharedPreferences {
         final Map<String,Object> data=new HashMap<>(); final Set<OnSharedPreferenceChangeListener> listeners=new HashSet<>();
         public Map<String,?> getAll(){return new HashMap<>(data);}

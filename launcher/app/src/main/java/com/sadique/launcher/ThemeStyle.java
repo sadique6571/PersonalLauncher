@@ -24,6 +24,11 @@ final class ThemeStyle {
             default:return fallback;
         }
     }
+    static int focusAccent(SharedPreferences prefs) {
+        int color=accent(prefs),background=pearl(prefs)?0xffe9e4dc:0xff111e24;
+        double a=luminance(color),b=luminance(background);
+        return (Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=3?color:foreground(prefs);
+    }
     static double luminance(int color) {
         double[] rgb={((color>>16)&255)/255d,((color>>8)&255)/255d,(color&255)/255d};
         for(int i=0;i<3;i++) rgb[i]=rgb[i]<=.04045?rgb[i]/12.92:Math.pow((rgb[i]+.055)/1.055,2.4);
