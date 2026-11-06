@@ -493,7 +493,7 @@ public final class PersonalHomeActivity extends Activity {
         clockLayout = new LinearLayout(this);
         LinearLayout clock = clockLayout;
         clock.setOrientation(LinearLayout.VERTICAL);
-        clock.setGravity(Gravity.CENTER);
+        clock.setGravity(new int[]{Gravity.START,Gravity.CENTER_HORIZONTAL,Gravity.END}[ThemeStyle.clockAlignment(prefs)]);
         boolean compact = getResources().getConfiguration().screenHeightDp < 480;
         clock.setPadding(0, dp(compact ? 0 : tv ? 10 : 16), 0, dp(compact ? 8 : 12));
         int clockSize = prefs.getInt("clock_size", tv ? 52 : 44);
@@ -545,7 +545,7 @@ public final class PersonalHomeActivity extends Activity {
         date.setGravity(Gravity.CENTER);
         LinearLayout timeRow = new LinearLayout(this);
         timeRow.setOrientation(LinearLayout.HORIZONTAL);
-        timeRow.setGravity(Gravity.CENTER);
+        timeRow.setGravity(Gravity.CENTER_VERTICAL | new int[]{Gravity.START,Gravity.CENTER_HORIZONTAL,Gravity.END}[ThemeStyle.clockAlignment(prefs)]);
         timeRow.addView(time, new LinearLayout.LayoutParams(-2, -2));
         LinearLayout.LayoutParams ampmParams = new LinearLayout.LayoutParams(-2, -2);
         ampmParams.gravity = Gravity.BOTTOM;
@@ -597,7 +597,7 @@ public final class PersonalHomeActivity extends Activity {
         scrollContent.setOrientation(LinearLayout.VERTICAL);
         if (prefs.getBoolean("hide_clock", false) || prefs.getBoolean("apps_only", false)) clock.setVisibility(View.GONE);
         int align = ThemeStyle.clockAlignment(prefs);
-        LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(-2, -2);
+        LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(-1, -2);
         clockParams.gravity = new int[]{Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END}[align];
         scrollContent.addView(clock, clockParams);
         scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
