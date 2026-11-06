@@ -14,7 +14,7 @@ final class DemoHeaderSurface extends GlassSurface {
         setColor(Color.TRANSPARENT); edge.setStyle(Paint.Style.STROKE); edge.setStrokeWidth(1);
     }
     @Override void backdrop(Bitmap image,int w,int h,int x,int y) {
-        if(frost instanceof GlassSurface) ((GlassSurface)frost).backdrop(image,w,h,x,y);
+        if(frost instanceof GlassSurface) { ((GlassSurface)frost).backdrop(image,w,h,x,y); invalidateSelf(); }
     }
     @Override public void draw(Canvas canvas) {
         Rect b=getBounds(); int w=b.width(),h=b.height(); int save=canvas.save(); canvas.translate(b.left,b.top);
