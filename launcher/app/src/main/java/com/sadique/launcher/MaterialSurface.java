@@ -19,14 +19,14 @@ final class MaterialSurface extends GlassSurface {
     private final RectF frame=new RectF();
     private final int accent;
     MaterialSurface(int radius,int stroke,boolean focused,SharedPreferences prefs,boolean drawer,int finish) {
-        super(stroke,0); pearl=ThemeStyle.pearl(prefs); this.focused=focused; accent=ThemeStyle.focusAccent(prefs);
+        super(stroke,0); pearl=ThemeStyle.light(prefs); this.focused=focused; accent=ThemeStyle.focusAccent(prefs);
         int intensity=TvGlassStyle.intensity(prefs);
         decorationAlpha=Math.round((pearl?34:68)*intensity/100f);
         ink.setStyle(Paint.Style.STROKE); ink.setColor(accent);
         tabInk.setColor(accent);
         int alpha=PanelTransparency.alpha(MaterialAppearance.alpha(finish,intensity,drawer,focused),prefs,drawer);
-        int top=MaterialAppearance.tint(pearl?0xfff9f1e8:0xff26363a,ThemeStyle.accent(prefs),focused);
-        int bottom=MaterialAppearance.tint(pearl?0xffe9e4dc:0xff111e24,ThemeStyle.accent(prefs),focused);
+        int top=ThemeStyle.materialColor(prefs,ThemeStyle.baseTop(prefs),focused);
+        int bottom=ThemeStyle.materialColor(prefs,ThemeStyle.baseBottom(prefs),focused);
         setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
         setColors(new int[]{(alpha<<24)|(top&0xffffff),(alpha<<24)|(bottom&0xffffff)});
         setCornerRadius(radius);

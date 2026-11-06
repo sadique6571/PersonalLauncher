@@ -164,11 +164,7 @@ final class AppLibraryDialog {
         panel.setLayoutDirection(rtl ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(12), dp(8), dp(12), dp(12));
-        if (TvGlassStyle.enabled(ThemePreferences.get(activity))) {
-            panel.setBackground(TvGlassStyle.drawer(dp(28), dp(1), ThemePreferences.get(activity)));
-            panel.setClipToOutline(true);
-        } else panel.setBackgroundResource(R.drawable.glass_panel);
-        if (activity instanceof PersonalHomeActivity) ((PersonalHomeActivity) activity).liquidDrawerPanel(panel, 28);
+        panel.setBackground(null); panel.setClipToOutline(false);
         View decor = activity.getWindow().getDecorView();
         catalogWidth = Math.min(dp(800), Math.max(dp(200), decor.getWidth() - dp(64)));
         int width = catalogWidth;
@@ -614,6 +610,7 @@ final class AppLibraryDialog {
         view.setGravity(rtl ? Gravity.RIGHT : Gravity.LEFT);
         view.setTextSize(size);
         view.setTextColor(ThemeStyle.contentColor(ThemePreferences.get(activity),color));
+        view.setShadowLayer(dp(2),0,0,ThemeStyle.light(ThemePreferences.get(activity))?0xccffffff:0xcc000000);
         view.setTypeface(UiFont.get(activity, R.string.font_medium));
         if(ThemeStyle.custom(ThemePreferences.get(activity))) GlassSettings.applyAppFont(activity,view);
         view.setLetterSpacing(0.01f);

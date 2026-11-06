@@ -76,7 +76,7 @@ public final class ContinueWatchingView extends LinearLayout {
     private int dp(int n) { return Math.round(n * getResources().getDisplayMetrics().density); }
     private TextView label(String value, int size) {
         TextView text = new TextView(host); text.setText(value); text.setTextSize(size); text.setTextColor(ThemeStyle.foreground(ThemePreferences.get(host)));
-        if(!ThemeStyle.pearl(ThemePreferences.get(host))) text.setShadowLayer(dp(5), 0, dp(2), 0xE6000000);
+        if(!ThemeStyle.light(ThemePreferences.get(host))) text.setShadowLayer(dp(5), 0, dp(2), 0xE6000000);
         return text;
     }
     public void start() {

@@ -155,7 +155,7 @@ final class VolumeSlider {
                 if (glass) outputIcon.setVisibility(View.GONE);
                 level = new TextView(context); level.setTextColor(ThemeStyle.foreground(prefs)); level.setTextSize(14);
                 level.setShadowLayer(dp(context, 2), 0, dp(context, 1), Color.BLACK);
-                if(ThemeStyle.pearl(prefs)) {
+                if(ThemeStyle.light(prefs)) {
                     level.setShadowLayer(0,0,0,Color.TRANSPARENT);
                     level.setBackground(TvGlassStyle.surface(dp(context,8),dp(context,1),false,prefs));
                 }
