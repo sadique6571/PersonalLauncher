@@ -10,8 +10,6 @@ import android.view.View;
 
 /** One bottom-filled capsule, with the output symbol inside the track in Apple style. */
 final class VolumeBar extends View {
-    private static final android.graphics.ColorFilter WHITE = new android.graphics.PorterDuffColorFilter(0xffffffff, android.graphics.PorterDuff.Mode.SRC_IN);
-    private static final android.graphics.ColorFilter BLUE = new android.graphics.PorterDuffColorFilter(0xff159fe8, android.graphics.PorterDuff.Mode.SRC_IN);
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path clip = new Path();
     private final RectF track = new RectF();
@@ -52,9 +50,9 @@ final class VolumeBar extends View {
                 float boundary = getHeight() * (1 - fraction);
                 // Draw both colours through disjoint clips: readable even where fill crosses the glyph.
                 int save = canvas.save(); canvas.clipRect(0, 0, getWidth(), boundary);
-                tint(0xffffffff); symbol.draw(canvas); canvas.restoreToCount(save);
+                tint(capsule.textColor()); symbol.draw(canvas); canvas.restoreToCount(save);
                 save = canvas.save(); canvas.clipRect(0, boundary, getWidth(), getHeight());
-                tint(0xff159fe8); symbol.draw(canvas); canvas.restoreToCount(save);
+                tint(ThemeStyle.custom(ThemePreferences.get(getContext()))?capsule.filledTextColor():0xff159fe8); symbol.draw(canvas); canvas.restoreToCount(save);
             }
             return;
         }
@@ -69,6 +67,6 @@ final class VolumeBar extends View {
         canvas.restoreToCount(save);
     }
     private void tint(int color) {
-        if (symbolTint != color) { symbol.setColorFilter(color == 0xffffffff ? WHITE : BLUE); symbolTint = color; }
+        if (symbolTint != color) { symbol.setColorFilter(color,android.graphics.PorterDuff.Mode.SRC_IN); symbolTint = color; }
     }
 }

@@ -85,7 +85,7 @@ Open **Launcher settings → Theme**:
 
 | Option | Choices | Effect |
 | --- | --- | --- |
-| Visual style | TV Glass / Classic | Switch the Home arrangement and shared panel style |
+| Visual style | TV Glass / Classic / Dune Loom / Pearl Current | Switch the Home arrangement and shared panel style |
 | Glass finish | Soft / Clear / Frosted | Change TV Glass surface appearance |
 | Glass intensity | Airy / Normal / Solid | Adjust surface opacity |
 | Avatar shape | Round / Rounded square | Shape of the status-bar photo and profile preview, saved per theme |
@@ -294,3 +294,19 @@ glass material. Its wallpaper blend and the header Frosted choice use a separate
 so header blur does not change drawer blur. Sharp/Rounded/Round app-card corners now use one radius
 for the shell, clipped artwork and focus edge; Subtle and Bright outlines retain different strengths.
 Profile photo shape is also available directly in the profile editor.
+
+## Dune Loom and Pearl Current
+
+Choose **Launcher settings → Theme → Visual style**. Dune Loom uses dark matte surfaces, copper
+contour lines and warm text. Pearl Current uses ivory porcelain surfaces, graphite text and teal
+focus/fill accents. Both use proportional app marks with app names, rather than baked-background
+artwork, with two columns by default on phones and four on TVs. Existing corner, glass intensity,
+edge, avatar and transparency controls remain available. Settings, search, app library, profile,
+confirmation dialogs, volume and download capsules share the selected material and readable text.
+
+All four styles retain separate appearance profiles, including transparency and header/photo choices.
+Existing Glass/Classic selections migrate without changing; wallpaper source/photo, profile identity,
+weather and app order remain shared. A theme switch does not replace the daily/custom wallpaper: a
+lightweight ivory or dusk wash gives the chosen photo the new theme's tone. These are implemented
+versions of the concept direction, not the demo image pasted as an interface. Static contour paths
+and gradients need no new dependency or continuously animated effect. APK version remains **7.0**.

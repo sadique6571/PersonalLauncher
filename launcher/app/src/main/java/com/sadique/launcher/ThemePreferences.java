@@ -9,7 +9,7 @@ final class ThemePreferences implements SharedPreferences {
     static final String MIGRATED="appearance_profiles_v1";
     private static final String GLASS="appearance.glass.", CLASSIC="appearance.classic.";
     private static final Set<String> VISUAL=new HashSet<>(Arrays.asList(
-            "theme_name","custom_accent","app_font","glass_alpha","glass_finish","glass_edge","panel_transparency",
+            "material_defaults_v1","theme_name","custom_accent","app_font","glass_alpha","glass_finish","glass_edge","panel_transparency",
             "clock_size","clock_style","clock_font","clock_align","time_24h","clock_seconds","clock_glow","clock_shadow","hide_clock",
             "hide_greeting","avatar_shape","header_bg_mode","header_bg","header_blur","header_glass_v2",
             "tv_columns","phone_columns","large_tiles","tile_corners","tile_spacing","logo_size","focus_border","focus_title_size","focus_glow","app_entrance",
@@ -36,16 +36,17 @@ final class ThemePreferences implements SharedPreferences {
             editor.putBoolean(MIGRATED,true).apply();
         }
     }
-    private String prefix() { return base.getBoolean("tv_glass_style",true)?GLASS:CLASSIC; }
+    private String prefix() { return ThemeStyle.prefix(ThemeStyle.id(base)); }
     private String key(String key) { return VISUAL.contains(key)?prefix()+key:key; }
-    private static boolean scoped(String key) { return key.startsWith(GLASS)||key.startsWith(CLASSIC); }
+    private static boolean scoped(String key) { return key.startsWith(GLASS)||key.startsWith(CLASSIC)||key.startsWith("appearance.dune.")||key.startsWith("appearance.pearl."); }
     @Override public Map<String,?> getAll() {
         Map<String,?> snapshot=base.getAll(); Map<String,Object> all=new HashMap<>(snapshot);
-        String active=Boolean.FALSE.equals(snapshot.get("tv_glass_style"))?CLASSIC:GLASS;
+        Object selected=snapshot.get("visual_style");
+        String active=ThemeStyle.prefix(selected instanceof Integer?(Integer)selected:Boolean.FALSE.equals(snapshot.get("tv_glass_style"))?ThemeStyle.CLASSIC:ThemeStyle.GLASS);
         for(String name:VISUAL) all.remove(name); // Do not export stale pre-migration appearance values.
         for(Map.Entry<String,?> entry:snapshot.entrySet())
             if(entry.getKey().startsWith(active)) all.put(entry.getKey().substring(active.length()),entry.getValue());
-        return all; // Retain both explicit namespaces so export/import preserves both themes.
+        return all; // Retain all explicit namespaces so export/import preserves all four themes.
     }
     @Override public String getString(String key,String fallback) { return base.getString(key(key),fallback); }
     @Override public Set<String> getStringSet(String key,Set<String> fallback) {
@@ -99,9 +100,12 @@ final class ThemePreferences implements SharedPreferences {
         @Override public Editor clear() { clear=true; return this; }
         private Editor changes() {
             String destination=selected;
-            Object style=pending.get("tv_glass_style");
-            if(style instanceof Boolean) destination=(Boolean)style?GLASS:CLASSIC;
+            Object style=pending.get("visual_style"),legacy=pending.get("tv_glass_style");
+            if(style instanceof Integer) destination=ThemeStyle.prefix(ThemeStyle.clamp((Integer)style));
+            else if(legacy instanceof Boolean) destination=(Boolean)legacy?GLASS:CLASSIC;
             Editor editor=base.edit(); if(clear) editor.clear().putBoolean(MIGRATED,true);
+            if(style instanceof Integer) editor.putBoolean("tv_glass_style",ThemeStyle.clamp((Integer)style)!=ThemeStyle.CLASSIC);
+            else if(legacy instanceof Boolean) editor.putInt("visual_style",(Boolean)legacy?ThemeStyle.GLASS:ThemeStyle.CLASSIC);
             for(Map.Entry<String,Object> entry:pending.entrySet())
                 put(editor,VISUAL.contains(entry.getKey())?destination+entry.getKey():entry.getKey(),entry.getValue());
             return editor;

@@ -16,7 +16,7 @@ final class NotificationAccessSetup {
         if (host.isFinishing() || host.isDestroyed() || prefs.getBoolean(ASKED, false)) return;
         if (HomeNotificationsUi.approved(host)) { prefs.edit().putBoolean(ASKED, true).apply(); return; }
         prefs.edit().putBoolean(ASKED, true).apply();
-        AlertDialog dialog = new AlertDialog.Builder(host).setTitle("Show notifications on Home?")
+        AlertDialog dialog = new ThemeDialogBuilder(host).setTitle("Show notifications on Home?")
                 .setMessage("Allow notification access in Android settings to show alerts in the bell. You can skip this; the launcher still works.")
                 .setPositiveButton("Open Android settings", (d, which) -> {
                     try { host.startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); }

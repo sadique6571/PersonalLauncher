@@ -35,7 +35,10 @@ final class TvSymbols extends Drawable {
     }
     static Drawable icon(Context context, int resource) {
         if (TvGlassStyle.enabled(ThemePreferences.get(context)) && supports(resource))
-            return new TvSymbols(resource);
+        {
+            TvSymbols symbol=new TvSymbols(resource);
+            symbol.paint.setColor(ThemeStyle.foreground(ThemePreferences.get(context))); return symbol;
+        }
         Drawable original = context.getDrawable(resource);
         return original == null ? null : original.mutate();
     }

@@ -12,7 +12,7 @@ final class DownloadCapsule extends View {
     private GlassCapsule capsule;
     private final android.content.SharedPreferences prefs;
     private final android.content.SharedPreferences.OnSharedPreferenceChangeListener styleChanged=(p,key)-> {
-        if ("tv_glass_style".equals(key) || "panel_transparency".equals(key) || "glass_alpha".equals(key)
+        if ("visual_style".equals(key) || "tv_glass_style".equals(key) || "panel_transparency".equals(key) || "glass_alpha".equals(key)
                 || "glass_finish".equals(key) || "glass_edge".equals(key) || "theme_name".equals(key) || "custom_accent".equals(key)) refreshStyle();
     };
     private final TextPaint text = new TextPaint(Paint.ANTI_ALIAS_FLAG);
@@ -53,7 +53,7 @@ final class DownloadCapsule extends View {
         float fraction=Math.max(0,Math.min(100,percent))/100f;
         boolean rtl=getLayoutDirection()==LAYOUT_DIRECTION_RTL;
         capsule.draw(canvas,fraction,false,rtl);
-        text.setColor(0xffffffff); canvas.drawText(fitted,getWidth()/2f,baseline,text);
+        text.setColor(capsule.textColor()); canvas.drawText(fitted,getWidth()/2f,baseline,text);
         // Repaint only the text over the full-height themed fill for contrast.
         if (fraction>0) {
             int save=canvas.save();
