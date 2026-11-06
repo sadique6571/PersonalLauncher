@@ -11,6 +11,7 @@ import android.graphics.drawable.Drawable;
 /** Original rounded line symbols, sized for the TV toolbar; no external icon/font dependency. */
 final class TvSymbols extends Drawable {
     private final int resource;
+    private int style;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path path = new Path();
     private TvSymbols(int resource) {
@@ -34,9 +35,12 @@ final class TvSymbols extends Drawable {
         return resource;
     }
     static Drawable icon(Context context, int resource) {
+        if(ThemeStyle.id(ThemePreferences.get(context))==ThemeStyle.SAGE && resource==R.drawable.ic_settings) {
+            Drawable gear=context.getDrawable(resource); if(gear!=null) { gear=gear.mutate(); gear.setTint(ThemeStyle.foreground(ThemePreferences.get(context))); } return gear;
+        }
         if (TvGlassStyle.enabled(ThemePreferences.get(context)) && supports(resource))
         {
-            TvSymbols symbol=new TvSymbols(resource);
+            TvSymbols symbol=new TvSymbols(resource); symbol.style=ThemeStyle.id(ThemePreferences.get(context));
             symbol.paint.setColor(ThemeStyle.foreground(ThemePreferences.get(context))); return symbol;
         }
         Drawable original = context.getDrawable(resource);
@@ -90,8 +94,12 @@ final class TvSymbols extends Drawable {
             canvas.drawRoundRect(6, 2, 18, 22, 2, 2, paint);
             canvas.drawCircle(12, 8, 1, paint); canvas.drawCircle(12, 16, 3, paint);
         } else if (resource == R.drawable.ic_apps) {
-            for (int y=3; y<=14; y+=11) for (int x=3; x<=14; x+=11)
-                canvas.drawRoundRect(x, y, x+7, y+7, 2, 2, paint);
+            if(style>=ThemeStyle.PEARL) paint.setStyle(Paint.Style.FILL);
+            int step=style==ThemeStyle.SAGE?8:11,side=style==ThemeStyle.SAGE?4:7;
+            for(int row=0;row<(style==ThemeStyle.SAGE?3:2);row++) for(int col=0;col<(style==ThemeStyle.SAGE?3:2);col++) {
+                int x=3+col*step,y=3+row*step; canvas.drawRoundRect(x,y,x+side,y+side,1.5f,1.5f,paint);
+            }
+            paint.setStyle(Paint.Style.STROKE);
         } else if (resource == R.drawable.ic_home_settings) {
             path.moveTo(3, 11); path.lineTo(12, 3); path.lineTo(21, 11);
             path.moveTo(5, 10); path.lineTo(5, 21); path.lineTo(10, 21); path.lineTo(10, 15);

@@ -85,7 +85,7 @@ Open **Launcher settings → Theme**:
 
 | Option | Choices | Effect |
 | --- | --- | --- |
-| Visual style | TV Glass / Classic / Dune Loom / Pearl Current | Switch the Home arrangement and shared panel style |
+| Visual style | TV Glass / Classic / Dune Loom / Pearl Current / Cobalt Rail / Sage Fold | Switch the Home arrangement and shared panel style |
 | Glass finish | Soft / Clear / Frosted | Change TV Glass surface appearance |
 | Glass intensity | Airy / Normal / Solid | Adjust surface opacity |
 | Avatar shape | Round / Rounded square | Shape of the status-bar photo and profile preview, saved per theme |
@@ -328,3 +328,22 @@ visual appearance still require physical testing; no frame-rate improvement is c
 
 Pearl chooses light or dark clock ink from a small cached sample of the photo behind the time,
 rather than washing out the photo. The clock shadow toggle remains respected.
+
+## Open app cards and four demo designs
+
+The Home app grid and popup App Library no longer have a large surrounding drawer panel in any
+style. App access, hiding/reordering and remote navigation remain. The four reference styles use
+wide 2.6:1 logo-and-name cards directly over the wallpaper: Dune Loom has stepped copper corners
+and etched arcs; Pearl Current has a scalloped double edge and shaped porcelain header; Cobalt
+Rail has blue double grooves, connected rails and yellow focus; Sage Fold has a paper stack and
+folded corner with a warm selected flap. Artwork clips to the same path as its surface and focus
+edge, including when corner settings change. The new App label size control changes card captions.
+
+Select them in Theme → Visual style. All six styles save their own appearance profiles. A one-time
+reference-layout initialization uses four TV columns, two phone columns and rounded-square profile
+photos; later user changes remain. Header/finish/intensity, colour, typography, clock, corners and
+transparency controls remain available. No theme-wide wallpaper filter is applied. Status icons
+are unboxed; Cobalt includes separators, Pearl includes a profile divider, and weather uses a small
+condition glyph with the actual available weather. Demo names, apps and photo contents reflect the
+installed device and selected wallpaper source. Version remains 7.0; physical TV/mobile visual checks
+are still required. No new dependency, permission or continuously running animation was added.

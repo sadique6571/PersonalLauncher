@@ -131,7 +131,7 @@ final class GlassSettings {
         android.content.SharedPreferences prefs = ThemePreferences.get(ctx);
         view.setTypeface(android.graphics.Typeface.create(
                 ThemeStyle.fontFamily(prefs), android.graphics.Typeface.NORMAL));
-        if(ThemeStyle.pearl(prefs)) {
+        if(ThemeStyle.light(prefs)) {
             if(PanelTransparency.enabled(prefs) && TvGlassStyle.intensity(prefs)<50)
                 view.setShadowLayer(2*ctx.getResources().getDisplayMetrics().density,0,0,0xeeffffff);
             else view.setShadowLayer(0,0,0,android.graphics.Color.TRANSPARENT);
@@ -369,7 +369,7 @@ final class GlassSettings {
             TextView text = (TextView) view;
             int style = text.getTypeface() == null ? Typeface.NORMAL : text.getTypeface().getStyle();
             applyAppFont(host, text); text.setTypeface(text.getTypeface(), style);
-            if(ThemeStyle.pearl(ThemePreferences.get(host))) text.setTextColor(ThemeStyle.foreground(ThemePreferences.get(host)));
+            if(ThemeStyle.light(ThemePreferences.get(host))) text.setTextColor(ThemeStyle.foreground(ThemePreferences.get(host)));
         }
         if (view instanceof ImageView) {
             ImageView image = (ImageView) view;

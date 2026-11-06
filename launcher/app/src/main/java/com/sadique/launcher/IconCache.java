@@ -48,11 +48,11 @@ final class IconCache {
     }
 
     private File file(String pkg, long version) {
-        return new File(dir, safe(pkg) + "_" + version + "_s" + logoSize + (mark?"_mark":"") + ".png");
+        return new File(dir, safe(pkg) + "_" + version + "_s" + logoSize + (mark?"_mark_v2":"") + ".png");
     }
 
     private String accentKey(String pkg, long version) {
-        return "icon_accent_" + safe(pkg) + "_" + version + "_s" + logoSize + (mark?"_mark":"");
+        return "icon_accent_" + safe(pkg) + "_" + version + "_s" + logoSize + (mark?"_mark_v2":"");
     }
 
     boolean mark() { return mark; }
@@ -77,7 +77,7 @@ final class IconCache {
 
     void save(String pkg, long version, Bitmap card, int accent) {
         if (version == 0 || card == null) return;
-        File tmp = new File(dir, safe(pkg) + "_" + version + "_s" + logoSize + (mark?"_mark":"") + ".tmp");
+        File tmp = new File(dir, safe(pkg) + "_" + version + "_s" + logoSize + (mark?"_mark_v2":"") + ".tmp");
         try (FileOutputStream out = new FileOutputStream(tmp)) {
             if (!card.compress(Bitmap.CompressFormat.PNG, 100, out)) return;
             out.flush();
@@ -143,7 +143,8 @@ final class IconCache {
                     logo = app.getDrawable(R.drawable.logo_youtube);
                 if (pkg.equals("com.netflix.ninja") || pkg.equals("com.netflix.mediaclient"))
                     logo = app.getDrawable(R.drawable.logo_netflix);
-                AppArtwork artwork = AppArtwork.create(resources, logo, logoScale,cache.mark());
+                if(cache.mark()) logo=DemoBrandMark.choose(pkg,logo);
+                    AppArtwork artwork = AppArtwork.create(resources, logo, logoScale,cache.mark());
                 Bitmap composed = ((android.graphics.drawable.BitmapDrawable) artwork.image).getBitmap();
                 cache.save(pkg, version, composed, artwork.accent);
             } catch (RuntimeException removedDuringQuery) {

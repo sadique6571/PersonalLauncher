@@ -34,10 +34,11 @@ final class TvGlassStyle {
         return surface(radius, strokeWidth, false, prefs, true, true);
     }
     static GradientDrawable drawerCard(int radius,int strokeWidth,boolean focused,SharedPreferences prefs) {
+        if(ThemeStyle.custom(prefs)) return new DemoCardSurface(radius,strokeWidth,focused,prefs);
         return surface(radius,strokeWidth,focused,prefs,true,true);
     }
     static GradientDrawable header(int radius,int strokeWidth,SharedPreferences prefs,boolean frosted) {
-        if(ThemeStyle.custom(prefs)) return new MaterialSurface(radius,strokeWidth,false,prefs,false,frosted?2:finish(prefs));
+        if(ThemeStyle.custom(prefs)) return new DemoHeaderSurface(prefs,frosted,radius,strokeWidth);
         int finish=frosted ? 2 : finish(prefs), intensity=intensity(prefs);
         if (enabled(prefs)) return surface(radius,strokeWidth,false,prefs,true,false,finish);
         GlassSurface shape=new GlassSurface(strokeWidth,edge(prefs));

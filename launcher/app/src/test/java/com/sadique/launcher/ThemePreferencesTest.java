@@ -105,14 +105,14 @@ public class ThemePreferencesTest {
             }
         }
     }
-    @Test public void allFourThemesRestoreTheirOwnAppearanceWithoutSplittingIdentityOrWallpaper() {
+    @Test public void allSixThemesRestoreTheirOwnAppearanceWithoutSplittingIdentityOrWallpaper() {
         ThemePreferences prefs=new ThemePreferences(new Memory());
         prefs.edit().putString("name","Profile").putInt("wallpaper_source",1).apply();
-        for(int style=0;style<4;style++) {
+        for(int style=0;style<6;style++) {
             prefs.edit().putInt("visual_style",style).putInt("glass_alpha",20+style*20)
                     .putInt("avatar_shape",style%2).putBoolean("panel_transparency",style%2==0).apply();
         }
-        for(int style=3;style>=0;style--) {
+        for(int style=5;style>=0;style--) {
             prefs.edit().putInt("visual_style",style).apply();
             assertEquals(style,ThemeStyle.id(prefs));
             assertEquals(20+style*20,prefs.getInt("glass_alpha",0));
@@ -193,7 +193,7 @@ public class ThemePreferencesTest {
     }
     @Test public void solidPanelToggleCannotChangeDrawerPanelOrInnerCardOpacityInAnyStyle() {
         ThemePreferences prefs=new ThemePreferences(new Memory());
-        for(int style=0;style<4;style++) {
+        for(int style=0;style<6;style++) {
             prefs.edit().putInt("visual_style",style).apply();
             for(int finish=0;finish<3;finish++) for(boolean focused:new boolean[]{false,true}) {
                 int glass=MaterialAppearance.alpha(finish,70,true,focused);
@@ -204,6 +204,40 @@ public class ThemePreferencesTest {
                 assertEquals(255,PanelTransparency.alpha(glass,prefs,false));
             }
         }
+    }
+    @Test public void cobaltAndSageUseIndependentProfilesAndReadablePalettes() {
+        ThemePreferences prefs=new ThemePreferences(new Memory());
+        prefs.edit().putInt("visual_style",ThemeStyle.COBALT).apply(); ThemeStyle.demoDefaults(prefs);
+        assertEquals(4,prefs.getInt("tv_columns",0)); assertEquals(2,prefs.getInt("phone_columns",0));
+        assertEquals(0xffffd92f,ThemeStyle.accent(prefs)); assertFalse(ThemeStyle.light(prefs));
+        prefs.edit().putInt("glass_alpha",30).apply();
+        prefs.edit().putInt("visual_style",ThemeStyle.SAGE).apply(); ThemeStyle.demoDefaults(prefs);
+        assertTrue(ThemeStyle.light(prefs)); assertEquals(70,prefs.getInt("glass_alpha",70));
+        assertEquals(0xff195c36,ThemeStyle.accent(prefs));
+        double a=ThemeStyle.luminance(ThemeStyle.baseTop(prefs)),b=ThemeStyle.luminance(ThemeStyle.foreground(prefs));
+        assertTrue((a+.05)/(b+.05)>7);
+        prefs.edit().putInt("phone_columns",3).putInt("header_bg_mode",0).apply(); ThemeStyle.demoDefaults(prefs);
+        assertEquals(3,prefs.getInt("phone_columns",0)); assertEquals(0,prefs.getInt("header_bg_mode",1));
+        prefs.edit().putInt("visual_style",ThemeStyle.COBALT).apply(); assertEquals(30,prefs.getInt("glass_alpha",0));
+        assertEquals("appearance.cobalt.",ThemeStyle.prefix(4)); assertEquals("appearance.sage.",ThemeStyle.prefix(5));
+    }
+    @Test public void newThemeNamespacesSurviveBackupAndInactiveListenerChanges() {
+        Memory base=new Memory(); ThemePreferences prefs=new ThemePreferences(base);
+        prefs.edit().putInt("visual_style",4).putInt("app_label_size",20).apply();
+        prefs.edit().putInt("visual_style",5).putInt("app_label_size",24).apply();
+        Map<String,?> backup=prefs.getAll();
+        assertEquals(20,backup.get("appearance.cobalt.app_label_size"));
+        assertEquals(24,backup.get("appearance.sage.app_label_size"));
+        List<String> changes=new ArrayList<>(); prefs.registerOnSharedPreferenceChangeListener((p,k)->changes.add(k));
+        base.edit().putInt("appearance.cobalt.app_label_size",14).apply(); assertTrue(changes.isEmpty());
+        prefs.edit().putInt("app_label_size",17).apply(); assertTrue(changes.contains("app_label_size"));
+        ThemePreferences restored=new ThemePreferences(new Memory()); SharedPreferences.Editor e=restored.edit();
+        for(Map.Entry<String,?> entry:backup.entrySet()) {
+            if(entry.getValue() instanceof Integer) e.putInt(entry.getKey(),(Integer)entry.getValue());
+            if(entry.getValue() instanceof Boolean) e.putBoolean(entry.getKey(),(Boolean)entry.getValue());
+        }
+        e.apply(); assertEquals(5,ThemeStyle.id(restored)); assertEquals(24,restored.getInt("app_label_size",0));
+        restored.edit().putInt("visual_style",4).apply(); assertEquals(20,restored.getInt("app_label_size",0));
     }
     private static final class Memory implements SharedPreferences {
         final Map<String,Object> data=new HashMap<>(); final Set<OnSharedPreferenceChangeListener> listeners=new HashSet<>();
