@@ -5,7 +5,8 @@ final class MaterialAppearance {
     private MaterialAppearance() { }
     static int alpha(int finish,int intensity,boolean drawer,boolean focused) {
         int value=Math.max(0,Math.min(100,intensity));
-        int max=drawer?(finish==1?110:finish==2?225:175):(finish==1?190:finish==2?255:230);
+        if(drawer) return Math.min(255,GlassTransparency.tintAlpha(finish,value)+(focused?Math.round(30*value/100f):0));
+        int max=finish==1?190:finish==2?255:230;
         return Math.min(255,Math.round(max*value/100f)+(focused?Math.round(12*value/100f):0));
     }
     static int tint(int base,int accent,boolean focused) {

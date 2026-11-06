@@ -191,6 +191,20 @@ public class ThemePreferencesTest {
         prefs.edit().putInt("visual_style",ThemeStyle.GLASS).putInt("clock_align",0).apply();
         assertTrue(ThemeStyle.fixedTypography(prefs)); assertEquals(1,ThemeStyle.clockAlignment(prefs));
     }
+    @Test public void solidPanelToggleCannotChangeDrawerPanelOrInnerCardOpacityInAnyStyle() {
+        ThemePreferences prefs=new ThemePreferences(new Memory());
+        for(int style=0;style<4;style++) {
+            prefs.edit().putInt("visual_style",style).apply();
+            for(int finish=0;finish<3;finish++) for(boolean focused:new boolean[]{false,true}) {
+                int glass=MaterialAppearance.alpha(finish,70,true,focused);
+                prefs.edit().putBoolean("panel_transparency",true).apply();
+                int enabled=PanelTransparency.alpha(glass,prefs,true);
+                prefs.edit().putBoolean("panel_transparency",false).apply();
+                assertEquals(enabled,PanelTransparency.alpha(glass,prefs,true));
+                assertEquals(255,PanelTransparency.alpha(glass,prefs,false));
+            }
+        }
+    }
     private static final class Memory implements SharedPreferences {
         final Map<String,Object> data=new HashMap<>(); final Set<OnSharedPreferenceChangeListener> listeners=new HashSet<>();
         public Map<String,?> getAll(){return new HashMap<>(data);}

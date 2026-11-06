@@ -10,12 +10,18 @@ public class MaterialAppearanceTest {
                 int airy=MaterialAppearance.alpha(finish,30,drawer,focused);
                 int normal=MaterialAppearance.alpha(finish,70,drawer,focused);
                 int solid=MaterialAppearance.alpha(finish,100,drawer,focused);
-                assertTrue(normal-airy>=40); assertTrue(solid>normal);
+                assertTrue(drawer?normal>airy:normal-airy>=40); assertTrue(solid>normal);
                 assertEquals(0,MaterialAppearance.alpha(finish,0,drawer,focused));
                 assertTrue(solid<=255);
             }
             assertTrue(MaterialAppearance.alpha(1,70,drawer,focused)<MaterialAppearance.alpha(0,70,drawer,focused));
             assertTrue(MaterialAppearance.alpha(0,70,drawer,focused)<MaterialAppearance.alpha(2,70,drawer,focused));
+        }
+    }
+    @Test public void materialDrawerUsesTheSameGlassOpacityCurveAsApple() {
+        for(int finish=0;finish<3;finish++) for(int intensity:new int[]{0,30,70,100}) {
+            assertEquals(GlassTransparency.tintAlpha(finish,intensity),MaterialAppearance.alpha(finish,intensity,true,false));
+            assertTrue(MaterialAppearance.alpha(finish,intensity,true,true)>=MaterialAppearance.alpha(finish,intensity,true,false));
         }
     }
     @Test public void selectedAccentChangesBothMaterialBasesAndFocusKeepsItsHue() {
@@ -26,6 +32,15 @@ public class MaterialAppearanceTest {
             assertTrue(((red>>16)&255)>((blue>>16)&255));
             assertTrue((blue&255)>(red&255));
             assertNotEquals(MaterialAppearance.tint(base,0xffff0000,true),red);
+        }
+    }
+    @Test public void pearlClockCanChangeInkWithoutChangingTheWallpaper() {
+        assertEquals(0xffffffff,ThemeStyle.wallpaperClockInk(0xff10202b));
+        assertEquals(0xff11191c,ThemeStyle.wallpaperClockInk(0xfff6e9d4));
+        for(int value=0;value<=255;value+=15) {
+            int background=0xff000000|(value<<16)|(value<<8)|value;
+            double a=ThemeStyle.luminance(background),b=ThemeStyle.luminance(ThemeStyle.wallpaperClockInk(background));
+            assertTrue((Math.max(a,b)+.05)/(Math.min(a,b)+.05)>3);
         }
     }
     @Test public void compactClockStillHasThreeDifferentUserSizes() {
