@@ -19,7 +19,7 @@ final class VolumeBar extends View {
     private Drawable symbol;
     VolumeBar(Context context) {
         super(context); setFocusable(false);
-        capsule = TvGlassStyle.enabled(ThemePreferences.get(context)) ? new GlassCapsule(context) : null;
+        capsule = TvGlassStyle.enabled(ThemePreferences.get(context)) ? new GlassCapsule(context,true) : null;
     }
     void level(float fraction, int color) {
         if (this.fraction == fraction && accent == color) return;

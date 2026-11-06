@@ -34,6 +34,8 @@ final class LiquidBackdrop {
     }
     void bind(View target) {
         if (closed) return;
+        targets.removeIf(reference->reference.get()==null);
+        for(java.lang.ref.WeakReference<View> reference:targets) if(reference.get()==target) return;
         targets.add(new java.lang.ref.WeakReference<>(target)); target.addOnLayoutChangeListener(layout);
         target.post(this::align);
     }
@@ -71,8 +73,9 @@ final class LiquidBackdrop {
     private void align() {
         if (closed || blurred==null || !(source.getParent() instanceof View)) return;
         ((View) source.getParent()).getLocationOnScreen(rootPoint);
+        targets.removeIf(reference->reference.get()==null);
         for (java.lang.ref.WeakReference<View> reference : targets) {
-            View target=reference.get(); if (target==null) continue;
+            View target=reference.get(); if (target==null || !target.isAttachedToWindow()) continue;
             if (!(target.getBackground() instanceof GlassSurface)) continue;
             target.getLocationOnScreen(targetPoint);
             ((GlassSurface) target.getBackground()).backdrop(blurred, source.getWidth(), source.getHeight(),

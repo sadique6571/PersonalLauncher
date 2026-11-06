@@ -16,10 +16,13 @@ final class GlassCapsule {
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF bounds = new RectF();
     private float radius;
-    GlassCapsule(Context context) {
+    private final CapsuleRelief relief;
+    GlassCapsule(Context context) { this(context,false); }
+    GlassCapsule(Context context,boolean embossed) {
         android.content.SharedPreferences prefs = ThemePreferences.get(context);
         glass=ThemeStyle.id(prefs)==ThemeStyle.GLASS; accent=GlassSettings.themeAccent(context);
         textColor=ThemeStyle.foreground(prefs);
+        relief=embossed && ThemeStyle.id(prefs)!=ThemeStyle.CLASSIC?new CapsuleRelief(context.getResources().getDisplayMetrics().density):null;
         int stroke=Math.max(1,Math.round(context.getResources().getDisplayMetrics().density));
         if(TvGlassStyle.enabled(prefs)) shell=TvGlassStyle.surface(0,stroke,false,prefs);
         else {
@@ -37,6 +40,7 @@ final class GlassCapsule {
     void size(int width, int height) {
         bounds.set(0, 0, width, height); radius = Math.min(width, height) / 2f;
         shell.setCornerRadius(radius); shell.setBounds(0, 0, width, height);
+        if(relief!=null) relief.size(width,height);
         fill.setShader(new LinearGradient(0, 0, Math.max(1, width), Math.max(1, height),
                 glass ? 0xffffffff : accent, glass ? 0xffe9edf5 : accent, Shader.TileMode.CLAMP));
     }
@@ -52,5 +56,6 @@ final class GlassCapsule {
             canvas.restoreToCount(save);
         }
         if (shell instanceof GlassSurface) ((GlassSurface)shell).drawRim(canvas);
+        if(relief!=null) relief.draw(canvas);
     }
 }

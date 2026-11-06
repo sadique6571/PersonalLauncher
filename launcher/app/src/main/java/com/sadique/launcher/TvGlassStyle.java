@@ -33,6 +33,9 @@ final class TvGlassStyle {
     static GradientDrawable drawer(int radius, int strokeWidth, SharedPreferences prefs) {
         return surface(radius, strokeWidth, false, prefs, true, true);
     }
+    static GradientDrawable drawerCard(int radius,int strokeWidth,boolean focused,SharedPreferences prefs) {
+        return surface(radius,strokeWidth,focused,prefs,true,true);
+    }
     static GradientDrawable header(int radius,int strokeWidth,SharedPreferences prefs,boolean frosted) {
         if(ThemeStyle.custom(prefs)) return new MaterialSurface(radius,strokeWidth,false,prefs,false,frosted?2:finish(prefs));
         int finish=frosted ? 2 : finish(prefs), intensity=intensity(prefs);

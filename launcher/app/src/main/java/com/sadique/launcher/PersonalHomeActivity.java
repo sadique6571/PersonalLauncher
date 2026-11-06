@@ -149,7 +149,7 @@ public final class PersonalHomeActivity extends Activity {
         for (java.util.Map.Entry<String, View> entry : tileViews.entrySet()) {
             View tile = entry.getValue();
             boolean focused = tile.isFocused();
-            tile.setBackground(surface(focused));
+            tile.setBackground(appSurface(focused));
             Object tag = tile.getTag();
             int accent = tag instanceof Integer ? (Integer) tag : CYAN;
             tile.setForeground(tileBorder(accent, focused));
@@ -253,8 +253,12 @@ public final class PersonalHomeActivity extends Activity {
         return dp(HomeGeometry.tileRadius(prefs.getInt("tile_corners",1)));
     }
 
-    private GradientDrawable surface(boolean focused) {
-        if (TvGlassStyle.enabled(prefs)) return TvGlassStyle.surface(tileRadius(), dp(focused ? 2 : 1), focused, prefs);
+    private GradientDrawable surface(boolean focused) { return surface(focused,false); }
+    private GradientDrawable appSurface(boolean focused) { return surface(focused,true); }
+    private GradientDrawable surface(boolean focused,boolean drawer) {
+        if (TvGlassStyle.enabled(prefs)) return drawer
+                ? TvGlassStyle.drawerCard(tileRadius(),dp(focused?2:1),focused,prefs)
+                : TvGlassStyle.surface(tileRadius(),dp(focused?2:1),focused,prefs);
         GradientDrawable shape = new GradientDrawable();
         float day = appearanceDaylight();
         // Theme-tinted glass (user 2026-11-01): the dark base takes the theme's hue.
@@ -265,7 +269,7 @@ public final class PersonalHomeActivity extends Activity {
         shape.setColor(blend(night, dayC, day));
         // Glass intensity (user 2026-11-01): 0=airy, 100=solid. Focused stays a touch brighter.
         int intensity = Math.max(0, Math.min(100, prefs.getInt("glass_alpha", 70)));
-        shape.setAlpha(PanelTransparency.alpha(ClassicGlassAlpha.card(intensity,focused),prefs,false));
+        shape.setAlpha(PanelTransparency.alpha(ClassicGlassAlpha.card(intensity,focused),prefs,drawer));
         shape.setCornerRadius(tileRadius());
         shape.setStroke(dp(focused ? 3 : 1), focused ? accent : 0xff28435e);
         return shape;
@@ -412,13 +416,13 @@ public final class PersonalHomeActivity extends Activity {
         root.addView(page, new ViewGroup.LayoutParams(-1, -1));
         // Cinematic shade: subtle dark gradients top and bottom for a film-like frame.
         GradientDrawable topShade = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{ThemeStyle.pearl(prefs)?0x22fff5e8:TvGlassStyle.enabled(prefs) ? 0x22000000 : ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs)) << 24, 0x00000000});
+                new int[]{ThemeStyle.pearl(prefs)?0x00000000:TvGlassStyle.enabled(prefs) ? 0x22000000 : ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs)) << 24, 0x00000000});
         View topBar = new View(this);
         topBar.setBackground(topShade);
         topBar.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         root.addView(topBar, new android.widget.FrameLayout.LayoutParams(-1, dp(110), Gravity.TOP));
         GradientDrawable bottomShade = new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
-                new int[]{ThemeStyle.pearl(prefs)?0x44fff7ed:0x66000000, 0x00000000});
+                new int[]{ThemeStyle.pearl(prefs)?0x00000000:0x66000000, 0x00000000});
         View bottomBar = new View(this);
         bottomBar.setBackground(bottomShade);
         bottomBar.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -1158,7 +1162,7 @@ public final class PersonalHomeActivity extends Activity {
     private View createAppTile(App app, int width, boolean moving) {
         requestAppIcon(app);
         android.widget.FrameLayout tile = new android.widget.FrameLayout(this);
-        tile.setBackground(surface(false));
+        tile.setBackground(appSurface(false));
         tile.setOutlineProvider(new ViewOutlineProvider() {
             @Override public void getOutline(View view,Outline outline) {
                 outline.setRoundRect(0,0,view.getWidth(),view.getHeight(),tileRadius());
@@ -1188,13 +1192,14 @@ public final class PersonalHomeActivity extends Activity {
             android.widget.FrameLayout.LayoutParams logo=new android.widget.FrameLayout.LayoutParams(logoWidth,-1,Gravity.START|Gravity.CENTER_VERTICAL);
             logo.setMarginStart(dp(10)); logo.topMargin=dp(10); logo.bottomMargin=dp(10); tile.addView(icon,logo);
             TextView title=text(app.name,tv?17:14,ThemeStyle.foreground(prefs));
+            title.setShadowLayer(dp(2),0,dp(1),ThemeStyle.pearl(prefs)?0xeeffffff:0xee000000);
             title.setGravity(Gravity.CENTER_VERTICAL|Gravity.START); title.setMaxLines(2);
             title.setEllipsize(android.text.TextUtils.TruncateAt.END); title.setTypeface(title.getTypeface(),android.graphics.Typeface.BOLD);
             android.widget.FrameLayout.LayoutParams caption=new android.widget.FrameLayout.LayoutParams(-1,-1);
             caption.setMarginStart(logoWidth+dp(20)); caption.setMarginEnd(dp(10)); tile.addView(title,caption);
         } else tile.addView(icon, new android.widget.FrameLayout.LayoutParams(-1, -1));
         tile.setOnFocusChangeListener((v, focus) -> {
-            tile.setBackground(surface(focus));
+            tile.setBackground(appSurface(focus));
             if (!moving) tile.setForeground(tileBorder(app.accent, focus));
             if (focus) focusedPkg = app.info.activityInfo.packageName;
             if (!moving) {
@@ -2703,12 +2708,6 @@ public final class PersonalHomeActivity extends Activity {
                 }
 
 
-            }
-            if(ThemeStyle.custom(prefs)) {
-                boolean pearl=ThemeStyle.pearl(prefs);
-                paint.setShader(new LinearGradient(0,0,0,getHeight(),pearl?0xb0fff6e9:0x22152124,
-                        pearl?0x20fff6e9:0x18152124,Shader.TileMode.CLAMP));
-                canvas.drawRect(0,0,getWidth(),getHeight(),paint); paint.setShader(null);
             }
             if (focusAccent != 0 && focusRadius > 0) {
                 int glow = (focusAccent & 0x00ffffff) | (ThemeStyle.pearl(prefs)?0x33000000:0x80000000);

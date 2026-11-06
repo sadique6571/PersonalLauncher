@@ -10,12 +10,18 @@ public class MaterialAppearanceTest {
                 int airy=MaterialAppearance.alpha(finish,30,drawer,focused);
                 int normal=MaterialAppearance.alpha(finish,70,drawer,focused);
                 int solid=MaterialAppearance.alpha(finish,100,drawer,focused);
-                assertTrue(normal-airy>=40); assertTrue(solid>normal);
+                assertTrue(drawer?normal>airy:normal-airy>=40); assertTrue(solid>normal);
                 assertEquals(0,MaterialAppearance.alpha(finish,0,drawer,focused));
                 assertTrue(solid<=255);
             }
             assertTrue(MaterialAppearance.alpha(1,70,drawer,focused)<MaterialAppearance.alpha(0,70,drawer,focused));
             assertTrue(MaterialAppearance.alpha(0,70,drawer,focused)<MaterialAppearance.alpha(2,70,drawer,focused));
+        }
+    }
+    @Test public void materialDrawerUsesTheSameGlassOpacityCurveAsApple() {
+        for(int finish=0;finish<3;finish++) for(int intensity:new int[]{0,30,70,100}) {
+            assertEquals(GlassTransparency.tintAlpha(finish,intensity),MaterialAppearance.alpha(finish,intensity,true,false));
+            assertTrue(MaterialAppearance.alpha(finish,intensity,true,true)>=MaterialAppearance.alpha(finish,intensity,true,false));
         }
     }
     @Test public void selectedAccentChangesBothMaterialBasesAndFocusKeepsItsHue() {

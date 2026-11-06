@@ -306,8 +306,8 @@ confirmation dialogs, volume and download capsules share the selected material a
 
 All four styles retain separate appearance profiles, including transparency and header/photo choices.
 Existing Glass/Classic selections migrate without changing; wallpaper source/photo, profile identity,
-weather and app order remain shared. A theme switch does not replace the daily/custom wallpaper: a
-lightweight ivory or dusk wash gives the chosen photo the new theme's tone. These are implemented
+weather and app order remain shared. A theme switch does not replace the daily/custom wallpaper: the
+chosen photo retains its natural colours without a theme-wide wash. These are implemented
 versions of the concept direction, not the demo image pasted as an interface. Static contour paths
 and gradients need no new dependency or continuously animated effect. APK version remains **7.0**.
 
@@ -317,3 +317,11 @@ Accent colours tint material bases and contour details; low-contrast focus colou
 toward a readable tone without replacing every bright colour with the same grey. Launcher font,
 clock font/alignment, clock shadow, focus glow and compact clock sizes honor their saved choices in
 both styles. Panel transparency Off still makes panels solid while exempting the app drawer.
+
+Pearl and Dune no longer add an automatic full-screen wallpaper wash. Wallpaper darkness and bottom
+shade remain explicit user controls. Drawer panels and every app card use the drawer exemption from
+Panel transparency Off; the material drawers share Apple's glass tint/blur opacity curve while keeping
+their own colours. Volume capsules in TV Glass, Dune and Pearl have a subtle raised edge from cached
+highlight/shadow gradients, without a blur effect. Material contour paths are cached by geometry, and
+stale/duplicate wallpaper-blend targets are pruned during long Home sessions. Device performance and
+visual appearance still require physical testing; no frame-rate improvement is claimed.
