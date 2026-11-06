@@ -127,7 +127,7 @@ final class VolumeSlider {
         try {
             android.content.SharedPreferences prefs = ThemePreferences.get(context);
             boolean glass = TvGlassStyle.enabled(prefs);
-            int style = glass ? 1 : 0;
+            int style = ThemeStyle.id(prefs);
             style = style * 31 + prefs.getInt("glass_finish", 0);
             style = style * 31 + prefs.getInt("glass_alpha", 70);
             style = style * 31 + prefs.getInt("glass_edge", 1);

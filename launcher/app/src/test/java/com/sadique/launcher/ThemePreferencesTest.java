@@ -105,6 +105,61 @@ public class ThemePreferencesTest {
             }
         }
     }
+    @Test public void allFourThemesRestoreTheirOwnAppearanceWithoutSplittingIdentityOrWallpaper() {
+        ThemePreferences prefs=new ThemePreferences(new Memory());
+        prefs.edit().putString("name","Profile").putInt("wallpaper_source",1).apply();
+        for(int style=0;style<4;style++) {
+            prefs.edit().putInt("visual_style",style).putInt("glass_alpha",20+style*20)
+                    .putInt("avatar_shape",style%2).putBoolean("panel_transparency",style%2==0).apply();
+        }
+        for(int style=3;style>=0;style--) {
+            prefs.edit().putInt("visual_style",style).apply();
+            assertEquals(style,ThemeStyle.id(prefs));
+            assertEquals(20+style*20,prefs.getInt("glass_alpha",0));
+            assertEquals(style%2,prefs.getInt("avatar_shape",0));
+            assertEquals(style%2==0,PanelTransparency.enabled(prefs));
+            assertEquals("Profile",prefs.getString("name","")); assertEquals(1,prefs.getInt("wallpaper_source",0));
+        }
+    }
+    @Test public void newStyleBackupRestoresSelectedNamespaceRegardlessOfLegacyBoolean() {
+        ThemePreferences prefs=new ThemePreferences(new Memory());
+        prefs.edit().putInt("visual_style",2).putInt("glass_alpha",31).apply();
+        prefs.edit().putInt("visual_style",3).putInt("glass_alpha",67).apply();
+        Map<String,?> backup=prefs.getAll();
+        assertEquals(31,backup.get("appearance.dune.glass_alpha"));
+        assertEquals(67,backup.get("appearance.pearl.glass_alpha"));
+        ThemePreferences restored=new ThemePreferences(new Memory()); SharedPreferences.Editor editor=restored.edit();
+        for(Map.Entry<String,?> entry:backup.entrySet()) {
+            if(entry.getValue() instanceof Boolean) editor.putBoolean(entry.getKey(),(Boolean)entry.getValue());
+            if(entry.getValue() instanceof Integer) editor.putInt(entry.getKey(),(Integer)entry.getValue());
+        }
+        editor.apply(); assertEquals(3,ThemeStyle.id(restored)); assertEquals(67,restored.getInt("glass_alpha",0));
+        restored.edit().putInt("visual_style",2).apply(); assertEquals(31,restored.getInt("glass_alpha",0));
+    }
+    @Test public void staleEditorsAndInactiveNewThemeChangesDoNotLeakIntoCurrentTheme() {
+        Memory base=new Memory(); ThemePreferences prefs=new ThemePreferences(base);
+        prefs.edit().putInt("visual_style",2).apply();
+        SharedPreferences.Editor dune=prefs.edit().putInt("glass_alpha",42);
+        prefs.edit().putInt("visual_style",3).apply(); dune.apply();
+        assertEquals(70,prefs.getInt("glass_alpha",70));
+        List<String> changes=new ArrayList<>(); prefs.registerOnSharedPreferenceChangeListener((p,k)->changes.add(k));
+        base.edit().putInt("appearance.dune.glass_alpha",55).apply(); assertTrue(changes.isEmpty());
+        prefs.edit().putInt("glass_alpha",80).apply(); assertTrue(changes.contains("glass_alpha"));
+        prefs.edit().putInt("visual_style",2).apply(); assertEquals(55,prefs.getInt("glass_alpha",0));
+    }
+    @Test public void newThemePaletteHasReadableTextAndLegacySelectorRemainsCompatible() {
+        ThemePreferences prefs=new ThemePreferences(new Memory());
+        for(int style:new int[]{ThemeStyle.DUNE,ThemeStyle.PEARL}) {
+            prefs.edit().putInt("visual_style",style).apply();
+            int background=style==ThemeStyle.PEARL?0xffe9e4dc:0xff111e24;
+            double a=ThemeStyle.luminance(background),b=ThemeStyle.luminance(ThemeStyle.foreground(prefs));
+            assertTrue((Math.max(a,b)+.05)/(Math.min(a,b)+.05)>7);
+            assertTrue(ThemeStyle.custom(prefs));
+            assertEquals(style==ThemeStyle.PEARL,ThemeStyle.pearl(prefs));
+        }
+        prefs.edit().putBoolean("tv_glass_style",false).apply(); assertEquals(ThemeStyle.CLASSIC,ThemeStyle.id(prefs));
+        prefs.edit().putBoolean("tv_glass_style",true).apply(); assertEquals(ThemeStyle.GLASS,ThemeStyle.id(prefs));
+    }
     private static final class Memory implements SharedPreferences {
         final Map<String,Object> data=new HashMap<>(); final Set<OnSharedPreferenceChangeListener> listeners=new HashSet<>();
         public Map<String,?> getAll(){return new HashMap<>(data);}

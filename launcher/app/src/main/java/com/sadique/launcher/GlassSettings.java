@@ -32,6 +32,7 @@ final class GlassSettings {
     /** Theme accent color, mirrored from the launcher's theme picker. */
     static int themeAccent(android.content.Context ctx) {
         android.content.SharedPreferences prefs = ThemePreferences.get(ctx);
+        if(ThemeStyle.custom(prefs)) return ThemeStyle.pearl(prefs)?ThemeStyle.accent(prefs):TvGlassStyle.readable(ThemeStyle.accent(prefs));
         switch (prefs.getInt("theme_name", 0)) {
             case 1: return 0xffff9a5c; // Sunset Orange
             case 2: return 0xffb388ff; // Deep Purple
@@ -120,7 +121,7 @@ final class GlassSettings {
         });
     }
     static TextView label(Activity host, String text, int size, int color) {
-        TextView view = new TextView(host); view.setText(text); view.setTextSize(size); view.setTextColor(color);
+        TextView view = new TextView(host); view.setText(text); view.setTextSize(size); view.setTextColor(ThemeStyle.contentColor(ThemePreferences.get(host),color));
         applyAppFont(host, view);
         return view;
     }
@@ -210,7 +211,7 @@ final class GlassSettings {
             LinearLayout container = new LinearLayout(host); container.setOrientation(LinearLayout.VERTICAL);
             int frame = dp(host, 8);
             container.setPadding(frame, frame, frame, frame);
-            AlertDialog dialog = new AlertDialog.Builder(host).setView(container).create();
+            AlertDialog dialog = new ThemeDialogBuilder(host).setView(container).create();
             state = new Panel(dialog, container);
             PANELS.put(host, new java.lang.ref.WeakReference<>(state));
             Panel current = state;
@@ -253,7 +254,7 @@ final class GlassSettings {
         TextView heading = label(host, title, 21, Color.WHITE); heading.setTypeface(heading.getTypeface(), Typeface.BOLD);
         bar.addView(heading, new LinearLayout.LayoutParams(0, -2, 1));
         ImageView settings = new ImageView(host);
-        bindSymbol(settings, host, R.drawable.ic_settings); settings.setColorFilter(0xffc9dfef);
+        bindSymbol(settings, host, R.drawable.ic_settings); settings.setColorFilter(ThemeStyle.foreground(ThemePreferences.get(host)));
         settings.setPadding(dp(host, 7), dp(host, 7), dp(host, 7), dp(host, 7));
         settings.setContentDescription(host.getString(R.string.tv_settings));
         settings.setId(View.generateViewId()); settings.setFocusable(true); settings.setClickable(true);
@@ -321,7 +322,7 @@ final class GlassSettings {
         applyBlur(dialog);
         for (int which : new int[]{AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_NEUTRAL}) {
             TextView button = dialog.getButton(which);
-            if (button != null) { applyAppFont(host, button); button.setTextColor(0xfff1f5fb); }
+            if (button != null) { applyAppFont(host, button); button.setTextColor(ThemeStyle.foreground(ThemePreferences.get(host))); }
         }
     }
     private static void styleDialogText(Activity host, View view) {
@@ -329,7 +330,7 @@ final class GlassSettings {
             TextView text = (TextView) view;
             int weight = text.getTypeface() == null ? Typeface.NORMAL : text.getTypeface().getStyle();
             applyAppFont(host, text); text.setTypeface(text.getTypeface(), weight);
-            text.setTextColor(0xfff1f5fb);
+            text.setTextColor(ThemeStyle.foreground(ThemePreferences.get(host)));
         }
         if (view instanceof android.view.ViewGroup) {
             android.view.ViewGroup group = (android.view.ViewGroup) view;
@@ -364,6 +365,7 @@ final class GlassSettings {
             TextView text = (TextView) view;
             int style = text.getTypeface() == null ? Typeface.NORMAL : text.getTypeface().getStyle();
             applyAppFont(host, text); text.setTypeface(text.getTypeface(), style);
+            if(ThemeStyle.pearl(ThemePreferences.get(host))) text.setTextColor(ThemeStyle.foreground(ThemePreferences.get(host)));
         }
         if (view instanceof ImageView) {
             ImageView image = (ImageView) view;

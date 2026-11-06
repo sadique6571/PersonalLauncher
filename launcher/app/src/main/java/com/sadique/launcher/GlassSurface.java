@@ -9,7 +9,7 @@ import android.graphics.Shader;
 import android.graphics.drawable.GradientDrawable;
 
 /** Lightweight translucent lens: cached gradients, a bright upper lip and a soft lower reflection. */
-final class GlassSurface extends GradientDrawable {
+class GlassSurface extends GradientDrawable {
     private final Paint backdrop = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final android.graphics.Matrix backdropMatrix = new android.graphics.Matrix();
     private android.graphics.Bitmap backdropImage;

@@ -24,12 +24,14 @@ final class IconCache {
     private final File dir;
     private final SharedPreferences prefs;
     private final int logoSize;
+    private final boolean mark;
 
     IconCache(Context context) {
         Context app = context.getApplicationContext();
         this.dir = new File(app.getCacheDir(), "icon_cards");
         this.dir.mkdirs();
         this.prefs = ThemePreferences.get(app);
+        mark=ThemeStyle.custom(prefs);
         logoSize=Math.max(0,Math.min(2,prefs.getInt("logo_size",1)));
     }
 
@@ -46,13 +48,14 @@ final class IconCache {
     }
 
     private File file(String pkg, long version) {
-        return new File(dir, safe(pkg) + "_" + version + "_s" + logoSize + ".png");
+        return new File(dir, safe(pkg) + "_" + version + "_s" + logoSize + (mark?"_mark":"") + ".png");
     }
 
     private String accentKey(String pkg, long version) {
-        return "icon_accent_" + safe(pkg) + "_" + version + "_s" + logoSize;
+        return "icon_accent_" + safe(pkg) + "_" + version + "_s" + logoSize + (mark?"_mark":"");
     }
 
+    boolean mark() { return mark; }
     float logoScale() { return new float[]{.8f,1f,1.2f}[logoSize]; }
 
     /** Cached card, or null. */
@@ -74,7 +77,7 @@ final class IconCache {
 
     void save(String pkg, long version, Bitmap card, int accent) {
         if (version == 0 || card == null) return;
-        File tmp = new File(dir, safe(pkg) + "_" + version + "_s" + logoSize + ".tmp");
+        File tmp = new File(dir, safe(pkg) + "_" + version + "_s" + logoSize + (mark?"_mark":"") + ".tmp");
         try (FileOutputStream out = new FileOutputStream(tmp)) {
             if (!card.compress(Bitmap.CompressFormat.PNG, 100, out)) return;
             out.flush();
@@ -140,7 +143,7 @@ final class IconCache {
                     logo = app.getDrawable(R.drawable.logo_youtube);
                 if (pkg.equals("com.netflix.ninja") || pkg.equals("com.netflix.mediaclient"))
                     logo = app.getDrawable(R.drawable.logo_netflix);
-                AppArtwork artwork = AppArtwork.create(resources, logo, logoScale);
+                AppArtwork artwork = AppArtwork.create(resources, logo, logoScale,cache.mark());
                 Bitmap composed = ((android.graphics.drawable.BitmapDrawable) artwork.image).getBitmap();
                 cache.save(pkg, version, composed, artwork.accent);
             } catch (RuntimeException removedDuringQuery) {

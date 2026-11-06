@@ -68,7 +68,7 @@ final class LauncherPin {
             String[] choices = prefs(host).getString("hash", "").isEmpty()
                     ? new String[]{host.getString(R.string.h_pin_new)}
                     : new String[]{host.getString(R.string.h_pin_new), host.getString(R.string.h_pin_remove)};
-            new AlertDialog.Builder(host).setTitle(R.string.h_local_pin).setMessage(R.string.h_pin_note)
+            new ThemeDialogBuilder(host).setTitle(R.string.h_local_pin).setMessage(R.string.h_pin_note)
                     .setPositiveButton(R.string.h_pin_new, (d, w) -> set(host))
                     .setNeutralButton(choices.length == 2 ? host.getString(R.string.h_pin_remove) : host.getString(android.R.string.cancel),
                             (d, w) -> { if (choices.length == 2) prefs(host).edit().clear().apply(); }).show();
@@ -99,11 +99,12 @@ final class LauncherPin {
         EditText input = new EditText(host); input.setSingleLine();
         input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
         input.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(8)});
-        AlertDialog dialog = new AlertDialog.Builder(host).setTitle(title).setView(input)
+        AlertDialog dialog = new ThemeDialogBuilder(host).setTitle(title).setView(input)
                 .setPositiveButton(android.R.string.ok, null).setNegativeButton(android.R.string.cancel, null).create();
         dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
                 .setOnClickListener(v -> submit.accept(input.getText().toString(), dialog, input)));
         dialog.show();
+        if(ThemeStyle.custom(ThemePreferences.get(host))) GlassSettings.styleDialog(host,dialog);
         return dialog;
     }
 }

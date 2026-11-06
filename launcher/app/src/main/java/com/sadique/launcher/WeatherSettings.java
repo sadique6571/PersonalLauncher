@@ -16,7 +16,7 @@ final class WeatherSettings {
         EditText city = new EditText(activity);
         city.setSingleLine(true);
         city.setHint("City name, e.g. Okara");
-        new AlertDialog.Builder(activity).setTitle("Weather city").setView(city)
+        new ThemeDialogBuilder(activity).setTitle("Weather city").setView(city)
                 .setPositiveButton("Search", (dialog, which) -> search(activity, city.getText().toString().trim()))
                 .setNegativeButton(android.R.string.cancel, null).show();
     }
@@ -38,7 +38,7 @@ final class WeatherSettings {
                 }
                 new Handler(Looper.getMainLooper()).post(() -> {
                     if (activity.isDestroyed() || activity.isFinishing()) return;
-                    new AlertDialog.Builder(activity).setTitle("Choose weather location").setItems(labels, (dialog, which) -> {
+                    new ThemeDialogBuilder(activity).setTitle("Choose weather location").setItems(labels, (dialog, which) -> {
                         SharedPreferences prefs = ThemePreferences.get(activity);
                         prefs.edit().putString("weather_city", labels[which]).putString("weather_lat", Double.toString(lat[which]))
                                 .putString("weather_lon", Double.toString(lon[which])).apply();

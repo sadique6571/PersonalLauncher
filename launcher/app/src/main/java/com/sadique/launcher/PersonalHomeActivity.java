@@ -239,6 +239,7 @@ public final class PersonalHomeActivity extends Activity {
 
     /** Current theme accent color: Midnight Cyan, Sunset Orange, Deep Purple, or Custom. */
     private int accentColor() {
+        if(ThemeStyle.custom(prefs)) return GlassSettings.themeAccent(this);
         switch (prefs.getInt("theme_name", 0)) {
             case 1: return 0xffff9a5c; // Sunset Orange
             case 2: return 0xffb388ff; // Deep Purple
@@ -302,7 +303,7 @@ public final class PersonalHomeActivity extends Activity {
         TextView view = new TextView(this);
         view.setText(value);
         view.setTextSize(size);
-        view.setTextColor(color);
+        view.setTextColor(ThemeStyle.contentColor(prefs,color));
         applyAppFont(view);
         return view;
     }
@@ -311,7 +312,7 @@ public final class PersonalHomeActivity extends Activity {
         Button view = new Button(this);
         view.setText(label);
         view.setTextSize(14);
-        view.setTextColor(TEXT);
+        view.setTextColor(ThemeStyle.foreground(prefs));
         view.setAllCaps(false);
         view.setMinHeight(dp(48));
         view.setMinimumWidth(0);
@@ -331,7 +332,7 @@ public final class PersonalHomeActivity extends Activity {
     private android.widget.ImageButton iconAction(String title, int resource, Runnable action) {
         android.widget.ImageButton icon = new android.widget.ImageButton(this);
         icon.setImageDrawable(TvSymbols.icon(this, resource));
-        icon.setColorFilter(TEXT);
+        icon.setColorFilter(ThemeStyle.foreground(prefs));
         icon.setContentDescription(title);
         icon.setTooltipText(title);
         boolean glassIcons = TvGlassStyle.enabled(prefs);
@@ -345,7 +346,7 @@ public final class PersonalHomeActivity extends Activity {
         icon.setOnFocusChangeListener((v, focus) -> {
             if (glassIcons) {
                 // Remote focus is visible through scale and colour, never a surrounding box.
-                icon.setColorFilter(focus ? 0xff8fddff : Color.WHITE);
+                icon.setColorFilter(focus ? accentColor() : ThemeStyle.foreground(prefs));
                 icon.setScaleX(focus ? 1.14f : 1f); icon.setScaleY(focus ? 1.14f : 1f);
             } else v.setBackground(toolbarSurface(focus));
         });
@@ -411,13 +412,13 @@ public final class PersonalHomeActivity extends Activity {
         root.addView(page, new ViewGroup.LayoutParams(-1, -1));
         // Cinematic shade: subtle dark gradients top and bottom for a film-like frame.
         GradientDrawable topShade = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{TvGlassStyle.enabled(prefs) ? 0x22000000 : ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs)) << 24, 0x00000000});
+                new int[]{ThemeStyle.pearl(prefs)?0x22fff5e8:TvGlassStyle.enabled(prefs) ? 0x22000000 : ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs)) << 24, 0x00000000});
         View topBar = new View(this);
         topBar.setBackground(topShade);
         topBar.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         root.addView(topBar, new android.widget.FrameLayout.LayoutParams(-1, dp(110), Gravity.TOP));
         GradientDrawable bottomShade = new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
-                new int[]{0x66000000, 0x00000000});
+                new int[]{ThemeStyle.pearl(prefs)?0x44fff7ed:0x66000000, 0x00000000});
         View bottomBar = new View(this);
         bottomBar.setBackground(bottomShade);
         bottomBar.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -856,11 +857,11 @@ public final class PersonalHomeActivity extends Activity {
         networkStatus.setText(online ? "Connected" : caps == null ? "Disconnected" : "No internet access");
         networkStatus.setTooltipText(online ? (wifi ? "Wi-Fi · Internet available" : "Internet available") : "No internet");
         int color = online ? 0xff59e493 : 0xffff6c78;
-        networkStatus.setTextColor(color);
+        networkStatus.setTextColor(ThemeStyle.custom(prefs)?ThemeStyle.muted(prefs):color);
         int iconId = wifi || caps == null ? R.drawable.ic_wifi
                 : caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ? R.drawable.ic_ethernet : R.drawable.ic_internet;
         android.graphics.drawable.Drawable icon = TvSymbols.icon(this, iconId);
-        icon.setTint(color);
+        icon.setTint(ThemeStyle.custom(prefs)?ThemeStyle.muted(prefs):color);
         icon.setBounds(0, 0, dp(28), dp(24));
         networkStatus.setCompoundDrawables(icon, null, null, null);
         networkStatus.setContentDescription(online ? "Internet available. Open Wi-Fi settings" : "No validated internet access. Open Wi-Fi settings");
@@ -927,7 +928,7 @@ public final class PersonalHomeActivity extends Activity {
                     android.graphics.drawable.Drawable logo = app.info.loadIcon(pm);
                     if (pkg.equals("com.google.android.youtube.tv") || pkg.equals("com.google.android.youtube")) logo = getDrawable(R.drawable.logo_youtube);
                     if (pkg.equals("com.netflix.ninja") || pkg.equals("com.netflix.mediaclient")) logo = getDrawable(R.drawable.logo_netflix);
-                    AppArtwork artwork = AppArtwork.create(getResources(), logo, cache.logoScale());
+                    AppArtwork artwork = AppArtwork.create(getResources(), logo, cache.logoScale(),cache.mark());
                     card = ((android.graphics.drawable.BitmapDrawable) artwork.image).getBitmap(); accent = artwork.accent;
                     cache.save(pkg, version, card, accent);
                 }
@@ -962,9 +963,9 @@ public final class PersonalHomeActivity extends Activity {
     private android.graphics.drawable.Drawable letterIcon(String name) {
         Bitmap bitmap = Bitmap.createBitmap(160, 90, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
-        canvas.drawColor(0xff0d2036);
+        if(!ThemeStyle.custom(prefs)) canvas.drawColor(0xff0d2036);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        paint.setColor(0x6640d9ff);
+        paint.setColor(ThemeStyle.custom(prefs)?accentColor():0x6640d9ff);
         paint.setTextSize(44);
         paint.setTextAlign(Paint.Align.CENTER);
         String letter = name.isEmpty() ? "?" : name.substring(0, 1).toUpperCase(Locale.ROOT);
@@ -1038,7 +1039,7 @@ public final class PersonalHomeActivity extends Activity {
 
     private void chooseCategoryFilter() {
         List<String> names = new HomeLibraryStore(this).categories(); names.add(0, getString(R.string.h_all_apps));
-        new AlertDialog.Builder(this).setTitle(R.string.h_categories).setItems(names.toArray(new String[0]), (dialog, which) -> {
+        new ThemeDialogBuilder(this).setTitle(R.string.h_categories).setItems(names.toArray(new String[0]), (dialog, which) -> {
             selectedCategory = which == 0 ? "" : names.get(which); gridState = null;
             if (cachedApps != null) renderApps(cachedApps);
         }).show();
@@ -1180,9 +1181,18 @@ public final class PersonalHomeActivity extends Activity {
         if (app.icon != null) icon.setImageDrawable(app.icon);
         else icon.setImageDrawable(TvSymbols.icon(this, R.drawable.ic_apps));
         // Artwork is composed at the card's 16:9 ratio; no second inset or crop here.
-        icon.setScaleType(ImageView.ScaleType.FIT_XY);
+        icon.setScaleType(ThemeStyle.custom(prefs)?ImageView.ScaleType.FIT_CENTER:ImageView.ScaleType.FIT_XY);
         icon.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        tile.addView(icon, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        if(ThemeStyle.custom(prefs)) {
+            int logoWidth=Math.max(dp(26),Math.round(width*.25f));
+            android.widget.FrameLayout.LayoutParams logo=new android.widget.FrameLayout.LayoutParams(logoWidth,-1,Gravity.START|Gravity.CENTER_VERTICAL);
+            logo.setMarginStart(dp(10)); logo.topMargin=dp(10); logo.bottomMargin=dp(10); tile.addView(icon,logo);
+            TextView title=text(app.name,tv?17:14,ThemeStyle.foreground(prefs));
+            title.setGravity(Gravity.CENTER_VERTICAL|Gravity.START); title.setMaxLines(2);
+            title.setEllipsize(android.text.TextUtils.TruncateAt.END); title.setTypeface(title.getTypeface(),android.graphics.Typeface.BOLD);
+            android.widget.FrameLayout.LayoutParams caption=new android.widget.FrameLayout.LayoutParams(-1,-1);
+            caption.setMarginStart(logoWidth+dp(20)); caption.setMarginEnd(dp(10)); tile.addView(title,caption);
+        } else tile.addView(icon, new android.widget.FrameLayout.LayoutParams(-1, -1));
         tile.setOnFocusChangeListener((v, focus) -> {
             tile.setBackground(surface(focus));
             if (!moving) tile.setForeground(tileBorder(app.accent, focus));
@@ -1202,7 +1212,7 @@ public final class PersonalHomeActivity extends Activity {
             }
             if (focus) {
                 if (!TvGlassStyle.enabled(prefs)) appHeading.setText(app.name);
-                appHeading.setTextColor(TEXT);
+                appHeading.setTextColor(ThemeStyle.foreground(prefs));
                 int[] position = new int[2], origin = new int[2];
                 tile.getLocationInWindow(position); sky.getLocationInWindow(origin);
                 sky.focusX = position[0] - origin[0] + tile.getWidth() / 2f;
@@ -1232,7 +1242,7 @@ public final class PersonalHomeActivity extends Activity {
             }).start();
         });
         tile.setOnLongClickListener(v -> {
-            new AlertDialog.Builder(this).setTitle(app.name).setItems(new String[]{"App info", "Hide from launcher", "Move app", getString(R.string.h_category)}, (dialog, which) -> {
+            new ThemeDialogBuilder(this).setTitle(app.name).setItems(new String[]{"App info", "Hide from launcher", "Move app", getString(R.string.h_category)}, (dialog, which) -> {
                 if (which == 0) launch(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + app.info.activityInfo.packageName)));
                 else if (which == 2) startMoveMode(app);
                 else if (which == 3) HomeLibraryUi.category(this, app.info.activityInfo.packageName, () -> { if (cachedApps != null) renderApps(cachedApps); });
@@ -1269,13 +1279,13 @@ public final class PersonalHomeActivity extends Activity {
         EditText input = new EditText(this); input.setSingleLine(true); input.setHint("Search installed apps");
         searchInput = input;
         input.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
-        input.setTextColor(TEXT); input.setHintTextColor(MUTED); applyAppFont(input);
+        input.setTextColor(ThemeStyle.foreground(prefs)); input.setHintTextColor(ThemeStyle.muted(prefs)); applyAppFont(input);
         input.setPadding(dp(16), dp(10), dp(16), dp(10)); input.setBackground(toolbarSurface(false));
         form.addView(input);
         LinearLayout results = new LinearLayout(this); results.setOrientation(LinearLayout.VERTICAL);
         ScrollView matches = new ScrollView(this); matches.addView(results);
         form.addView(matches, new LinearLayout.LayoutParams(-1, dp(tv ? 250 : 300)));
-        searchDialog = new AlertDialog.Builder(this).setTitle("Search apps").setView(form)
+        searchDialog = new ThemeDialogBuilder(this).setTitle("Search apps").setView(form)
                 .setPositiveButton("Find on Play Store", (dialog, which) -> openStore(input.getText().toString().trim()))
                 .setNeutralButton("Voice search", (dialog, which) -> recognizeIntoSearch())
                 .setNegativeButton("Close", null).create();
@@ -1583,7 +1593,7 @@ public final class PersonalHomeActivity extends Activity {
 
     /** Submenu helper with per-row icons. */
     private void subMenu(String title, String[] labels, String[] hints, int[] icons, Runnable[] choices) {
-        if (!tvGlass()) { GlassSettings.options(this, title, labels, hints, icons, which -> choices[which].run()); return; }
+        if (!TvGlassStyle.enabled(prefs)) { GlassSettings.options(this, title, labels, hints, icons, which -> choices[which].run()); return; }
         List<Integer> visible = new ArrayList<>();
         for (int i=0;i<labels.length;i++) {
             if ("Launcher font".equals(labels[i]) || "Clock font".equals(labels[i]) || "Clock alignment".equals(labels[i])) continue;
@@ -1679,13 +1689,21 @@ public final class PersonalHomeActivity extends Activity {
         subMenu("Clock", labels, hints, icons, choices);
     }
 
-    private void switchVisualStyle(boolean glass) {
-        if (prefs.getBoolean("tv_glass_style",true)==glass) return;
-        int priorLogo=prefs.getInt("logo_size",1);
-        prefs.edit().putBoolean("tv_glass_style",glass).apply();
-        if (priorLogo!=prefs.getInt("logo_size",1)) {
-            appGeneration++;
-            if (cachedApps!=null) for(App app:cachedApps) { app.iconReady=false; app.iconLoading=false; }
+    private void switchVisualStyle(int style) {
+        if (ThemeStyle.id(prefs)==style) return;
+        int priorLogo=prefs.getInt("logo_size",1); boolean priorMark=ThemeStyle.custom(prefs);
+        appGeneration++; // Reject artwork started for the previous style, even if its palette was similar.
+        prefs.edit().putInt("visual_style",style).apply();
+        boolean reload=priorLogo!=prefs.getInt("logo_size",1) || priorMark!=ThemeStyle.custom(prefs);
+        if(cachedApps!=null) for(App app:cachedApps) {
+            app.iconLoading=false;
+            if(reload) { app.iconReady=false; app.icon=null; }
+        }
+        if(ThemeStyle.custom(prefs) && !prefs.getBoolean("material_defaults_v1",false)) {
+            prefs.edit().putBoolean("material_defaults_v1",true).putInt("tile_corners",style==ThemeStyle.DUNE?0:1)
+                    .putInt("phone_columns",2).putInt("tv_columns",4)
+                    .putString("theme_mode",style==ThemeStyle.PEARL?"light":"dark")
+                    .putBoolean("clock_shadow",style!=ThemeStyle.PEARL).apply();
         }
         GlassSettings.dismiss(this);
         buildHomeSoon();
@@ -1699,11 +1717,11 @@ public final class PersonalHomeActivity extends Activity {
     private void themeSettings() {
         // "Dark mode" removed 2026-11-01 (user): the theme glass color covers it.
         String[] labels = {"Visual style", "Theme", "Accent color", "Launcher font", "Glass intensity", "Glass finish", "Glass edge", "Panel transparency", "Header background", "Avatar shape"};
-        String[] hints = {"TV Glass or Classic", "Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels", "Soft, Clear or Frosted panels", "Reflection around glass surfaces", "Solid panels when off; app drawer stays transparent", "Status-bar glass in this theme", "Round or rounded-square profile photo"};
+        String[] hints = {"TV Glass, Classic, Dune Loom or Pearl Current", "Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels", "Soft, Clear or Frosted panels", "Reflection around glass surfaces", "Solid panels when off; app drawer stays transparent", "Status-bar glass in this theme", "Round or rounded-square profile photo"};
         int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_person};
         Runnable[] choices = {
-            () -> chooseSetting("Visual style", new String[]{"TV Glass", "Classic"}, which -> switchVisualStyle(which==0)),
-            () -> chooseSetting("Theme", new String[]{"Midnight Cyan", "Sunset Orange", "Deep Purple", "Custom"}, which -> {
+            () -> chooseSetting("Visual style", new String[]{"TV Glass", "Classic", "Dune Loom", "Pearl Current"}, this::switchVisualStyle),
+            () -> chooseSetting("Theme", new String[]{ThemeStyle.custom(prefs)?"Theme default":"Midnight Cyan", "Sunset Orange", "Deep Purple", "Custom"}, which -> {
                 prefs.edit().putInt("theme_name", which).apply();
                 if (which == 3) chooseAccentColor();
                 else { applyAppearance(); refreshApps(); }
@@ -1792,7 +1810,7 @@ public final class PersonalHomeActivity extends Activity {
             () -> LauncherUpdatesUi.show(this),
             this::exportSettings,
             this::importSettings,
-            () -> new AlertDialog.Builder(this).setTitle("Reset layout and show all apps?").setPositiveButton("Reset", (dialog, which) -> {
+            () -> new ThemeDialogBuilder(this).setTitle("Reset layout and show all apps?").setPositiveButton("Reset", (dialog, which) -> {
                 prefs.edit().remove("app_order").remove("hidden_apps").remove("tv_columns").remove("phone_columns").remove("large_tiles")
                         .remove("focus_title_size").remove("clock_size").remove("background_dim").remove("theme_mode")
                         .remove("wallpaper_mode").remove("focus_glow").remove("continue_watching")
@@ -1841,8 +1859,9 @@ public final class PersonalHomeActivity extends Activity {
      *  readable on any wallpaper. Replaces the old per-label adaptive colors. */
     private void applyLabelScheme(android.widget.TextView label, boolean dark, boolean muted) {
         if (label == null) return;
-        label.setTextColor(muted ? 0xE6FFFFFF : 0xFFFFFFFF);
-        label.setShadowLayer(dp(5), 0, dp(2), 0xE6000000);
+        label.setTextColor(ThemeStyle.custom(prefs)?(muted?ThemeStyle.muted(prefs):ThemeStyle.foreground(prefs)):(muted ? 0xE6FFFFFF : 0xFFFFFFFF));
+        if(ThemeStyle.pearl(prefs)) label.setShadowLayer(0,0,0,Color.TRANSPARENT);
+        else label.setShadowLayer(dp(5), 0, dp(2), 0xE6000000);
     }
 
     private void adaptTextColors() {
@@ -1866,7 +1885,7 @@ public final class PersonalHomeActivity extends Activity {
             case "Panel transparency": return PanelTransparency.enabled(prefs) ? 0 : 1;
             case "Glass finish": return TvGlassStyle.finish(prefs);
             case "Glass edge": return Math.max(0, Math.min(2, prefs.getInt("glass_edge", 1)));
-            case "Visual style": return TvGlassStyle.enabled(prefs) ? 0 : 1;
+            case "Visual style": return ThemeStyle.id(prefs);
             case "Wallpaper darkness": return Math.min(2, prefs.getInt("background_dim", 0) / 20);
             case "App colour glow": return prefs.getBoolean("focus_glow", true) ? 0 : 1;
             case "Header background": return headerBgMode();
@@ -1996,7 +2015,7 @@ public final class PersonalHomeActivity extends Activity {
         name.setHint("Your name");
         name.setText(prefs.getString("name", "Sadique Sadiq"));
         name.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS);
-        name.setTextColor(TEXT); name.setHintTextColor(MUTED); applyAppFont(name);
+        name.setTextColor(ThemeStyle.foreground(prefs)); name.setHintTextColor(ThemeStyle.muted(prefs)); applyAppFont(name);
         name.setPadding(dp(16), dp(12), dp(16), dp(12)); name.setBackground(toolbarSurface(false));
         form.addView(name);
         // Choose / Remove side by side (user 2026-11-01).
@@ -2047,7 +2066,7 @@ public final class PersonalHomeActivity extends Activity {
         actionRow.addView(save, saveParams);
         actionRow.addView(later, laterParams);
         form.addView(actionRow);
-        profile = new AlertDialog.Builder(this).setTitle(prefs.getBoolean("setup", false) ? "Your profile" : "Welcome · set up your Home")
+        profile = new ThemeDialogBuilder(this).setTitle(prefs.getBoolean("setup", false) ? "Your profile" : "Welcome · set up your Home")
                 .setView(form).create();
         profile.setOnDismissListener(d -> { profileAvatarPreview = null; handler.postDelayed(notificationOffer, 1200); });
         profile.show(); GlassSettings.styleDialog(this, profile);
@@ -2090,7 +2109,7 @@ public final class PersonalHomeActivity extends Activity {
         if (prefs.contains("home_offer_done")) prefs.edit().remove("home_offer_done").apply();
         if (System.currentTimeMillis() < prefs.getLong("home_offer_snooze", 0)) return;
         homeOfferShowing = true;
-        new AlertDialog.Builder(this)
+        new ThemeDialogBuilder(this)
             .setTitle("Use as Home screen?")
             .setMessage("Set Personal Launcher as your default launcher so the Home button opens it.")
             .setPositiveButton("Set as default", (d, w) -> LauncherSetupUi.show(this))
@@ -2682,7 +2701,13 @@ public final class PersonalHomeActivity extends Activity {
 
 
             }
-            if (focusAccent != 0 && focusRadius > 0) {
+            if(ThemeStyle.custom(prefs)) {
+                boolean pearl=ThemeStyle.pearl(prefs);
+                paint.setShader(new LinearGradient(0,0,0,getHeight(),pearl?0xcffff6e9:0x44152124,
+                        pearl?0x99fff6e9:0x33152124,Shader.TileMode.CLAMP));
+                canvas.drawRect(0,0,getWidth(),getHeight(),paint); paint.setShader(null);
+            }
+            if (focusAccent != 0 && focusRadius > 0 && !ThemeStyle.pearl(prefs)) {
                 int glow = (focusAccent & 0x00ffffff) | 0x80000000;
                 paint.setShader(new RadialGradient(focusX, focusY, focusRadius, glow, Color.TRANSPARENT, Shader.TileMode.CLAMP));
                 canvas.drawCircle(focusX, focusY, focusRadius, paint); paint.setShader(null);
@@ -2734,6 +2759,11 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private android.graphics.drawable.Drawable tileBorder(int accent, boolean focused) {
+        if(ThemeStyle.custom(prefs)) {
+            GradientDrawable rim=new GradientDrawable(); rim.setColor(Color.TRANSPARENT); rim.setCornerRadius(tileRadius());
+            rim.setStroke(dp(focused?new int[]{2,3,5}[Math.max(0,Math.min(2,prefs.getInt("focus_border",1)))]:1),
+                    focused?accentColor():((TvGlassStyle.edge(prefs)&0xff000000)|(accentColor()&0xffffff))); return rim;
+        }
         GradientDrawable border = new GradientDrawable();
         border.setColor(Color.TRANSPARENT); border.setCornerRadius(tileRadius());
         int thickness = focused ? new int[]{2, 3, 5}[Math.max(0, Math.min(2, prefs.getInt("focus_border", 1)))] : 1;

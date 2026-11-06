@@ -13,7 +13,7 @@ final class HomeLibraryUi {
         HomeLibraryStore store = new HomeLibraryStore(host);
         List<String> categories = store.categories();
         categories.add(0, host.getString(R.string.h_no_category)); categories.add(host.getString(R.string.h_new_category));
-        new AlertDialog.Builder(host).setTitle(R.string.h_category).setItems(categories.toArray(new String[0]), (d, which) -> {
+        new ThemeDialogBuilder(host).setTitle(R.string.h_category).setItems(categories.toArray(new String[0]), (d, which) -> {
             if (which == categories.size() - 1) input(host, R.string.h_new_category, "", value -> { store.category(pkg, value); changed.run(); });
             else { store.category(pkg, which == 0 ? "" : categories.get(which)); changed.run(); }
         }).show();
@@ -26,7 +26,7 @@ final class HomeLibraryUi {
     static void input(Activity host, int title, String value, TextAction action) {
         EditText edit = new EditText(host); edit.setSingleLine(); edit.setText(value); edit.setSelectAllOnFocus(true);
         edit.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(80)});
-        new AlertDialog.Builder(host).setTitle(title).setView(edit).setPositiveButton(android.R.string.ok,
+        new ThemeDialogBuilder(host).setTitle(title).setView(edit).setPositiveButton(android.R.string.ok,
                 (d, which) -> action.accept(edit.getText().toString())).setNegativeButton(android.R.string.cancel, null).show();
     }
 }

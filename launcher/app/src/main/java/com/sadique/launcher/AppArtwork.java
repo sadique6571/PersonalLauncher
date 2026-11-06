@@ -20,6 +20,9 @@ final class AppArtwork {
     }
 
     static AppArtwork create(Resources resources, Drawable source, float logoScale) {
+        return create(resources,source,logoScale,false);
+    }
+    static AppArtwork create(Resources resources,Drawable source,float logoScale,boolean mark) {
         int size = 256;
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
@@ -77,6 +80,15 @@ final class AppArtwork {
         for (int i = 1; i < weights.length; i++) if (weights[i] > weights[best]) best = i;
         int accent = weights[best] < 1 ? 0xff40d9ff : Color.rgb((int) (sums[best][0] / weights[best]),
                 (int) (sums[best][1] / weights[best]), (int) (sums[best][2] / weights[best]));
+        if(mark) {
+            Bitmap logo=Bitmap.createBitmap(256,256,Bitmap.Config.ARGB_8888);
+            Canvas logoCanvas=new Canvas(logo);
+            float scale=Math.min(220f/bitmap.getWidth(),220f/bitmap.getHeight())*logoScale;
+            float w=bitmap.getWidth()*scale,h=bitmap.getHeight()*scale;
+            logoCanvas.drawBitmap(bitmap,null,new RectF((256-w)/2,(256-h)/2,(256+w)/2,(256+h)/2),
+                    new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG));
+            return new AppArtwork(new BitmapDrawable(resources,logo),accent);
+        }
         // A clean card background and proportional logo; never stretch icon edge pixels.
         Bitmap card = Bitmap.createBitmap(320, 180, Bitmap.Config.ARGB_8888);
         Canvas cardCanvas = new Canvas(card);

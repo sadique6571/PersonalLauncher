@@ -75,8 +75,8 @@ public final class ContinueWatchingView extends LinearLayout {
 
     private int dp(int n) { return Math.round(n * getResources().getDisplayMetrics().density); }
     private TextView label(String value, int size) {
-        TextView text = new TextView(host); text.setText(value); text.setTextSize(size); text.setTextColor(Color.WHITE);
-        text.setShadowLayer(dp(5), 0, dp(2), 0xE6000000);
+        TextView text = new TextView(host); text.setText(value); text.setTextSize(size); text.setTextColor(ThemeStyle.foreground(ThemePreferences.get(host)));
+        if(!ThemeStyle.pearl(ThemePreferences.get(host))) text.setShadowLayer(dp(5), 0, dp(2), 0xE6000000);
         return text;
     }
     public void start() {
@@ -101,7 +101,7 @@ public final class ContinueWatchingView extends LinearLayout {
         if (host.checkSelfPermission(PERMISSION) == PackageManager.PERMISSION_GRANTED) { reload(); return; }
         try {
             host.getPackageManager().getPermissionInfo(PERMISSION, 0);
-            new AlertDialog.Builder(host).setTitle("Continue watching access")
+            new ThemeDialogBuilder(host).setTitle("Continue watching access")
                     .setMessage("Allow reading TV listings so this launcher can show Watch Next entries shared by your apps. Private app history is not accessed.")
                     .setPositiveButton("Continue", (d, which) -> host.requestPermissions(new String[]{PERMISSION}, PERMISSION_REQUEST))
                     .setNegativeButton(android.R.string.cancel, null).show();

@@ -11,15 +11,17 @@ import android.graphics.Shader;
 final class GlassCapsule {
     private final android.graphics.drawable.GradientDrawable shell;
     private final boolean glass;
+    private final int textColor;
     private final int accent;
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF bounds = new RectF();
     private float radius;
     GlassCapsule(Context context) {
         android.content.SharedPreferences prefs = ThemePreferences.get(context);
-        glass=TvGlassStyle.enabled(prefs); accent=GlassSettings.themeAccent(context);
+        glass=ThemeStyle.id(prefs)==ThemeStyle.GLASS; accent=GlassSettings.themeAccent(context);
+        textColor=ThemeStyle.foreground(prefs);
         int stroke=Math.max(1,Math.round(context.getResources().getDisplayMetrics().density));
-        if(glass) shell=TvGlassStyle.surface(0,stroke,false,prefs);
+        if(TvGlassStyle.enabled(prefs)) shell=TvGlassStyle.surface(0,stroke,false,prefs);
         else {
             shell=new android.graphics.drawable.GradientDrawable(
                     android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
@@ -28,6 +30,7 @@ final class GlassCapsule {
             shell.setAlpha(PanelTransparency.alpha(ClassicGlassAlpha.card(TvGlassStyle.intensity(prefs),false),prefs,false));
         }
     }
+    int textColor() { return textColor; }
     int filledTextColor() {
         return glass ? 0xff142239 : (android.graphics.Color.luminance(accent)>.179 ? 0xff000000 : 0xffffffff);
     }

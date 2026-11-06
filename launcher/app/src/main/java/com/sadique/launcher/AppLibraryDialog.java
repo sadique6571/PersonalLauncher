@@ -130,6 +130,7 @@ final class AppLibraryDialog {
     }
 
     private GradientDrawable surface(int color, int radius) {
+        if(ThemeStyle.custom(ThemePreferences.get(activity))) return TvGlassStyle.surface(dp(radius),dp(1),false,ThemePreferences.get(activity));
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(color);
         bg.setCornerRadius(dp(radius));
@@ -607,7 +608,7 @@ final class AppLibraryDialog {
         view.setTextDirection(rtl ? View.TEXT_DIRECTION_RTL : View.TEXT_DIRECTION_FIRST_STRONG);
         view.setGravity(rtl ? Gravity.RIGHT : Gravity.LEFT);
         view.setTextSize(size);
-        view.setTextColor(color);
+        view.setTextColor(ThemeStyle.contentColor(ThemePreferences.get(activity),color));
         view.setTypeface(UiFont.get(activity, R.string.font_medium));
         view.setLetterSpacing(0.01f);
         view.setIncludeFontPadding(false);
