@@ -34,7 +34,7 @@ final class TvGlassStyle {
         return surface(radius, strokeWidth, false, prefs, true, true);
     }
     static GradientDrawable header(int radius,int strokeWidth,SharedPreferences prefs,boolean frosted) {
-        if(ThemeStyle.custom(prefs)) return new MaterialSurface(radius,strokeWidth,false,prefs,false);
+        if(ThemeStyle.custom(prefs)) return new MaterialSurface(radius,strokeWidth,false,prefs,false,frosted?2:finish(prefs));
         int finish=frosted ? 2 : finish(prefs), intensity=intensity(prefs);
         if (enabled(prefs)) return surface(radius,strokeWidth,false,prefs,true,false,finish);
         GlassSurface shape=new GlassSurface(strokeWidth,edge(prefs));
@@ -50,7 +50,7 @@ final class TvGlassStyle {
         return surface(radius,strokeWidth,focused,prefs,liquid,drawer,finish(prefs));
     }
     private static GradientDrawable surface(int radius,int strokeWidth,boolean focused,SharedPreferences prefs,boolean liquid,boolean drawer,int finish) {
-        if(ThemeStyle.custom(prefs)) return new MaterialSurface(radius,strokeWidth,focused,prefs,drawer);
+        if(ThemeStyle.custom(prefs)) return new MaterialSurface(radius,strokeWidth,focused,prefs,drawer,finish);
         float strength = intensity(prefs) / 100f;
         int base = finish == 1 ? 24 : finish == 2 ? 96 : 48;
         int alpha = base + Math.round((245 - base) * strength * strength);

@@ -615,6 +615,7 @@ final class AppLibraryDialog {
         view.setTextSize(size);
         view.setTextColor(ThemeStyle.contentColor(ThemePreferences.get(activity),color));
         view.setTypeface(UiFont.get(activity, R.string.font_medium));
+        if(ThemeStyle.custom(ThemePreferences.get(activity))) GlassSettings.applyAppFont(activity,view);
         view.setLetterSpacing(0.01f);
         view.setIncludeFontPadding(false);
         return view;

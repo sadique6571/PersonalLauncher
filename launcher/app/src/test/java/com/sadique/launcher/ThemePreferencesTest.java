@@ -169,6 +169,28 @@ public class ThemePreferencesTest {
             assertTrue((Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=3);
         }
     }
+    @Test public void bothMaterialsHonorFontClockAlignmentAndPreserveAccentIdentity() {
+        ThemePreferences prefs=new ThemePreferences(new Memory());
+        for(int style:new int[]{ThemeStyle.DUNE,ThemeStyle.PEARL}) {
+            prefs.edit().putInt("visual_style",style).putInt("app_font",1).putInt("clock_font",2).putInt("clock_align",0).apply();
+            assertFalse(ThemeStyle.fixedTypography(prefs));
+            assertEquals("serif",ThemeStyle.fontFamily(prefs));
+            assertEquals("monospace",ThemeStyle.clockFontFamily(prefs));
+            assertEquals(0,ThemeStyle.clockAlignment(prefs));
+            prefs.edit().putInt("clock_align",2).apply(); assertEquals(2,ThemeStyle.clockAlignment(prefs));
+            Set<Integer> accents=new HashSet<>();
+            for(int color:new int[]{0xffff5252,0xffffea00,0xff69f0ae,0xff508dff}) {
+                prefs.edit().putInt("theme_name",3).putInt("custom_accent",color).apply();
+                assertEquals(color,ThemeStyle.accent(prefs)); accents.add(ThemeStyle.focusAccent(prefs));
+            }
+            assertEquals(4,accents.size());
+            prefs.edit().putBoolean("panel_transparency",false).apply();
+            assertEquals(255,PanelTransparency.alpha(MaterialAppearance.alpha(0,30,false,false),prefs,false));
+            assertEquals(MaterialAppearance.alpha(0,30,true,false),PanelTransparency.alpha(MaterialAppearance.alpha(0,30,true,false),prefs,true));
+        }
+        prefs.edit().putInt("visual_style",ThemeStyle.GLASS).putInt("clock_align",0).apply();
+        assertTrue(ThemeStyle.fixedTypography(prefs)); assertEquals(1,ThemeStyle.clockAlignment(prefs));
+    }
     private static final class Memory implements SharedPreferences {
         final Map<String,Object> data=new HashMap<>(); final Set<OnSharedPreferenceChangeListener> listeners=new HashSet<>();
         public Map<String,?> getAll(){return new HashMap<>(data);}

@@ -129,9 +129,13 @@ final class GlassSettings {
     /** Launcher-wide font (Settings → Theme → Launcher font) for settings UI text. (User 2026-11-01.) */
     static void applyAppFont(android.content.Context ctx, TextView view) {
         android.content.SharedPreferences prefs = ThemePreferences.get(ctx);
-        String[] fonts = {"sans-serif", "serif", "monospace", "sans-serif-light"};
         view.setTypeface(android.graphics.Typeface.create(
-                TvGlassStyle.enabled(prefs) ? "sans-serif" : fonts[Math.max(0, Math.min(3, prefs.getInt("app_font", 0)))], android.graphics.Typeface.NORMAL));
+                ThemeStyle.fontFamily(prefs), android.graphics.Typeface.NORMAL));
+        if(ThemeStyle.pearl(prefs)) {
+            if(PanelTransparency.enabled(prefs) && TvGlassStyle.intensity(prefs)<50)
+                view.setShadowLayer(2*ctx.getResources().getDisplayMetrics().density,0,0,0xeeffffff);
+            else view.setShadowLayer(0,0,0,android.graphics.Color.TRANSPARENT);
+        }
     }
     static View row(Activity host, String title, String subtitle, int icon, int tint, Runnable action) {
         LinearLayout row = new LinearLayout(host); row.setGravity(Gravity.CENTER_VERTICAL);
