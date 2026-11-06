@@ -325,3 +325,6 @@ their own colours. Volume capsules in TV Glass, Dune and Pearl have a subtle rai
 highlight/shadow gradients, without a blur effect. Material contour paths are cached by geometry, and
 stale/duplicate wallpaper-blend targets are pruned during long Home sessions. Device performance and
 visual appearance still require physical testing; no frame-rate improvement is claimed.
+
+Pearl chooses light or dark clock ink from a small cached sample of the photo behind the time,
+rather than washing out the photo. The clock shadow toggle remains respected.

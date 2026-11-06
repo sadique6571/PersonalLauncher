@@ -83,6 +83,8 @@ public final class PersonalHomeActivity extends Activity {
     private ImageView avatar;
     private Bitmap avatarBitmap;
     private Bitmap customWallpaper;
+    private Bitmap contrastPhoto;
+    private int contrastX=-1,contrastY=-1,contrastShade=-1,pearlClockInk=0xffffffff;
     private LiquidBackdrop liquidBackdrop, headerBackdrop;
     private ContinueWatchingView continueWatching;
     private SkyClock sky;
@@ -564,6 +566,7 @@ public final class PersonalHomeActivity extends Activity {
             sky.clockX = position[0] - origin[0] + time.getWidth() / 2f;
             sky.clockY = position[1] - origin[1] + time.getHeight() / 2f;
             sky.invalidate();
+            if(updatePearlClockInk()) adaptVisibleTextColors();
         });
         appHeading = text("Your apps", prefs.getInt("focus_title_size", tv ? 32 : 26), TEXT);
         appHeading.setSingleLine(true);
@@ -1865,15 +1868,40 @@ public final class PersonalHomeActivity extends Activity {
         if (label == null) return;
         label.setTextColor(ThemeStyle.custom(prefs)?(muted?ThemeStyle.muted(prefs):ThemeStyle.foreground(prefs)):(muted ? 0xE6FFFFFF : 0xFFFFFFFF));
         boolean clockLabel=label==time || label==ampm || label==date;
+        if(clockLabel && ThemeStyle.pearl(prefs)) label.setTextColor(pearlClockInk);
         if(clockLabel && !prefs.getBoolean("clock_shadow",true)) label.setShadowLayer(0,0,0,Color.TRANSPARENT);
-        else if(ThemeStyle.pearl(prefs)) label.setShadowLayer(dp(2),0,dp(1),0xccffffff);
+        else if(ThemeStyle.pearl(prefs)) label.setShadowLayer(dp(2),0,dp(1),clockLabel && pearlClockInk==0xffffffff?0xcc000000:0xccffffff);
         else label.setShadowLayer(dp(5),0,dp(2),0xe6000000);
+    }
+
+    /** Nine cached photo samples choose clock ink; the photo itself is never tinted for text contrast. */
+    private boolean updatePearlClockInk() {
+        if(!ThemeStyle.pearl(prefs) || sky==null) { contrastPhoto=null; return false; }
+        Bitmap photo=sky.currentPicture();
+        if(photo==null || photo.isRecycled()) {
+            contrastPhoto=null; boolean changed=pearlClockInk!=0xffffffff; pearlClockInk=0xffffffff; return changed;
+        }
+        if(sky.getWidth()<=0 || sky.getHeight()<=0) return false;
+        float y=sky.clockY>=0?sky.clockY:dp(150),x=sky.clockX>=0?sky.clockX:sky.getWidth()/2f;
+        float[] frame=HomeAppearance.frame(sky.getWidth(),sky.getHeight(),photo.getWidth(),photo.getHeight(),y,photo==sky.backdrop);
+        int px=Math.max(0,Math.min(photo.getWidth()-1,Math.round((x-frame[0])/(frame[2]-frame[0])*photo.getWidth())));
+        int py=Math.max(0,Math.min(photo.getHeight()-1,Math.round((y-frame[1])/(frame[3]-frame[1])*photo.getHeight())));
+        int shade=HomeAppearance.shade(prefs.getString("theme_mode","light"),sky.minute,prefs.getInt("background_dim",0));
+        if(contrastPhoto==photo && contrastX==px && contrastY==py && contrastShade==shade) return false;
+        contrastPhoto=photo; contrastX=px; contrastY=py; contrastShade=shade;
+        int red=0,green=0,blue=0,dx=Math.max(1,photo.getWidth()/30),dy=Math.max(1,photo.getHeight()/30);
+        for(int row=-1;row<=1;row++) for(int col=-1;col<=1;col++) {
+            int pixel=photo.getPixel(Math.max(0,Math.min(photo.getWidth()-1,px+col*dx)),Math.max(0,Math.min(photo.getHeight()-1,py+row*dy)));
+            red+=(pixel>>16)&255; green+=(pixel>>8)&255; blue+=pixel&255;
+        }
+        int background=MaterialAppearance.mix(Color.rgb(red/9,green/9,blue/9),0xff051327,shade/255f);
+        int ink=ThemeStyle.wallpaperClockInk(background); boolean changed=ink!=pearlClockInk; pearlClockInk=ink; return changed;
     }
 
     private void adaptTextColors() {
         if (liquidBackdrop != null) liquidBackdrop.refresh();
         if (headerBackdrop != null) headerBackdrop.refresh();
-        // Initial pass: per-label wallpaper sampling (no theme shade factor).
+        updatePearlClockInk();
         adaptVisibleTextColors();
     }
 

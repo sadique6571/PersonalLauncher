@@ -34,6 +34,15 @@ public class MaterialAppearanceTest {
             assertNotEquals(MaterialAppearance.tint(base,0xffff0000,true),red);
         }
     }
+    @Test public void pearlClockCanChangeInkWithoutChangingTheWallpaper() {
+        assertEquals(0xffffffff,ThemeStyle.wallpaperClockInk(0xff10202b));
+        assertEquals(0xff11191c,ThemeStyle.wallpaperClockInk(0xfff6e9d4));
+        for(int value=0;value<=255;value+=15) {
+            int background=0xff000000|(value<<16)|(value<<8)|value;
+            double a=ThemeStyle.luminance(background),b=ThemeStyle.luminance(ThemeStyle.wallpaperClockInk(background));
+            assertTrue((Math.max(a,b)+.05)/(Math.min(a,b)+.05)>3);
+        }
+    }
     @Test public void compactClockStillHasThreeDifferentUserSizes() {
         assertTrue(HomeGeometry.clockSize(36,true)<HomeGeometry.clockSize(44,true));
         assertTrue(HomeGeometry.clockSize(44,true)<HomeGeometry.clockSize(52,true));
