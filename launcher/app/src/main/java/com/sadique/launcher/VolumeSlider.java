@@ -128,6 +128,7 @@ final class VolumeSlider {
             android.content.SharedPreferences prefs = ThemePreferences.get(context);
             boolean glass = TvGlassStyle.enabled(prefs);
             int style = ThemeStyle.id(prefs);
+            style = style * 31 + prefs.getInt("app_font", 0);
             style = style * 31 + prefs.getInt("glass_finish", 0);
             style = style * 31 + prefs.getInt("glass_alpha", 70);
             style = style * 31 + prefs.getInt("glass_edge", 1);
@@ -159,7 +160,7 @@ final class VolumeSlider {
                     level.setBackground(TvGlassStyle.surface(dp(context,8),dp(context,1),false,prefs));
                 }
                 level.setGravity(Gravity.CENTER);
-                level.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+                level.setTypeface(android.graphics.Typeface.create(ThemeStyle.fontFamily(prefs), android.graphics.Typeface.BOLD));
                 panel.addView(level, new LinearLayout.LayoutParams(-1, dp(context, 24)));
                 WindowManager.LayoutParams position = new WindowManager.LayoutParams(dp(context, 64), -2,
                         context instanceof AccessibilityService ? WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY

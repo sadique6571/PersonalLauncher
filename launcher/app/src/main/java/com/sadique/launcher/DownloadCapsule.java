@@ -13,7 +13,7 @@ final class DownloadCapsule extends View {
     private final android.content.SharedPreferences prefs;
     private final android.content.SharedPreferences.OnSharedPreferenceChangeListener styleChanged=(p,key)-> {
         if ("visual_style".equals(key) || "tv_glass_style".equals(key) || "panel_transparency".equals(key) || "glass_alpha".equals(key)
-                || "glass_finish".equals(key) || "glass_edge".equals(key) || "theme_name".equals(key) || "custom_accent".equals(key)) refreshStyle();
+                || "app_font".equals(key) || "glass_finish".equals(key) || "glass_edge".equals(key) || "theme_name".equals(key) || "custom_accent".equals(key)) refreshStyle();
     };
     private final TextPaint text = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private String caption="Checking GitHub", fitted=caption;
@@ -21,13 +21,14 @@ final class DownloadCapsule extends View {
     private float baseline;
     DownloadCapsule(Context context) {
         super(context); prefs=ThemePreferences.get(context); capsule=new GlassCapsule(context);
-        text.setTypeface(android.graphics.Typeface.create("sans-serif-medium",android.graphics.Typeface.NORMAL));
+        text.setTypeface(android.graphics.Typeface.create(ThemeStyle.fontFamily(prefs),android.graphics.Typeface.BOLD));
         text.setTextSize(14*getResources().getDisplayMetrics().scaledDensity); text.setTextAlign(Paint.Align.CENTER);
         setFocusable(false); setClickable(false); setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
         setAccessibilityLiveRegion(ACCESSIBILITY_LIVE_REGION_POLITE);
     }
     private void refreshStyle() {
-        capsule=new GlassCapsule(getContext()); capsule.size(getWidth(),getHeight()); invalidate();
+        text.setTypeface(android.graphics.Typeface.create(ThemeStyle.fontFamily(prefs),android.graphics.Typeface.BOLD));
+        capsule=new GlassCapsule(getContext()); capsule.size(getWidth(),getHeight()); fit(); invalidate();
     }
     @Override protected void onAttachedToWindow() {
         super.onAttachedToWindow(); prefs.registerOnSharedPreferenceChangeListener(styleChanged); refreshStyle();

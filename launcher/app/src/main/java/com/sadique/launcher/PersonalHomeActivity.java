@@ -493,7 +493,7 @@ public final class PersonalHomeActivity extends Activity {
         clockLayout = new LinearLayout(this);
         LinearLayout clock = clockLayout;
         clock.setOrientation(LinearLayout.VERTICAL);
-        clock.setGravity(Gravity.CENTER);
+        clock.setGravity(new int[]{Gravity.START,Gravity.CENTER_HORIZONTAL,Gravity.END}[ThemeStyle.clockAlignment(prefs)]);
         boolean compact = getResources().getConfiguration().screenHeightDp < 480;
         clock.setPadding(0, dp(compact ? 0 : tv ? 10 : 16), 0, dp(compact ? 8 : 12));
         int clockSize = prefs.getInt("clock_size", tv ? 52 : 44);
@@ -507,7 +507,7 @@ public final class PersonalHomeActivity extends Activity {
                 break;
             }
         }
-        if (compact) clockSize = Math.min(clockSize, 32);
+        clockSize=HomeGeometry.clockSize(clockSize,compact);
         time = text("", clockSize, TEXT);
         time.setGravity(Gravity.CENTER);
         time.setSingleLine(true);
@@ -516,9 +516,8 @@ public final class PersonalHomeActivity extends Activity {
             time.setShadowLayer(dp(8), 0, dp(3), 0xcc000000);
         }
         // Use the regular family with bold weight; the light family overrides the intended weight.
-        String[] clockFonts = {"sans-serif", "serif", "monospace"};
         time.setTypeface(android.graphics.Typeface.create(
-                tvGlass() ? "sans-serif" : clockFonts[Math.max(0, Math.min(2, prefs.getInt("clock_font", 0)))], android.graphics.Typeface.BOLD));
+                ThemeStyle.clockFontFamily(prefs), android.graphics.Typeface.BOLD));
         // Analog mode: hide the digital time (keeps layout for clockY), SkyClock draws the face.
         boolean analogClock = prefs.getInt("clock_style", 0) == 1;
         // AM/PM is a separate view, not a span: it can never be clipped when
@@ -546,7 +545,7 @@ public final class PersonalHomeActivity extends Activity {
         date.setGravity(Gravity.CENTER);
         LinearLayout timeRow = new LinearLayout(this);
         timeRow.setOrientation(LinearLayout.HORIZONTAL);
-        timeRow.setGravity(Gravity.CENTER);
+        timeRow.setGravity(Gravity.CENTER_VERTICAL | new int[]{Gravity.START,Gravity.CENTER_HORIZONTAL,Gravity.END}[ThemeStyle.clockAlignment(prefs)]);
         timeRow.addView(time, new LinearLayout.LayoutParams(-2, -2));
         LinearLayout.LayoutParams ampmParams = new LinearLayout.LayoutParams(-2, -2);
         ampmParams.gravity = Gravity.BOTTOM;
@@ -558,6 +557,7 @@ public final class PersonalHomeActivity extends Activity {
             int[] position = new int[2], origin = new int[2];
             time.getLocationInWindow(position);
             root.getLocationInWindow(origin);
+            sky.clockX = position[0] - origin[0] + time.getWidth() / 2f;
             sky.clockY = position[1] - origin[1] + time.getHeight() / 2f;
             sky.invalidate();
         });
@@ -596,8 +596,8 @@ public final class PersonalHomeActivity extends Activity {
         LinearLayout scrollContent = new LinearLayout(this);
         scrollContent.setOrientation(LinearLayout.VERTICAL);
         if (prefs.getBoolean("hide_clock", false) || prefs.getBoolean("apps_only", false)) clock.setVisibility(View.GONE);
-        int align = TvGlassStyle.enabled(prefs) ? 1 : Math.max(0,Math.min(2,prefs.getInt("clock_align",1)));
-        LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(-2, -2);
+        int align = ThemeStyle.clockAlignment(prefs);
+        LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(-1, -2);
         clockParams.gravity = new int[]{Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END}[align];
         scrollContent.addView(clock, clockParams);
         scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
@@ -1586,14 +1586,13 @@ public final class PersonalHomeActivity extends Activity {
 
     /** Applies the launcher-wide font to a TextView. */
     private void applyAppFont(TextView view) {
-        String[] fonts = {"sans-serif", "serif", "monospace", "sans-serif-light"};
         view.setTypeface(android.graphics.Typeface.create(
-                tvGlass() ? "sans-serif" : fonts[Math.max(0, Math.min(3, prefs.getInt("app_font", 0)))], android.graphics.Typeface.NORMAL));
+                ThemeStyle.fontFamily(prefs), android.graphics.Typeface.NORMAL));
     }
 
     /** Submenu helper with per-row icons. */
     private void subMenu(String title, String[] labels, String[] hints, int[] icons, Runnable[] choices) {
-        if (!TvGlassStyle.enabled(prefs)) { GlassSettings.options(this, title, labels, hints, icons, which -> choices[which].run()); return; }
+        if (!ThemeStyle.fixedTypography(prefs)) { GlassSettings.options(this, title, labels, hints, icons, which -> choices[which].run()); return; }
         List<Integer> visible = new ArrayList<>();
         for (int i=0;i<labels.length;i++) {
             if ("Launcher font".equals(labels[i]) || "Clock font".equals(labels[i]) || "Clock alignment".equals(labels[i])) continue;
@@ -1860,8 +1859,10 @@ public final class PersonalHomeActivity extends Activity {
     private void applyLabelScheme(android.widget.TextView label, boolean dark, boolean muted) {
         if (label == null) return;
         label.setTextColor(ThemeStyle.custom(prefs)?(muted?ThemeStyle.muted(prefs):ThemeStyle.foreground(prefs)):(muted ? 0xE6FFFFFF : 0xFFFFFFFF));
-        if(ThemeStyle.pearl(prefs)) label.setShadowLayer(0,0,0,Color.TRANSPARENT);
-        else label.setShadowLayer(dp(5), 0, dp(2), 0xE6000000);
+        boolean clockLabel=label==time || label==ampm || label==date;
+        if(clockLabel && !prefs.getBoolean("clock_shadow",true)) label.setShadowLayer(0,0,0,Color.TRANSPARENT);
+        else if(ThemeStyle.pearl(prefs)) label.setShadowLayer(dp(2),0,dp(1),0xccffffff);
+        else label.setShadowLayer(dp(5),0,dp(2),0xe6000000);
     }
 
     private void adaptTextColors() {
@@ -1882,6 +1883,8 @@ public final class PersonalHomeActivity extends Activity {
     /** Index of the currently applied option for a settings chooser (-1 when none applies). (User 2026-11-01.) */
     private int settingCurrentIndex(String title) {
         switch (title) {
+            case "Accent color": return prefs.getInt("theme_name",0)!=3?-1:indexOf(new int[]{0xff40d9ff,0xffff9a5c,0xffb388ff,0xff69f0ae,0xffff5252,0xffffea00,0xffff80ab,0xffffffff,
+                    0xff000000,0xff343b46,0xffcbd3df,0xff508dff,0xff44c6bc,0xffe8c66a,0xffd890a5,0xff7986ed},prefs.getInt("custom_accent",0));
             case "Panel transparency": return PanelTransparency.enabled(prefs) ? 0 : 1;
             case "Glass finish": return TvGlassStyle.finish(prefs);
             case "Glass edge": return Math.max(0, Math.min(2, prefs.getInt("glass_edge", 1)));
@@ -2462,7 +2465,7 @@ public final class PersonalHomeActivity extends Activity {
             }
         }
         int minute, focusAccent;
-        float clockY = -1, focusX, focusY, focusRadius;
+        float clockX=-1, clockY = -1, focusX, focusY, focusRadius;
         /** Analog face radius in px, set from clock_size pref. */
         float clockRadius = -1;
         /** Analog clock mode: 0=digital, 1=analog. Set from prefs. */
@@ -2703,12 +2706,12 @@ public final class PersonalHomeActivity extends Activity {
             }
             if(ThemeStyle.custom(prefs)) {
                 boolean pearl=ThemeStyle.pearl(prefs);
-                paint.setShader(new LinearGradient(0,0,0,getHeight(),pearl?0xcffff6e9:0x44152124,
-                        pearl?0x99fff6e9:0x33152124,Shader.TileMode.CLAMP));
+                paint.setShader(new LinearGradient(0,0,0,getHeight(),pearl?0xb0fff6e9:0x22152124,
+                        pearl?0x20fff6e9:0x18152124,Shader.TileMode.CLAMP));
                 canvas.drawRect(0,0,getWidth(),getHeight(),paint); paint.setShader(null);
             }
-            if (focusAccent != 0 && focusRadius > 0 && !ThemeStyle.pearl(prefs)) {
-                int glow = (focusAccent & 0x00ffffff) | 0x80000000;
+            if (focusAccent != 0 && focusRadius > 0) {
+                int glow = (focusAccent & 0x00ffffff) | (ThemeStyle.pearl(prefs)?0x33000000:0x80000000);
                 paint.setShader(new RadialGradient(focusX, focusY, focusRadius, glow, Color.TRANSPARENT, Shader.TileMode.CLAMP));
                 canvas.drawCircle(focusX, focusY, focusRadius, paint); paint.setShader(null);
             }
@@ -2716,21 +2719,21 @@ public final class PersonalHomeActivity extends Activity {
             // Clock glow: soft halo behind the clock.
             if (prefs.getBoolean("clock_glow", false)) {
                 int accent = accentColor();
-                paint.setShader(new RadialGradient(getWidth() / 2f, cy, dp(160),
+                paint.setShader(new RadialGradient(clockX>=0?clockX:getWidth()/2f, cy, dp(160),
                         (accent & 0x00ffffff) | 0x60000000, Color.TRANSPARENT, Shader.TileMode.CLAMP));
-                canvas.drawCircle(getWidth() / 2f, cy, dp(160), paint); paint.setShader(null);
+                canvas.drawCircle(clockX>=0?clockX:getWidth()/2f, cy, dp(160), paint); paint.setShader(null);
             }
             // Analog clock face.
             if (clockStyle == 1) {
-                float cx = getWidth() / 2f;
                 float radius = clockRadius > 0 ? clockRadius : Math.min(getWidth(), getHeight()) / 7f;
+                float cx=Math.max(radius,Math.min(getWidth()-radius,clockX>=0?clockX:getWidth()/2f));
                 paint.setShader(null);
                 paint.setStyle(Paint.Style.FILL);
-                paint.setColor(0x99000000);
+                paint.setColor(ThemeStyle.pearl(prefs)?0xccfff6e9:0x99000000);
                 canvas.drawCircle(cx, cy, radius, paint);
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(dp(2));
-                paint.setColor(0xffffffff);
+                paint.setColor(ThemeStyle.foreground(prefs));
                 canvas.drawCircle(cx, cy, radius, paint);
                 int hour = (minute / 60) % 12, min = minute % 60;
                 // Tick marks.

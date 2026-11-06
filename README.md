@@ -310,3 +310,10 @@ weather and app order remain shared. A theme switch does not replace the daily/c
 lightweight ivory or dusk wash gives the chosen photo the new theme's tone. These are implemented
 versions of the concept direction, not the demo image pasted as an interface. Static contour paths
 and gradients need no new dependency or continuously animated effect. APK version remains **7.0**.
+
+Dune and Pearl material controls now apply the chosen intensity to both fill and wallpaper blend:
+Airy, Normal and Solid have distinct opacity, while Clear/Soft/Frosted also change the finish.
+Accent colours tint material bases and contour details; low-contrast focus colours are adjusted
+toward a readable tone without replacing every bright colour with the same grey. Launcher font,
+clock font/alignment, clock shadow, focus glow and compact clock sizes honor their saved choices in
+both styles. Panel transparency Off still makes panels solid while exempting the app drawer.
