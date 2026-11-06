@@ -69,9 +69,10 @@ final class ThemeStyle {
         for(int i=0;i<3;i++) rgb[i]=rgb[i]<=.04045?rgb[i]/12.92:Math.pow((rgb[i]+.055)/1.055,2.4);
         return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];
     }
-    static int wallpaperClockInk(int background) {
-        double value=luminance(background),dark=luminance(0xff11191c);
-        return (value+.05)/(dark+.05)>=1.05/(value+.05)?0xff11191c:0xffffffff;
+    static int wallpaperClockInk(int background) { return wallpaperClockInk(background,0xff11191c); }
+    static int wallpaperClockInk(int background,int darkInk) {
+        double value=luminance(background),dark=luminance(darkInk);
+        return (value+.05)/(dark+.05)>=1.05/(value+.05)?darkInk:0xffffffff;
     }
     static int contentColor(SharedPreferences prefs,int color) {
         if(!light(prefs)) return color;

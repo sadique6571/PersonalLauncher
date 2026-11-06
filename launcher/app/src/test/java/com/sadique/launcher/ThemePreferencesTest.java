@@ -214,6 +214,8 @@ public class ThemePreferencesTest {
         prefs.edit().putInt("visual_style",ThemeStyle.SAGE).apply(); ThemeStyle.demoDefaults(prefs);
         assertTrue(ThemeStyle.light(prefs)); assertEquals(70,prefs.getInt("glass_alpha",70));
         assertEquals(0xff195c36,ThemeStyle.accent(prefs));
+        assertEquals(ThemeStyle.foreground(prefs),ThemeStyle.wallpaperClockInk(0xffeef3e7,ThemeStyle.foreground(prefs)));
+        assertEquals(0xffffffff,ThemeStyle.wallpaperClockInk(0xff10251a,ThemeStyle.foreground(prefs)));
         double a=ThemeStyle.luminance(ThemeStyle.baseTop(prefs)),b=ThemeStyle.luminance(ThemeStyle.foreground(prefs));
         assertTrue((a+.05)/(b+.05)>7);
         prefs.edit().putInt("phone_columns",3).putInt("header_bg_mode",0).apply(); ThemeStyle.demoDefaults(prefs);

@@ -1925,7 +1925,7 @@ public final class PersonalHomeActivity extends Activity {
             red+=(pixel>>16)&255; green+=(pixel>>8)&255; blue+=pixel&255;
         }
         int background=MaterialAppearance.mix(Color.rgb(red/9,green/9,blue/9),0xff051327,shade/255f);
-        int ink=ThemeStyle.wallpaperClockInk(background); boolean changed=ink!=pearlClockInk; pearlClockInk=ink; return changed;
+        int ink=ThemeStyle.wallpaperClockInk(background,ThemeStyle.foreground(prefs)); boolean changed=ink!=pearlClockInk; pearlClockInk=ink; return changed;
     }
 
     private void adaptTextColors() {
