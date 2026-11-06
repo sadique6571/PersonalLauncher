@@ -28,7 +28,7 @@ final class DownloadCapsule extends View {
     }
     private void refreshStyle() {
         text.setTypeface(android.graphics.Typeface.create(ThemeStyle.fontFamily(prefs),android.graphics.Typeface.BOLD));
-        capsule=new GlassCapsule(getContext()); capsule.size(getWidth(),getHeight()); invalidate();
+        capsule=new GlassCapsule(getContext()); capsule.size(getWidth(),getHeight()); fit(); invalidate();
     }
     @Override protected void onAttachedToWindow() {
         super.onAttachedToWindow(); prefs.registerOnSharedPreferenceChangeListener(styleChanged); refreshStyle();
