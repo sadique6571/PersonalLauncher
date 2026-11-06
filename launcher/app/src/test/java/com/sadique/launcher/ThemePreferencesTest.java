@@ -239,6 +239,16 @@ public class ThemePreferencesTest {
         e.apply(); assertEquals(5,ThemeStyle.id(restored)); assertEquals(24,restored.getInt("app_label_size",0));
         restored.edit().putInt("visual_style",4).apply(); assertEquals(20,restored.getInt("app_label_size",0));
     }
+    @Test public void defaultReferenceColoursDoNotMixTheFocusAccentIntoTheCardBase() {
+        ThemePreferences prefs=new ThemePreferences(new Memory());
+        for(int style=2;style<6;style++) {
+            prefs.edit().putInt("visual_style",style).putInt("theme_name",0).apply();
+            int base=ThemeStyle.baseTop(prefs); assertEquals(base,ThemeStyle.materialColor(prefs,base,false));
+            prefs.edit().putInt("theme_name",3).putInt("custom_accent",0xffff0000).apply();
+            int red=ThemeStyle.materialColor(prefs,base,false);
+            prefs.edit().putInt("custom_accent",0xff0000ff).apply(); assertNotEquals(red,ThemeStyle.materialColor(prefs,base,false));
+        }
+    }
     private static final class Memory implements SharedPreferences {
         final Map<String,Object> data=new HashMap<>(); final Set<OnSharedPreferenceChangeListener> listeners=new HashSet<>();
         public Map<String,?> getAll(){return new HashMap<>(data);}

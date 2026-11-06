@@ -105,9 +105,17 @@ final class TvSymbols extends Drawable {
             path.moveTo(5, 10); path.lineTo(5, 21); path.lineTo(10, 21); path.lineTo(10, 15);
             path.lineTo(14, 15); path.lineTo(14, 21); path.lineTo(19, 21); path.lineTo(19, 10); canvas.drawPath(path, paint);
         } else if (resource == R.drawable.ic_input) {
-            canvas.drawRoundRect(3, 4, 21, 20, 3, 3, paint);
-            canvas.drawLine(8, 8, 8, 16, paint); canvas.drawLine(5, 12, 15, 12, paint);
-            path.moveTo(12, 9); path.lineTo(15, 12); path.lineTo(12, 15); canvas.drawPath(path, paint);
+            if(style==ThemeStyle.PEARL) {
+                path.moveTo(4,5); path.lineTo(20,5); path.lineTo(22,14); path.lineTo(16,14); path.lineTo(14,20);
+                path.lineTo(10,20); path.lineTo(8,14); path.lineTo(2,14); path.close(); canvas.drawPath(path,paint);
+                canvas.drawLine(7,9,17,9,paint);
+            } else if(style>=ThemeStyle.DUNE) {
+                path.moveTo(10,3); path.lineTo(21,3); path.lineTo(21,21); path.lineTo(10,21); canvas.drawPath(path,paint);
+                canvas.drawLine(2,12,15,12,paint); path.reset(); path.moveTo(10,7); path.lineTo(15,12); path.lineTo(10,17); canvas.drawPath(path,paint);
+            } else {
+                canvas.drawRoundRect(3,4,21,20,3,3,paint); canvas.drawLine(8,8,8,16,paint); canvas.drawLine(5,12,15,12,paint);
+                path.moveTo(12,9); path.lineTo(15,12); path.lineTo(12,15); canvas.drawPath(path,paint);
+            }
         } else if (resource == R.drawable.ic_livetv) {
             canvas.drawRoundRect(3, 6, 21, 19, 2, 2, paint);
             canvas.drawLine(8, 2, 12, 6, paint); canvas.drawLine(16, 2, 12, 6, paint);

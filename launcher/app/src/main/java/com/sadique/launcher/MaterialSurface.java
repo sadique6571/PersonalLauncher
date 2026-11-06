@@ -25,8 +25,8 @@ final class MaterialSurface extends GlassSurface {
         ink.setStyle(Paint.Style.STROKE); ink.setColor(accent);
         tabInk.setColor(accent);
         int alpha=PanelTransparency.alpha(MaterialAppearance.alpha(finish,intensity,drawer,focused),prefs,drawer);
-        int top=MaterialAppearance.tint(ThemeStyle.baseTop(prefs),ThemeStyle.accent(prefs),focused);
-        int bottom=MaterialAppearance.tint(ThemeStyle.baseBottom(prefs),ThemeStyle.accent(prefs),focused);
+        int top=ThemeStyle.materialColor(prefs,ThemeStyle.baseTop(prefs),focused);
+        int bottom=ThemeStyle.materialColor(prefs,ThemeStyle.baseBottom(prefs),focused);
         setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
         setColors(new int[]{(alpha<<24)|(top&0xffffff),(alpha<<24)|(bottom&0xffffff)});
         setCornerRadius(radius);

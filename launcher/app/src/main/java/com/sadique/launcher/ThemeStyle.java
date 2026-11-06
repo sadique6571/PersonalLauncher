@@ -29,6 +29,9 @@ final class ThemeStyle {
     static int baseTop(SharedPreferences prefs) {
         switch(id(prefs)) { case SAGE:return 0xffdce6be; case COBALT:return 0xff12275c; case PEARL:return 0xfff9f1e8; default:return 0xff26363a; }
     }
+    static int materialColor(SharedPreferences prefs,int base,boolean focused) {
+        return prefs.getInt("theme_name",0)==0?base:MaterialAppearance.tint(base,accent(prefs),focused);
+    }
     static int baseBottom(SharedPreferences prefs) {
         switch(id(prefs)) { case SAGE:return 0xffc5d4ac; case COBALT:return 0xff07112d; case PEARL:return 0xffe9e4dc; default:return 0xff111e24; }
     }

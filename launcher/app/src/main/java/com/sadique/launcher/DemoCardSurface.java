@@ -13,8 +13,8 @@ final class DemoCardSurface extends GradientDrawable {
     DemoCardSurface(int radius,int unit,boolean focused,SharedPreferences prefs) {
         this.unit=unit; this.focused=focused; style=ThemeStyle.id(prefs); accent=ThemeStyle.focusAccent(prefs);
         footer=DemoGeometry.footer(style,unit); edge=TvGlassStyle.edge(prefs)>>>24;
-        top=MaterialAppearance.tint(ThemeStyle.baseTop(prefs),ThemeStyle.accent(prefs),false);
-        bottom=MaterialAppearance.tint(ThemeStyle.baseBottom(prefs),ThemeStyle.accent(prefs),false);
+        top=ThemeStyle.materialColor(prefs,ThemeStyle.baseTop(prefs),false);
+        bottom=ThemeStyle.materialColor(prefs,ThemeStyle.baseBottom(prefs),false);
         float s=TvGlassStyle.intensity(prefs)/100f;
         int max=TvGlassStyle.finish(prefs)==1?210:TvGlassStyle.finish(prefs)==2?255:245;
         opacity=Math.round(max*(2*s-s*s));
