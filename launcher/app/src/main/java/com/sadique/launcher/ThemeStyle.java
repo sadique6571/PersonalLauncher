@@ -5,12 +5,13 @@ import android.content.SharedPreferences;
 /** Stable style identifiers; legacy boolean installs retain exactly their selected style. */
 final class ThemeStyle {
     static final int GLASS=0, CLASSIC=1, DUNE=2, PEARL=3;
+    private static final String[] PREFIXES={"appearance.glass.","appearance.classic.","appearance.dune.","appearance.pearl."};
     private ThemeStyle() { }
     static int clamp(int style) { return Math.max(0,Math.min(3,style)); }
     static int id(SharedPreferences prefs) {
         return clamp(prefs.getInt("visual_style",prefs.getBoolean("tv_glass_style",true)?GLASS:CLASSIC));
     }
-    static String prefix(int style) { return new String[]{"appearance.glass.","appearance.classic.","appearance.dune.","appearance.pearl."}[clamp(style)]; }
+    static String prefix(int style) { return PREFIXES[clamp(style)]; }
     static boolean custom(SharedPreferences prefs) { return id(prefs)>=DUNE; }
     static boolean pearl(SharedPreferences prefs) { return id(prefs)==PEARL; }
     static int foreground(SharedPreferences prefs) { return pearl(prefs)?0xff242d30:id(prefs)==DUNE?0xffffedd8:0xfff1f5fb; }

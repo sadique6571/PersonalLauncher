@@ -41,11 +41,12 @@ final class ThemePreferences implements SharedPreferences {
     private static boolean scoped(String key) { return key.startsWith(GLASS)||key.startsWith(CLASSIC)||key.startsWith("appearance.dune.")||key.startsWith("appearance.pearl."); }
     @Override public Map<String,?> getAll() {
         Map<String,?> snapshot=base.getAll(); Map<String,Object> all=new HashMap<>(snapshot);
-        String active=prefix();
+        Object selected=snapshot.get("visual_style");
+        String active=ThemeStyle.prefix(selected instanceof Integer?(Integer)selected:Boolean.FALSE.equals(snapshot.get("tv_glass_style"))?ThemeStyle.CLASSIC:ThemeStyle.GLASS);
         for(String name:VISUAL) all.remove(name); // Do not export stale pre-migration appearance values.
         for(Map.Entry<String,?> entry:snapshot.entrySet())
             if(entry.getKey().startsWith(active)) all.put(entry.getKey().substring(active.length()),entry.getValue());
-        return all; // Retain both explicit namespaces so export/import preserves both themes.
+        return all; // Retain all explicit namespaces so export/import preserves all four themes.
     }
     @Override public String getString(String key,String fallback) { return base.getString(key(key),fallback); }
     @Override public Set<String> getStringSet(String key,Set<String> fallback) {
