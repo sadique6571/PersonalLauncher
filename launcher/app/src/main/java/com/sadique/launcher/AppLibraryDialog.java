@@ -587,7 +587,12 @@ final class AppLibraryDialog {
 
     private void addAction(LinearLayout rows, int label, Runnable action) {
         View row = activity.getLayoutInflater().inflate(R.layout.item_input, rows, false);
-        ((TextView) row.findViewById(R.id.title)).setText(label);
+        TextView title=row.findViewById(R.id.title); title.setText(label);
+        if(ThemeStyle.custom(ThemePreferences.get(activity))) {
+            title.setTextColor(ThemeStyle.foreground(ThemePreferences.get(activity)));
+            row.setBackground(GlassSettings.background(activity,false));
+            row.setOnFocusChangeListener((v,focused)->v.setBackground(GlassSettings.background(activity,focused)));
+        }
         row.setFocusableInTouchMode(true);
         row.findViewById(R.id.icon).setVisibility(View.GONE);
         row.findViewById(R.id.dot).setVisibility(View.GONE);
