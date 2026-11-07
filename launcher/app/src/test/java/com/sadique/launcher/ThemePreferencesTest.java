@@ -6,9 +6,52 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class ThemePreferencesTest {
+    @Test public void inactiveThemeListenersStaySilentForEveryRegisteredStyle() {
+        Memory base=new Memory(); ThemePreferences prefs=new ThemePreferences(base);
+        List<String> changes=new ArrayList<>();
+        prefs.registerOnSharedPreferenceChangeListener((p,k)->changes.add(k));
+        for(int active=0;active<ThemeStyle.COUNT;active++) {
+            prefs.edit().putInt("visual_style",active).apply();
+            for(int target=0;target<ThemeStyle.COUNT;target++) {
+                changes.clear();
+                base.edit().putInt(ThemeStyle.prefix(target)+"glass_alpha",active*10+target).apply();
+                if(target==active) assertEquals(Collections.singletonList("glass_alpha"),changes);
+                else assertTrue("inactive style "+target+" leaked into "+active,changes.isEmpty());
+            }
+        }
+    }
+    @Test public void pineAndAmberBackupRestoresBothProfilesAndPendingEditorsStayLocal() {
+        ThemePreferences prefs=new ThemePreferences(new Memory());
+        prefs.edit().putInt("visual_style",ThemeStyle.PINE).putInt("glass_alpha",31).apply();
+        SharedPreferences.Editor pine=prefs.edit().putInt("app_font",2);
+        prefs.edit().putInt("visual_style",ThemeStyle.AMBER).putInt("glass_alpha",76).apply();
+        pine.apply();
+        assertEquals(0,prefs.getInt("app_font",0));
+        Map<String,?> backup=prefs.getAll();
+        ThemePreferences restored=new ThemePreferences(new Memory()); SharedPreferences.Editor editor=restored.edit();
+        for(Map.Entry<String,?> entry:backup.entrySet()) {
+            if(entry.getValue() instanceof Boolean) editor.putBoolean(entry.getKey(),(Boolean)entry.getValue());
+            if(entry.getValue() instanceof Integer) editor.putInt(entry.getKey(),(Integer)entry.getValue());
+        }
+        editor.apply();
+        assertEquals(ThemeStyle.AMBER,ThemeStyle.id(restored)); assertEquals(76,restored.getInt("glass_alpha",0));
+        restored.edit().putInt("visual_style",ThemeStyle.PINE).apply();
+        assertEquals(31,restored.getInt("glass_alpha",0)); assertEquals(2,restored.getInt("app_font",0));
+    }
+    @Test public void pineAndAmberHeaderTitlesContrastWithBothPaletteStops() {
+        ThemePreferences prefs=new ThemePreferences(new Memory());
+        for(int style:new int[]{ThemeStyle.PINE,ThemeStyle.AMBER}) {
+            prefs.edit().putInt("visual_style",style).apply();
+            for(int wallpaper:new int[]{0xff000000,0xffffffff}) for(int base:new int[]{ThemeStyle.baseTop(prefs),ThemeStyle.baseBottom(prefs)}) {
+                int composite=MaterialAppearance.mix(wallpaper,base,HeaderAppearance.alpha(0)/255f);
+                double a=ThemeStyle.luminance(composite),b=ThemeStyle.luminance(ThemeStyle.headerTitleColor(prefs));
+                assertTrue("title contrast for style "+style,(Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5);
+            }
+        }
+    }
     @Test public void wallpaperClockShadowMigrationIsOncePerTheme() {
         ThemePreferences prefs=new ThemePreferences(new Memory());
-        for(int style=0;style<=5;style++) {
+        for(int style=0;style<ThemeStyle.COUNT;style++) {
             prefs.edit().putInt("visual_style",style).putBoolean("clock_shadow",false).apply();
             HeaderAppearance.clockDefaults(prefs);
             assertTrue(prefs.getBoolean("clock_shadow",false));
@@ -19,7 +62,7 @@ public class ThemePreferencesTest {
     }
     @Test public void themeHeaderInkSurvivesDarkAndWhiteWallpaper() {
         ThemePreferences prefs=new ThemePreferences(new Memory());
-        for(int style=0;style<=5;style++) {
+        for(int style=0;style<ThemeStyle.COUNT;style++) {
             prefs.edit().putInt("visual_style",style).putInt("header_bg_mode",1).putBoolean("header_glass_v2",true).apply();
             for(int wallpaper:new int[]{0xff000000,0xffffffff}) {
                 int[] bases=style>=2?new int[]{ThemeStyle.baseTop(prefs),ThemeStyle.baseBottom(prefs)}:new int[]{0xff132539,0xff09182a};
@@ -132,17 +175,17 @@ public class ThemePreferencesTest {
             }
         }
     }
-    @Test public void allSixThemesRestoreTheirOwnAppearanceWithoutSplittingIdentityOrWallpaper() {
+    @Test public void allThemesRestoreTheirOwnAppearanceWithoutSplittingIdentityOrWallpaper() {
         ThemePreferences prefs=new ThemePreferences(new Memory());
         prefs.edit().putString("name","Profile").putInt("wallpaper_source",1).apply();
-        for(int style=0;style<6;style++) {
-            prefs.edit().putInt("visual_style",style).putInt("glass_alpha",20+style*20)
+        for(int style=0;style<ThemeStyle.COUNT;style++) {
+            prefs.edit().putInt("visual_style",style).putInt("glass_alpha",20+style*10)
                     .putInt("avatar_shape",style%2).putBoolean("panel_transparency",style%2==0).apply();
         }
-        for(int style=5;style>=0;style--) {
+        for(int style=ThemeStyle.COUNT-1;style>=0;style--) {
             prefs.edit().putInt("visual_style",style).apply();
             assertEquals(style,ThemeStyle.id(prefs));
-            assertEquals(20+style*20,prefs.getInt("glass_alpha",0));
+            assertEquals(20+style*10,prefs.getInt("glass_alpha",0));
             assertEquals(style%2,prefs.getInt("avatar_shape",0));
             assertEquals(style%2==0,PanelTransparency.enabled(prefs));
             assertEquals("Profile",prefs.getString("name","")); assertEquals(1,prefs.getInt("wallpaper_source",0));
@@ -220,7 +263,7 @@ public class ThemePreferencesTest {
     }
     @Test public void solidPanelToggleCannotChangeDrawerPanelOrInnerCardOpacityInAnyStyle() {
         ThemePreferences prefs=new ThemePreferences(new Memory());
-        for(int style=0;style<6;style++) {
+        for(int style=0;style<ThemeStyle.COUNT;style++) {
             prefs.edit().putInt("visual_style",style).apply();
             for(int finish=0;finish<3;finish++) for(boolean focused:new boolean[]{false,true}) {
                 int glass=MaterialAppearance.alpha(finish,70,true,focused);
@@ -271,7 +314,7 @@ public class ThemePreferencesTest {
     }
     @Test public void defaultReferenceColoursDoNotMixTheFocusAccentIntoTheCardBase() {
         ThemePreferences prefs=new ThemePreferences(new Memory());
-        for(int style=2;style<6;style++) {
+        for(int style=2;style<ThemeStyle.COUNT;style++) {
             prefs.edit().putInt("visual_style",style).putInt("theme_name",0).apply();
             int base=ThemeStyle.baseTop(prefs); assertEquals(base,ThemeStyle.materialColor(prefs,base,false));
             prefs.edit().putInt("theme_name",3).putInt("custom_accent",0xffff0000).apply();

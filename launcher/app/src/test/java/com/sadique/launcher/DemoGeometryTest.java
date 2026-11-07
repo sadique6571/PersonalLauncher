@@ -5,7 +5,7 @@ import static org.junit.Assert.*;
 public class DemoGeometryTest {
     @Test public void everyDemoOutlineIsClosedAndInsideTheArtworkBounds() {
         Set<String> shapes=new HashSet<>();
-        for(int style=ThemeStyle.DUNE;style<=ThemeStyle.SAGE;style++) {
+        for(int style=ThemeStyle.DUNE;style<ThemeStyle.COUNT;style++) {
             float[][] outline=DemoGeometry.outline(style,320,123,16);
             assertEquals(0,(int)outline[0][0]); assertEquals(3,(int)outline[outline.length-1][0]);
             for(float[] segment:outline) for(int i=1;i<segment.length;i+=2) {
@@ -17,7 +17,7 @@ public class DemoGeometryTest {
         assertEquals(4,shapes.size());
     }
     @Test public void allCornerChoicesRemainDistinctForEachCardFamily() {
-        for(int style=2;style<=5;style++) {
+        for(int style=2;style<ThemeStyle.COUNT;style++) {
             Set<String> choices=new HashSet<>();
             for(int radius:new int[]{4,16,28}) choices.add(Arrays.deepToString(DemoGeometry.outline(style,260,100,radius)));
             assertEquals(3,choices.size());

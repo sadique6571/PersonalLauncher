@@ -38,7 +38,11 @@ final class ThemePreferences implements SharedPreferences {
     }
     private String prefix() { return ThemeStyle.prefix(ThemeStyle.id(base)); }
     private String key(String key) { return VISUAL.contains(key)?prefix()+key:key; }
-    private static boolean scoped(String key) { return key.startsWith(GLASS)||key.startsWith(CLASSIC)||key.startsWith("appearance.dune.")||key.startsWith("appearance.pearl.")||key.startsWith("appearance.cobalt.")||key.startsWith("appearance.sage."); }
+    private static boolean scoped(String key) {
+        for(int style=0;style<ThemeStyle.COUNT;style++)
+            if(key.startsWith(ThemeStyle.prefix(style))) return true;
+        return false;
+    }
     @Override public Map<String,?> getAll() {
         Map<String,?> snapshot=base.getAll(); Map<String,Object> all=new HashMap<>(snapshot);
         Object selected=snapshot.get("visual_style");
@@ -46,7 +50,7 @@ final class ThemePreferences implements SharedPreferences {
         for(String name:VISUAL) all.remove(name); // Do not export stale pre-migration appearance values.
         for(Map.Entry<String,?> entry:snapshot.entrySet())
             if(entry.getKey().startsWith(active)) all.put(entry.getKey().substring(active.length()),entry.getValue());
-        return all; // Retain all explicit namespaces so export/import preserves all four themes.
+        return all; // Retain all explicit namespaces so export/import preserves every theme.
     }
     @Override public String getString(String key,String fallback) { return base.getString(key(key),fallback); }
     @Override public Set<String> getStringSet(String key,Set<String> fallback) {
