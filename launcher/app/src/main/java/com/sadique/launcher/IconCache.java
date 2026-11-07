@@ -77,16 +77,21 @@ final class IconCache {
 
     void save(String pkg, long version, Bitmap card, int accent) {
         if (version == 0 || card == null) return;
-        File tmp = new File(dir, safe(pkg) + "_" + version + "_s" + logoSize + (mark?"_mark_v2":"") + ".tmp");
-        try (FileOutputStream out = new FileOutputStream(tmp)) {
-            if (!card.compress(Bitmap.CompressFormat.PNG, 100, out)) return;
-            out.flush();
-            File dest = file(pkg, version);
-            if (!tmp.renameTo(dest)) return;
+        File tmp = null;
+        try {
+            // Boot pre-warm and Home can save the same key concurrently.
+            tmp = File.createTempFile("artwork-", ".tmp", dir);
+            try (FileOutputStream out = new FileOutputStream(tmp)) {
+                if (!card.compress(Bitmap.CompressFormat.PNG, 100, out)) return;
+                out.flush();
+            }
+            if (!tmp.renameTo(file(pkg, version))) return;
             prefs.edit().putInt(accentKey(pkg, version), accent).apply();
             prune(pkg, version);
         } catch (Exception failed) {
-            tmp.delete();
+            // A failed cache write must not prevent the live icon from appearing.
+        } finally {
+            if (tmp != null) tmp.delete();
         }
     }
 

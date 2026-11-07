@@ -130,7 +130,7 @@ final class AppLibraryDialog {
     }
 
     private GradientDrawable surface(int color, int radius) {
-        if(ThemeStyle.custom(ThemePreferences.get(activity))) return TvGlassStyle.drawerCard(dp(radius),dp(1),false,ThemePreferences.get(activity));
+        if(radius>8 && ThemeStyle.custom(ThemePreferences.get(activity))) return TvGlassStyle.drawerCard(dp(radius),dp(1),false,ThemePreferences.get(activity));
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(color);
         bg.setCornerRadius(dp(radius));
