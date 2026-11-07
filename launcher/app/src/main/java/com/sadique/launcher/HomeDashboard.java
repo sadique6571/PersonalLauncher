@@ -22,12 +22,10 @@ final class HomeDashboard {
         AlertDialog panel = GlassSettings.panel(host, TvGlassStyle.enabled(ThemePreferences.get(host)) ? "Control Center" : host.getString(R.string.h_dashboard), rows, true);
         rows.addView(GlassSettings.label(host, network, 12, 0xffb5cadd));
         section(host, rows, R.string.h_quick_settings);
-        pair(host, rows, panel, actions, R.string.h_wifi, R.drawable.ic_wifi, WIFI,
-                R.string.h_bluetooth, android.R.drawable.stat_sys_data_bluetooth, BLUETOOTH);
-        pair(host, rows, panel, actions, R.string.h_inputs, R.drawable.ic_input, INPUTS,
-                R.string.h_display, R.drawable.ic_picture, DISPLAY);
-        pair(host, rows, panel, actions, R.string.h_sound, R.drawable.ic_volume, SOUND,
-                R.string.h_screensaver, R.drawable.ic_picture, SCREENSAVER);
+        rows.addView(new ControlCenterGrid(host, action -> {
+            if (!actions.keepPanel(action)) panel.dismiss();
+            actions.open(action);
+        }));
         section(host, rows, R.string.h_personalize);
         row(host, rows, R.string.h_launcher_settings, R.string.h_layout_hint, R.drawable.ic_palette, () -> actions.open(SETTINGS));
         if (!floating) row(host, rows, R.string.h_single_identity, 0, R.drawable.ic_person, () -> { panel.dismiss(); actions.open(IDENTITY); });
