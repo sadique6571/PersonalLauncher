@@ -1930,7 +1930,14 @@ public final class PersonalHomeActivity extends Activity {
             red+=(pixel>>16)&255; green+=(pixel>>8)&255; blue+=pixel&255;
         }
         int background=MaterialAppearance.mix(Color.rgb(red/9,green/9,blue/9),0xff051327,shade/255f);
-        int ink=ThemeStyle.wallpaperClockInk(background,darkInk); boolean changed=ink!=wallpaperClockInk; wallpaperClockInk=ink; return changed;
+        // A white cloud or bright patch must not turn an otherwise colourful photo's clock black.
+        boolean whiteWallpaper=true;
+        for(int row=0;row<3 && whiteWallpaper;row++) for(int col=0;col<3;col++) {
+            int pixel=photo.getPixel(Math.min(photo.getWidth()-1,Math.round(photo.getWidth()*(.15f+.35f*col))),
+                    Math.min(photo.getHeight()-1,Math.round(photo.getHeight()*(.15f+.35f*row))));
+            if(ThemeStyle.wallpaperClockInk(pixel,darkInk)==0xffffffff) { whiteWallpaper=false; break; }
+        }
+        int ink=whiteWallpaper?ThemeStyle.wallpaperClockInk(background,darkInk):0xffffffff; boolean changed=ink!=wallpaperClockInk; wallpaperClockInk=ink; return changed;
     }
 
     private void adaptTextColors() {
