@@ -84,7 +84,7 @@ public final class PersonalHomeActivity extends Activity {
     private Bitmap avatarBitmap;
     private Bitmap customWallpaper;
     private ClockSampleKey contrastKey;
-    private int pearlClockInk=0xffffffff;
+    private int wallpaperClockInk=0xffffffff;
     private LiquidBackdrop liquidBackdrop, headerBackdrop;
     private ContinueWatchingView continueWatching;
     private SkyClock sky;
@@ -339,7 +339,7 @@ public final class PersonalHomeActivity extends Activity {
     private android.widget.ImageButton iconAction(String title, int resource, Runnable action) {
         android.widget.ImageButton icon = new android.widget.ImageButton(this);
         icon.setImageDrawable(TvSymbols.icon(this, resource));
-        icon.setColorFilter(ThemeStyle.foreground(prefs));
+        icon.setColorFilter(HeaderAppearance.foreground(prefs));
         icon.setContentDescription(title);
         icon.setTooltipText(title);
         boolean glassIcons = TvGlassStyle.enabled(prefs);
@@ -353,7 +353,7 @@ public final class PersonalHomeActivity extends Activity {
         icon.setOnFocusChangeListener((v, focus) -> {
             if (glassIcons) {
                 // Remote focus is visible through scale and colour, never a surrounding box.
-                icon.setColorFilter(focus ? accentColor() : ThemeStyle.foreground(prefs));
+                icon.setColorFilter(focus ? ThemeStyle.focusAccent(prefs) : HeaderAppearance.foreground(prefs));
                 icon.setScaleX(focus ? 1.14f : 1f); icon.setScaleY(focus ? 1.14f : 1f);
             } else v.setBackground(toolbarSurface(focus));
         });
@@ -391,6 +391,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void buildHome() {
+        HeaderAppearance.clockDefaults(prefs);
         if (liquidBackdrop != null) { liquidBackdrop.close(); liquidBackdrop=null; }
         if (headerBackdrop != null) { headerBackdrop.close(); headerBackdrop=null; }
         long buildMs = android.os.SystemClock.elapsedRealtime();
@@ -576,7 +577,7 @@ public final class PersonalHomeActivity extends Activity {
             sky.clockX = position[0] - origin[0] + time.getWidth() / 2f;
             sky.clockY = position[1] - origin[1] + time.getHeight() / 2f;
             sky.invalidate();
-            if(updatePearlClockInk()) adaptVisibleTextColors();
+            if(updateWallpaperClockInk()) adaptVisibleTextColors();
         });
         appHeading = text("Your apps", prefs.getInt("focus_title_size", tv ? 32 : 26), TEXT);
         appHeading.setSingleLine(true);
@@ -850,7 +851,7 @@ public final class PersonalHomeActivity extends Activity {
     private void setHomeWeather(String value) {
         homeWeather.setText(ThemeStyle.custom(prefs)?value.replace(" · "," "):value);
         if(ThemeStyle.custom(prefs)&&!"Unavailable".equals(value)) {
-            StatusWeatherGlyph glyph=new StatusWeatherGlyph(value,Calendar.getInstance().get(Calendar.HOUR_OF_DAY),ThemeStyle.foreground(prefs));
+            StatusWeatherGlyph glyph=new StatusWeatherGlyph(value,Calendar.getInstance().get(Calendar.HOUR_OF_DAY),HeaderAppearance.foreground(prefs));
             glyph.setBounds(0,0,dp(22),dp(22)); homeWeather.setCompoundDrawablePadding(dp(6));
             homeWeather.setCompoundDrawablesRelative(glyph,null,null,null);
         } else homeWeather.setCompoundDrawablesRelative(null,null,null,null);
@@ -874,11 +875,11 @@ public final class PersonalHomeActivity extends Activity {
         networkStatus.setContentDescription(online?"Network connected":caps==null?"Network disconnected":"Network without internet");
         networkStatus.setTooltipText(online ? (wifi ? "Wi-Fi · Internet available" : "Internet available") : "No internet");
         int color = online ? 0xff59e493 : 0xffff6c78;
-        networkStatus.setTextColor(ThemeStyle.custom(prefs)?ThemeStyle.muted(prefs):color);
+        networkStatus.setTextColor(ThemeStyle.custom(prefs)?HeaderAppearance.foreground(prefs):color);
         int iconId = wifi || caps == null ? R.drawable.ic_wifi
                 : caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ? R.drawable.ic_ethernet : R.drawable.ic_internet;
         android.graphics.drawable.Drawable icon = TvSymbols.icon(this, iconId);
-        icon.setTint(ThemeStyle.custom(prefs)?ThemeStyle.muted(prefs):color);
+        icon.setTint(ThemeStyle.custom(prefs)?HeaderAppearance.foreground(prefs):color);
         icon.setBounds(0, 0, dp(28), dp(24));
         networkStatus.setCompoundDrawables(icon, null, null, null);
         networkStatus.setContentDescription(online ? "Internet available. Open Wi-Fi settings" : "No validated internet access. Open Wi-Fi settings");
@@ -1739,7 +1740,7 @@ public final class PersonalHomeActivity extends Activity {
             prefs.edit().putBoolean("material_defaults_v1",true).putInt("tile_corners",style==ThemeStyle.DUNE?0:1)
                     .putInt("phone_columns",2).putInt("tv_columns",4)
                     .putString("theme_mode",ThemeStyle.light(prefs)?"light":"dark")
-                    .putBoolean("clock_shadow",!ThemeStyle.light(prefs)).apply();
+                    .putBoolean("clock_shadow",true).apply();
         }
         GlassSettings.dismiss(this);
         buildHomeSoon();
@@ -1897,18 +1898,22 @@ public final class PersonalHomeActivity extends Activity {
         if (label == null) return;
         label.setTextColor(ThemeStyle.custom(prefs)?(muted?ThemeStyle.muted(prefs):ThemeStyle.foreground(prefs)):(muted ? 0xE6FFFFFF : 0xFFFFFFFF));
         boolean clockLabel=label==time || label==ampm || label==date;
-        if(clockLabel && ThemeStyle.light(prefs)) label.setTextColor(pearlClockInk);
+        boolean headerLabel=label==userName || label==greeting || label==homeWeather || label==networkStatus;
+        if(headerLabel) label.setTextColor(HeaderAppearance.foreground(prefs));
+        if(clockLabel) label.setTextColor(wallpaperClockInk);
         if(clockLabel && !prefs.getBoolean("clock_shadow",true)) label.setShadowLayer(0,0,0,Color.TRANSPARENT);
-        else if(ThemeStyle.light(prefs)) label.setShadowLayer(dp(2),0,dp(1),clockLabel && pearlClockInk==0xffffffff?0xcc000000:0xccffffff);
-        else label.setShadowLayer(dp(5),0,dp(2),0xe6000000);
+        else {
+            boolean darkInk=clockLabel?wallpaperClockInk!=0xffffffff:headerLabel && ThemeStyle.light(prefs) && headerBgMode()!=0;
+            label.setShadowLayer(dp(clockLabel?5:2),0,dp(clockLabel?2:1),darkInk?0x99ffffff:0xe6000000);
+        }
     }
 
     /** Nine cached photo samples choose clock ink; the photo itself is never tinted for text contrast. */
-    private boolean updatePearlClockInk() {
-        if(!ThemeStyle.light(prefs) || sky==null) { contrastKey=null; return false; }
+    private boolean updateWallpaperClockInk() {
+        if(sky==null) { contrastKey=null; return false; }
         Bitmap photo=sky.currentPicture();
         if(photo==null || photo.isRecycled()) {
-            contrastKey=null; boolean changed=pearlClockInk!=0xffffffff; pearlClockInk=0xffffffff; return changed;
+            contrastKey=null; boolean changed=wallpaperClockInk!=0xffffffff; wallpaperClockInk=0xffffffff; return changed;
         }
         if(sky.getWidth()<=0 || sky.getHeight()<=0) return false;
         float y=sky.clockY>=0?sky.clockY:dp(150),x=sky.clockX>=0?sky.clockX:sky.getWidth()/2f;
@@ -1916,7 +1921,7 @@ public final class PersonalHomeActivity extends Activity {
         int px=Math.max(0,Math.min(photo.getWidth()-1,Math.round((x-frame[0])/(frame[2]-frame[0])*photo.getWidth())));
         int py=Math.max(0,Math.min(photo.getHeight()-1,Math.round((y-frame[1])/(frame[3]-frame[1])*photo.getHeight())));
         int shade=HomeAppearance.shade(prefs.getString("theme_mode","light"),sky.minute,prefs.getInt("background_dim",0));
-        int darkInk=ThemeStyle.foreground(prefs);
+        int darkInk=0xff11191c;
         if(contrastKey!=null && contrastKey.matches(photo,px,py,shade,darkInk)) return false;
         contrastKey=new ClockSampleKey(photo,px,py,shade,darkInk);
         int red=0,green=0,blue=0,dx=Math.max(1,photo.getWidth()/30),dy=Math.max(1,photo.getHeight()/30);
@@ -1925,13 +1930,20 @@ public final class PersonalHomeActivity extends Activity {
             red+=(pixel>>16)&255; green+=(pixel>>8)&255; blue+=pixel&255;
         }
         int background=MaterialAppearance.mix(Color.rgb(red/9,green/9,blue/9),0xff051327,shade/255f);
-        int ink=ThemeStyle.wallpaperClockInk(background,darkInk); boolean changed=ink!=pearlClockInk; pearlClockInk=ink; return changed;
+        // A white cloud or bright patch must not turn an otherwise colourful photo's clock black.
+        boolean whiteWallpaper=true;
+        for(int row=0;row<3 && whiteWallpaper;row++) for(int col=0;col<3;col++) {
+            int pixel=photo.getPixel(Math.min(photo.getWidth()-1,Math.round(photo.getWidth()*(.15f+.35f*col))),
+                    Math.min(photo.getHeight()-1,Math.round(photo.getHeight()*(.15f+.35f*row))));
+            if(ThemeStyle.wallpaperClockInk(pixel,darkInk)==0xffffffff) { whiteWallpaper=false; break; }
+        }
+        int ink=whiteWallpaper?ThemeStyle.wallpaperClockInk(background,darkInk):0xffffffff; boolean changed=ink!=wallpaperClockInk; wallpaperClockInk=ink; return changed;
     }
 
     private void adaptTextColors() {
         if (liquidBackdrop != null) liquidBackdrop.refresh();
         if (headerBackdrop != null) headerBackdrop.refresh();
-        updatePearlClockInk();
+        updateWallpaperClockInk();
         adaptVisibleTextColors();
     }
 

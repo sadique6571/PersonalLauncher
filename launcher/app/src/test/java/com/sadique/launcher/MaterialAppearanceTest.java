@@ -34,14 +34,18 @@ public class MaterialAppearanceTest {
             assertNotEquals(MaterialAppearance.tint(base,0xffff0000,true),red);
         }
     }
-    @Test public void pearlClockCanChangeInkWithoutChangingTheWallpaper() {
-        assertEquals(0xffffffff,ThemeStyle.wallpaperClockInk(0xff10202b));
-        assertEquals(0xff11191c,ThemeStyle.wallpaperClockInk(0xfff6e9d4));
-        for(int value=0;value<=255;value+=15) {
-            int background=0xff000000|(value<<16)|(value<<8)|value;
-            double a=ThemeStyle.luminance(background),b=ThemeStyle.luminance(ThemeStyle.wallpaperClockInk(background));
-            assertTrue((Math.max(a,b)+.05)/(Math.min(a,b)+.05)>3);
-        }
+    @Test public void clockStaysWhiteExceptOnNearlyWhiteWallpaper() {
+        for(int background:new int[]{0xff10202b,0xff808080,0xffdddddd,0xfff6e9d4,0xffeef3e7,0xffffff00,0xffe8f7ff})
+            assertEquals(0xffffffff,ThemeStyle.wallpaperClockInk(background));
+        assertEquals(0xffffffff,ThemeStyle.wallpaperClockInk(0xfff4f4f4));
+        assertEquals(0xff11191c,ThemeStyle.wallpaperClockInk(0xfff5f5f5));
+        assertEquals(0xff11191c,ThemeStyle.wallpaperClockInk(0xffffffff));
+    }
+    @Test public void headerAlwaysHasAReadableThemeFoundation() {
+        assertEquals(224,HeaderAppearance.alpha(0));
+        assertEquals(224,HeaderAppearance.alpha(100));
+        assertEquals(240,HeaderAppearance.alpha(240));
+        assertEquals(255,HeaderAppearance.alpha(255));
     }
     @Test public void compactClockStillHasThreeDifferentUserSizes() {
         assertTrue(HomeGeometry.clockSize(36,true)<HomeGeometry.clockSize(44,true));

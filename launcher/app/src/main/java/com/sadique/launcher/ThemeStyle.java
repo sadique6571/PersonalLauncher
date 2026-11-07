@@ -71,8 +71,9 @@ final class ThemeStyle {
     }
     static int wallpaperClockInk(int background) { return wallpaperClockInk(background,0xff11191c); }
     static int wallpaperClockInk(int background,int darkInk) {
-        double value=luminance(background),dark=luminance(darkInk);
-        return (value+.05)/(dark+.05)>=1.05/(value+.05)?darkInk:0xffffffff;
+        // Keep the requested white clock on normal photos, including pale skies and beige.
+        return ((background>>16)&255)>=245 && ((background>>8)&255)>=245 && (background&255)>=245
+                ? darkInk : 0xffffffff;
     }
     static int contentColor(SharedPreferences prefs,int color) {
         if(!light(prefs)) return color;

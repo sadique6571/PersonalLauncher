@@ -40,12 +40,18 @@ final class TvGlassStyle {
     static GradientDrawable header(int radius,int strokeWidth,SharedPreferences prefs,boolean frosted) {
         if(ThemeStyle.custom(prefs)) return new DemoHeaderSurface(prefs,frosted,radius,strokeWidth);
         int finish=frosted ? 2 : finish(prefs), intensity=intensity(prefs);
-        if (enabled(prefs)) return surface(radius,strokeWidth,false,prefs,true,false,finish);
+        if (enabled(prefs)) {
+            GradientDrawable header=surface(radius,strokeWidth,false,prefs,true,false,finish);
+            int alpha=HeaderAppearance.alpha(PanelTransparency.alpha(GlassTransparency.tintAlpha(finish,intensity),prefs,false));
+            header.setColors(new int[]{(alpha<<24)|(tinted(0xff132539,prefs)&0xffffff),
+                    (alpha<<24)|(tinted(0xff09182a,prefs)&0xffffff)});
+            return header;
+        }
         GlassSurface shape=new GlassSurface(strokeWidth,edge(prefs));
-        int alpha=GlassTransparency.tintAlpha(finish,intensity);
+        int alpha=HeaderAppearance.alpha(PanelTransparency.alpha(GlassTransparency.tintAlpha(finish,intensity),prefs,false));
         shape.setColors(new int[]{
                 (PanelTransparency.alpha(alpha,prefs,false)<<24) | (tinted(0xff132539,prefs)&0xffffff),
-                (PanelTransparency.alpha(Math.max(0,alpha-12),prefs,false)<<24) | (tinted(0xff09182a,prefs)&0xffffff)});
+                (alpha<<24) | (tinted(0xff09182a,prefs)&0xffffff)});
         shape.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
         shape.backdropOpacity(GlassTransparency.backdropAlpha(finish,intensity));
         shape.setCornerRadius(radius); return shape;

@@ -10,7 +10,7 @@ final class ThemePreferences implements SharedPreferences {
     private static final String GLASS="appearance.glass.", CLASSIC="appearance.classic.";
     private static final Set<String> VISUAL=new HashSet<>(Arrays.asList(
             "demo_defaults_v1","app_label_size","material_defaults_v1","theme_name","custom_accent","app_font","glass_alpha","glass_finish","glass_edge","panel_transparency",
-            "clock_size","clock_style","clock_font","clock_align","time_24h","clock_seconds","clock_glow","clock_shadow","hide_clock",
+            "clock_size","clock_style","clock_font","clock_align","time_24h","clock_seconds","clock_glow","clock_shadow","clock_wallpaper_v2","hide_clock",
             "hide_greeting","avatar_shape","header_bg_mode","header_bg","header_blur","header_glass_v2",
             "tv_columns","phone_columns","large_tiles","tile_corners","tile_spacing","logo_size","focus_border","focus_title_size","focus_glow","app_entrance",
             "background_dim","bottom_shade","theme_mode","daynight_smooth","row_spacing","banner_poster_size","banner_autoscroll",

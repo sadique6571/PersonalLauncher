@@ -11,7 +11,7 @@ final class StatusWeatherGlyph extends Drawable {
     }
     @Override public void draw(Canvas c) {
         int save=c.save(); Rect b=getBounds(); c.translate(b.left,b.top); c.scale(b.width()/24f,b.height()/24f);
-        ink.setColor(kind==2?color:0xffedb847); ink.setStyle(Paint.Style.FILL);
+        ink.setColor(color); ink.setStyle(Paint.Style.FILL);
         if(kind==1) c.drawPath(moon,ink);
         else if(kind==2) { c.drawCircle(8,13,5,ink); c.drawCircle(13,10,6,ink); c.drawCircle(18,14,4,ink); c.drawRect(7,13,19,18,ink); }
         else { c.drawCircle(12,12,5,ink); ink.setStrokeWidth(1.7f); for(int i=0;i<8;i++) { double a=i*Math.PI/4; c.drawLine(12+(float)Math.cos(a)*8,12+(float)Math.sin(a)*8,12+(float)Math.cos(a)*11,12+(float)Math.sin(a)*11,ink); } }

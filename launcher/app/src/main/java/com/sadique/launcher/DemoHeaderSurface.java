@@ -5,12 +5,17 @@ import android.graphics.drawable.GradientDrawable;
 /** Pearl's shaped porcelain bar, Cobalt's profile grooves, and open Dune/Sage headers. */
 final class DemoHeaderSurface extends GlassSurface {
     private final int style,accent,alpha; private final Paint paint=new Paint(3),edge=new Paint(3);
+    private final GradientDrawable foundation=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0,0});
     private final Path shape=new Path(); private final GradientDrawable frost; private Shader pearlFill; private int width=-1,height=-1;
     DemoHeaderSurface(SharedPreferences prefs,boolean frosted,int radius,int stroke) {
         super(stroke,0);
         style=ThemeStyle.id(prefs); accent=ThemeStyle.focusAccent(prefs);
         alpha=PanelTransparency.alpha(MaterialAppearance.alpha(TvGlassStyle.finish(prefs),TvGlassStyle.intensity(prefs),false,false),prefs,false);
         frost=frosted?new MaterialSurface(radius,stroke,false,prefs,false,2):null;
+        int support=HeaderAppearance.alpha(alpha);
+        foundation.setColors(new int[]{(support<<24)|(ThemeStyle.materialColor(prefs,ThemeStyle.baseTop(prefs),false)&0xffffff),
+                (support<<24)|(ThemeStyle.materialColor(prefs,ThemeStyle.baseBottom(prefs),false)&0xffffff)});
+        foundation.setCornerRadius(radius);
         setColor(Color.TRANSPARENT); edge.setStyle(Paint.Style.STROKE); edge.setStrokeWidth(1);
     }
     @Override void backdrop(Bitmap image,int w,int h,int x,int y) {
@@ -19,6 +24,7 @@ final class DemoHeaderSurface extends GlassSurface {
     @Override public void draw(Canvas canvas) {
         Rect b=getBounds(); int w=b.width(),h=b.height(); int save=canvas.save(); canvas.translate(b.left,b.top);
         if(frost!=null) { frost.setBounds(0,0,w,h); frost.draw(canvas); }
+        foundation.setBounds(0,0,w,h); foundation.setAlpha(getAlpha()); foundation.draw(canvas);
         if(style==ThemeStyle.PEARL) {
             if(width!=w||height!=h) {
                 width=w; height=h; shape.reset(); shape.moveTo(0,0); shape.lineTo(w,0); shape.lineTo(w,h*.72f);

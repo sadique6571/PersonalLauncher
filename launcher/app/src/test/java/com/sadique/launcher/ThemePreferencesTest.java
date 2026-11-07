@@ -6,6 +6,33 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class ThemePreferencesTest {
+    @Test public void wallpaperClockShadowMigrationIsOncePerTheme() {
+        ThemePreferences prefs=new ThemePreferences(new Memory());
+        for(int style=0;style<=5;style++) {
+            prefs.edit().putInt("visual_style",style).putBoolean("clock_shadow",false).apply();
+            HeaderAppearance.clockDefaults(prefs);
+            assertTrue(prefs.getBoolean("clock_shadow",false));
+            prefs.edit().putBoolean("clock_shadow",false).apply();
+            HeaderAppearance.clockDefaults(prefs);
+            assertFalse(prefs.getBoolean("clock_shadow",true));
+        }
+    }
+    @Test public void themeHeaderInkSurvivesDarkAndWhiteWallpaper() {
+        ThemePreferences prefs=new ThemePreferences(new Memory());
+        for(int style=0;style<=5;style++) {
+            prefs.edit().putInt("visual_style",style).putInt("header_bg_mode",1).putBoolean("header_glass_v2",true).apply();
+            for(int wallpaper:new int[]{0xff000000,0xffffffff}) {
+                int[] bases=style>=2?new int[]{ThemeStyle.baseTop(prefs),ThemeStyle.baseBottom(prefs)}:new int[]{0xff132539,0xff09182a};
+                for(int base:bases) {
+                    int composite=MaterialAppearance.mix(wallpaper,base,HeaderAppearance.alpha(0)/255f);
+                    double a=ThemeStyle.luminance(composite),b=ThemeStyle.luminance(HeaderAppearance.foreground(prefs));
+                    assertTrue("style "+style,(Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5);
+                }
+            }
+            prefs.edit().putInt("header_bg_mode",0).apply();
+            assertEquals(0xffffffff,HeaderAppearance.foreground(prefs));
+        }
+    }
     @Test public void migrationPreservesActiveAppearanceAndDoesNotCopyItToOtherTheme() {
         for(boolean active:new boolean[]{true,false}) {
             Memory base=new Memory(); base.edit().putBoolean("tv_glass_style",active).putInt("glass_alpha",33).putString("weather_city","Okara").apply();
@@ -214,7 +241,8 @@ public class ThemePreferencesTest {
         prefs.edit().putInt("visual_style",ThemeStyle.SAGE).apply(); ThemeStyle.demoDefaults(prefs);
         assertTrue(ThemeStyle.light(prefs)); assertEquals(70,prefs.getInt("glass_alpha",70));
         assertEquals(0xff195c36,ThemeStyle.accent(prefs));
-        assertEquals(ThemeStyle.foreground(prefs),ThemeStyle.wallpaperClockInk(0xffeef3e7,ThemeStyle.foreground(prefs)));
+        assertEquals(0xffffffff,ThemeStyle.wallpaperClockInk(0xffeef3e7,ThemeStyle.foreground(prefs)));
+        assertEquals(ThemeStyle.foreground(prefs),ThemeStyle.wallpaperClockInk(0xffffffff,ThemeStyle.foreground(prefs)));
         assertEquals(0xffffffff,ThemeStyle.wallpaperClockInk(0xff10251a,ThemeStyle.foreground(prefs)));
         double a=ThemeStyle.luminance(ThemeStyle.baseTop(prefs)),b=ThemeStyle.luminance(ThemeStyle.foreground(prefs));
         assertTrue((a+.05)/(b+.05)>7);
