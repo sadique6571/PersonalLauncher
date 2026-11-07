@@ -4,12 +4,12 @@ import android.graphics.*;
 import android.graphics.drawable.GradientDrawable;
 /** Pearl's shaped porcelain bar, Cobalt's profile grooves, and open Dune/Sage headers. */
 final class DemoHeaderSurface extends GlassSurface {
-    private final int style,accent,alpha; private final Paint paint=new Paint(3),edge=new Paint(3);
+    private final int style,accent,alpha,titleColor; private final Paint paint=new Paint(3),edge=new Paint(3);
     private final GradientDrawable foundation=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0,0});
     private final Path shape=new Path(); private final GradientDrawable frost; private Shader pearlFill; private int width=-1,height=-1;
     DemoHeaderSurface(SharedPreferences prefs,boolean frosted,int radius,int stroke) {
         super(stroke,0);
-        style=ThemeStyle.id(prefs); accent=ThemeStyle.focusAccent(prefs);
+        style=ThemeStyle.id(prefs); accent=ThemeStyle.focusAccent(prefs); titleColor=ThemeStyle.headerTitleColor(prefs);
         alpha=PanelTransparency.alpha(MaterialAppearance.alpha(TvGlassStyle.finish(prefs),TvGlassStyle.intensity(prefs),false,false),prefs,false);
         frost=frosted?new MaterialSurface(radius,stroke,false,prefs,false,2):null;
         int support=HeaderAppearance.alpha(alpha);
@@ -50,7 +50,7 @@ final class DemoHeaderSurface extends GlassSurface {
             shape.reset(); shape.moveTo(w-h*.25f,0); shape.lineTo(w,h*.25f); shape.lineTo(w,0); shape.close(); canvas.drawPath(shape,paint);
         }
         if(w>h*8) {
-            paint.setShader(null); paint.setAlpha(getAlpha()); paint.setColor(style==ThemeStyle.DUNE?accent:style==ThemeStyle.COBALT?0xffd5e2ff:0xff183126);
+            paint.setShader(null); paint.setAlpha(getAlpha()); paint.setColor(titleColor);
             paint.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL)); paint.setTextSize(h*.17f); paint.setTextAlign(Paint.Align.CENTER);
             String name=style==ThemeStyle.DUNE?"DUNE LOOM":style==ThemeStyle.PEARL?"PEARL CURRENT":style==ThemeStyle.COBALT?"COBALT RAIL":style==ThemeStyle.PINE?"PINE MIST":style==ThemeStyle.AMBER?"AMBER NIGHT":"SAGE FOLD";
             canvas.drawText(name,w/2f,h*.2f,paint);

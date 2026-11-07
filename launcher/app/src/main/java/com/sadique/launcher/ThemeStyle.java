@@ -6,8 +6,9 @@ import android.content.SharedPreferences;
 final class ThemeStyle {
     static final int GLASS=0, CLASSIC=1, DUNE=2, PEARL=3, COBALT=4, SAGE=5, PINE=6, AMBER=7;
     private static final String[] PREFIXES={"appearance.glass.","appearance.classic.","appearance.dune.","appearance.pearl.","appearance.cobalt.","appearance.sage.","appearance.pine.","appearance.amber."};
+    static final int COUNT=PREFIXES.length;
     private ThemeStyle() { }
-    static int clamp(int style) { return Math.max(0,Math.min(7,style)); }
+    static int clamp(int style) { return Math.max(0,Math.min(COUNT-1,style)); }
     static int id(SharedPreferences prefs) {
         return clamp(prefs.getInt("visual_style",prefs.getBoolean("tv_glass_style",true)?GLASS:CLASSIC));
     }
@@ -17,6 +18,9 @@ final class ThemeStyle {
     static boolean light(SharedPreferences prefs) { return pearl(prefs)||id(prefs)==SAGE; }
     static int foreground(SharedPreferences prefs) { return id(prefs)==SAGE?0xff0d2b1a:pearl(prefs)?0xff242d30:id(prefs)==DUNE?0xffffedd8:id(prefs)==PINE?0xffeafff2:id(prefs)==AMBER?0xfffff3dd:0xfff1f5fb; }
     static int muted(SharedPreferences prefs) { return id(prefs)==SAGE?0xff31513c:pearl(prefs)?0xff4e6264:id(prefs)==DUNE?0xffd3af8e:id(prefs)==PINE?0xffa8cbb8:id(prefs)==AMBER?0xffd8b98a:0xffa4bcd6; }
+    static int headerTitleColor(SharedPreferences prefs) {
+        return id(prefs)==DUNE?focusAccent(prefs):id(prefs)==COBALT?0xffd5e2ff:foreground(prefs);
+    }
     static int accent(SharedPreferences prefs) {
         int fallback=id(prefs)==COBALT?0xffffd92f:id(prefs)==SAGE?0xff195c36:id(prefs)==DUNE?0xffedab75:id(prefs)==PEARL?0xff006d72:id(prefs)==PINE?0xff8fd0b2:id(prefs)==AMBER?0xfff5b942:0xff40d9ff;
         switch(prefs.getInt("theme_name",0)) {
