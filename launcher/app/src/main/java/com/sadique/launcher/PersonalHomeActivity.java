@@ -83,8 +83,8 @@ public final class PersonalHomeActivity extends Activity {
     private ImageView avatar;
     private Bitmap avatarBitmap;
     private Bitmap customWallpaper;
-    private Bitmap contrastPhoto;
-    private int contrastX=-1,contrastY=-1,contrastShade=-1,pearlClockInk=0xffffffff;
+    private ClockSampleKey contrastKey;
+    private int pearlClockInk=0xffffffff;
     private LiquidBackdrop liquidBackdrop, headerBackdrop;
     private ContinueWatchingView continueWatching;
     private SkyClock sky;
@@ -885,7 +885,7 @@ public final class PersonalHomeActivity extends Activity {
         refreshHomeWeather();
     }
 
-    private int appGeneration;
+    private volatile int appGeneration;
     private void loadApps() {
         if (carriedApp != null) { carriedApp = null; moveOrder = null; }
         int generation = ++appGeneration;
@@ -928,11 +928,11 @@ public final class PersonalHomeActivity extends Activity {
 
     /** Only bound/visible tiles request artwork. Serial work and generation checks bound concurrency. */
     private void requestAppIcon(App app) {
-        if (app.iconReady || app.iconLoading || isDestroyed()) return;
-        app.iconLoading = true;
+        if (app.iconReady || app.iconRequest.pending(appGeneration) || isDestroyed()) return;
         int generation = appGeneration;
+        app.iconRequest.begin(generation);
         appWorker.execute(() -> {
-            if (generation != appGeneration || isDestroyed()) { app.iconLoading = false; return; }
+            if (generation != appGeneration || isDestroyed()) return;
             String pkg = app.info.activityInfo.packageName;
             try {
                 IconCache cache = new IconCache(this);
@@ -952,13 +952,13 @@ public final class PersonalHomeActivity extends Activity {
                 }
                 Bitmap finished = card; int finishedAccent = accent;
                 handler.post(() -> {
-                    app.iconLoading = false;
+                    if (!app.iconRequest.finish(generation)) return;
                     if (!isDestroyed() && generation == appGeneration) {
                         updateTileIcon(pkg, new android.graphics.drawable.BitmapDrawable(getResources(), finished), finishedAccent);
                         trimAppIcons();
                     }
                 });
-            } catch (RuntimeException removed) { handler.post(() -> app.iconLoading = false); }
+            } catch (RuntimeException removed) { handler.post(() -> app.iconRequest.finish(generation)); }
         });
     }
 
@@ -1017,7 +1017,7 @@ public final class PersonalHomeActivity extends Activity {
         android.graphics.drawable.Drawable icon;
         int accent;
         boolean iconReady;
-        volatile boolean iconLoading;
+        final ArtworkRequestState iconRequest = new ArtworkRequestState();
         App(String name, ResolveInfo info, android.graphics.drawable.Drawable icon, int accent, boolean iconReady) {
             this.name = name; this.info = info; this.icon = icon; this.accent = accent; this.iconReady = iconReady;
         }
@@ -1733,7 +1733,6 @@ public final class PersonalHomeActivity extends Activity {
         ThemeStyle.demoDefaults(prefs,tv);
         boolean reload=priorLogo!=prefs.getInt("logo_size",1) || priorMark!=ThemeStyle.custom(prefs);
         if(cachedApps!=null) for(App app:cachedApps) {
-            app.iconLoading=false;
             if(reload) { app.iconReady=false; app.icon=null; }
         }
         if(ThemeStyle.custom(prefs) && !prefs.getBoolean("material_defaults_v1",false)) {
@@ -1906,10 +1905,10 @@ public final class PersonalHomeActivity extends Activity {
 
     /** Nine cached photo samples choose clock ink; the photo itself is never tinted for text contrast. */
     private boolean updatePearlClockInk() {
-        if(!ThemeStyle.light(prefs) || sky==null) { contrastPhoto=null; return false; }
+        if(!ThemeStyle.light(prefs) || sky==null) { contrastKey=null; return false; }
         Bitmap photo=sky.currentPicture();
         if(photo==null || photo.isRecycled()) {
-            contrastPhoto=null; boolean changed=pearlClockInk!=0xffffffff; pearlClockInk=0xffffffff; return changed;
+            contrastKey=null; boolean changed=pearlClockInk!=0xffffffff; pearlClockInk=0xffffffff; return changed;
         }
         if(sky.getWidth()<=0 || sky.getHeight()<=0) return false;
         float y=sky.clockY>=0?sky.clockY:dp(150),x=sky.clockX>=0?sky.clockX:sky.getWidth()/2f;
@@ -1917,15 +1916,16 @@ public final class PersonalHomeActivity extends Activity {
         int px=Math.max(0,Math.min(photo.getWidth()-1,Math.round((x-frame[0])/(frame[2]-frame[0])*photo.getWidth())));
         int py=Math.max(0,Math.min(photo.getHeight()-1,Math.round((y-frame[1])/(frame[3]-frame[1])*photo.getHeight())));
         int shade=HomeAppearance.shade(prefs.getString("theme_mode","light"),sky.minute,prefs.getInt("background_dim",0));
-        if(contrastPhoto==photo && contrastX==px && contrastY==py && contrastShade==shade) return false;
-        contrastPhoto=photo; contrastX=px; contrastY=py; contrastShade=shade;
+        int darkInk=ThemeStyle.foreground(prefs);
+        if(contrastKey!=null && contrastKey.matches(photo,px,py,shade,darkInk)) return false;
+        contrastKey=new ClockSampleKey(photo,px,py,shade,darkInk);
         int red=0,green=0,blue=0,dx=Math.max(1,photo.getWidth()/30),dy=Math.max(1,photo.getHeight()/30);
         for(int row=-1;row<=1;row++) for(int col=-1;col<=1;col++) {
             int pixel=photo.getPixel(Math.max(0,Math.min(photo.getWidth()-1,px+col*dx)),Math.max(0,Math.min(photo.getHeight()-1,py+row*dy)));
             red+=(pixel>>16)&255; green+=(pixel>>8)&255; blue+=pixel&255;
         }
         int background=MaterialAppearance.mix(Color.rgb(red/9,green/9,blue/9),0xff051327,shade/255f);
-        int ink=ThemeStyle.wallpaperClockInk(background,ThemeStyle.foreground(prefs)); boolean changed=ink!=pearlClockInk; pearlClockInk=ink; return changed;
+        int ink=ThemeStyle.wallpaperClockInk(background,darkInk); boolean changed=ink!=pearlClockInk; pearlClockInk=ink; return changed;
     }
 
     private void adaptTextColors() {
