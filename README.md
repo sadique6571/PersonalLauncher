@@ -332,14 +332,15 @@ rather than washing out the photo. The clock shadow toggle remains respected.
 ## Open app cards and four demo designs
 
 The Home app grid and popup App Library no longer have a large surrounding drawer panel in any
-style. App access, hiding/reordering and remote navigation remain. The four reference styles use
+style. App access, hiding/reordering and remote navigation remain. The six reference styles use
 wide 2.6:1 logo-and-name cards directly over the wallpaper: Dune Loom has stepped copper corners
 and etched arcs; Pearl Current has a scalloped double edge and shaped porcelain header; Cobalt
 Rail has blue double grooves, connected rails and yellow focus; Sage Fold has a paper stack and
-folded corner with a warm selected flap. Artwork clips to the same path as its surface and focus
+folded corner with a warm selected flap; Pine Mist has a deep-green gradient with a mint focus and
+serif clock; Amber Night has a deep amber-brown gradient with a gold focus and square tiles. Artwork clips to the same path as its surface and focus
 edge, including when corner settings change. The new App label size control changes card captions.
 
-Select them in Theme → Visual style. All six styles save their own appearance profiles. A one-time
+Select them in Theme → Visual style. All eight styles save their own appearance profiles. A one-time
 reference-layout initialization uses four TV columns, two phone columns and rounded-square profile
 photos; later user changes remain. Header/finish/intensity, colour, typography, clock, corners and
 transparency controls remain available. No theme-wide wallpaper filter is applied. Status icons

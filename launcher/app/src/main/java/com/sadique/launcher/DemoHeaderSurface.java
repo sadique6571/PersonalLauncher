@@ -52,7 +52,7 @@ final class DemoHeaderSurface extends GlassSurface {
         if(w>h*8) {
             paint.setShader(null); paint.setAlpha(getAlpha()); paint.setColor(style==ThemeStyle.DUNE?accent:style==ThemeStyle.COBALT?0xffd5e2ff:0xff183126);
             paint.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL)); paint.setTextSize(h*.17f); paint.setTextAlign(Paint.Align.CENTER);
-            String name=style==ThemeStyle.DUNE?"DUNE LOOM":style==ThemeStyle.PEARL?"PEARL CURRENT":style==ThemeStyle.COBALT?"COBALT RAIL":"SAGE FOLD";
+            String name=style==ThemeStyle.DUNE?"DUNE LOOM":style==ThemeStyle.PEARL?"PEARL CURRENT":style==ThemeStyle.COBALT?"COBALT RAIL":style==ThemeStyle.PINE?"PINE MIST":style==ThemeStyle.AMBER?"AMBER NIGHT":"SAGE FOLD";
             canvas.drawText(name,w/2f,h*.2f,paint);
         }
         canvas.restoreToCount(save);

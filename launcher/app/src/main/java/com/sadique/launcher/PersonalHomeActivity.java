@@ -1737,7 +1737,7 @@ public final class PersonalHomeActivity extends Activity {
             if(reload) { app.iconReady=false; app.icon=null; }
         }
         if(ThemeStyle.custom(prefs) && !prefs.getBoolean("material_defaults_v1",false)) {
-            prefs.edit().putBoolean("material_defaults_v1",true).putInt("tile_corners",style==ThemeStyle.DUNE?0:1)
+            prefs.edit().putBoolean("material_defaults_v1",true).putInt("tile_corners",style==ThemeStyle.DUNE||style==ThemeStyle.AMBER?0:1)
                     .putInt("phone_columns",2).putInt("tv_columns",4)
                     .putString("theme_mode",ThemeStyle.light(prefs)?"light":"dark")
                     .putBoolean("clock_shadow",true).apply();
@@ -1754,10 +1754,10 @@ public final class PersonalHomeActivity extends Activity {
     private void themeSettings() {
         // "Dark mode" removed 2026-11-01 (user): the theme glass color covers it.
         String[] labels = {"Visual style", "Theme", "Accent color", "Launcher font", "Glass intensity", "Glass finish", "Glass edge", "Panel transparency", "Header background", "Avatar shape"};
-        String[] hints = {"Six independent visual styles", "Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels", "Soft, Clear or Frosted panels", "Reflection around glass surfaces", "Solid panels when off; app drawer stays transparent", "Status-bar glass in this theme", "Round or rounded-square profile photo"};
+        String[] hints = {"Eight independent visual styles", "Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels", "Soft, Clear or Frosted panels", "Reflection around glass surfaces", "Solid panels when off; app drawer stays transparent", "Status-bar glass in this theme", "Round or rounded-square profile photo"};
         int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_person};
         Runnable[] choices = {
-            () -> chooseSetting("Visual style", new String[]{"TV Glass", "Classic", "Dune Loom", "Pearl Current", "Cobalt Rail", "Sage Fold"}, this::switchVisualStyle),
+            () -> chooseSetting("Visual style", new String[]{"TV Glass", "Classic", "Dune Loom", "Pearl Current", "Cobalt Rail", "Sage Fold", "Pine Mist", "Amber Night"}, this::switchVisualStyle),
             () -> chooseSetting("Theme", new String[]{ThemeStyle.custom(prefs)?"Theme default":"Midnight Cyan", "Sunset Orange", "Deep Purple", "Custom"}, which -> {
                 prefs.edit().putInt("theme_name", which).apply();
                 if (which == 3) chooseAccentColor();
