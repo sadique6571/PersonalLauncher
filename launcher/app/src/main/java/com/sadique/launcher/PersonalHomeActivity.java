@@ -1753,9 +1753,9 @@ public final class PersonalHomeActivity extends Activity {
 
     private void themeSettings() {
         // "Dark mode" removed 2026-11-01 (user): the theme glass color covers it.
-        String[] labels = {"Visual style", "Theme", "Accent color", "Launcher font", "Glass intensity", "Glass finish", "Glass edge", "Panel transparency", "Header background", "Avatar shape"};
-        String[] hints = {"Eight independent visual styles", "Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels", "Soft, Clear or Frosted panels", "Reflection around glass surfaces", "Solid panels when off; app drawer stays transparent", "Status-bar glass in this theme", "Round or rounded-square profile photo"};
-        int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_person};
+        String[] labels = {"Visual style", "Theme", "Accent color", "Launcher font", "Glass intensity", "Glass finish", "Glass edge", "Panel transparency", "Header background", "Avatar shape", "Reset current theme"};
+        String[] hints = {"Eight independent visual styles", "Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels", "Soft, Clear or Frosted panels", "Reflection around glass surfaces", "Solid panels when off; app drawer stays transparent", "Status-bar glass in this theme", "Round or rounded-square profile photo", "Restore defaults for the active style"};
+        int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_person, R.drawable.ic_refresh};
         Runnable[] choices = {
             () -> chooseSetting("Visual style", new String[]{"TV Glass", "Classic", "Dune Loom", "Pearl Current", "Cobalt Rail", "Sage Fold", "Pine Mist", "Amber Night"}, this::switchVisualStyle),
             () -> chooseSetting("Theme", new String[]{ThemeStyle.custom(prefs)?"Theme default":"Midnight Cyan", "Sunset Orange", "Deep Purple", "Custom"}, which -> {
@@ -1785,8 +1785,37 @@ public final class PersonalHomeActivity extends Activity {
                 prefs.edit().putInt("header_bg_mode",which).apply(); buildHomeSoon();
             }),
             this::chooseAvatarShape,
+            () -> chooseSetting("Reset theme", new String[]{"Keep current settings", "Reset to original defaults"}, which -> {
+                if (which == 1) {
+                    resetCurrentTheme();
+                }
+            })
         };
         subMenu("Theme", labels, hints, icons, choices);
+    }
+
+    private void resetCurrentTheme() {
+        int currentStyle = ThemeStyle.id(prefs);
+        String prefix = ThemeStyle.prefix(currentStyle);
+        SharedPreferences raw = getSharedPreferences("personal_home", 0);
+        SharedPreferences.Editor editor = raw.edit();
+        for (String key : raw.getAll().keySet()) {
+            if (key.startsWith(prefix)) {
+                editor.remove(key);
+            }
+        }
+        editor.apply();
+        ThemeStyle.demoDefaults(prefs, tv);
+        appGeneration++;
+        if (cachedApps != null) {
+            for (App app : cachedApps) {
+                app.iconReady = false;
+                app.icon = null;
+            }
+        }
+        applyAppearance();
+        buildHomeSoon();
+        toast("Theme settings reset to defaults");
     }
 
     private void wallpaperMenu() {

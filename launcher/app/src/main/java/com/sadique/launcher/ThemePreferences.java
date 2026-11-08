@@ -14,7 +14,8 @@ final class ThemePreferences implements SharedPreferences {
             "hide_greeting","avatar_shape","header_bg_mode","header_bg","header_blur","header_glass_v2",
             "tv_columns","phone_columns","large_tiles","tile_corners","tile_spacing","logo_size","focus_border","focus_title_size","focus_glow","app_entrance",
             "background_dim","bottom_shade","theme_mode","daynight_smooth","row_spacing","banner_poster_size","banner_autoscroll",
-            "continue_watching","row_netflix","row_youtube","apps_only","ss_clock_pos"));
+            "continue_watching","row_netflix","row_youtube","apps_only","ss_clock_pos",
+            "wallpaper_mode","wallpaper_source","wallpaper_slideshow","wallpaper_darkness","wallpaper_custom_id","icon_tiles","uniform_tiles"));
     private static volatile ThemePreferences instance;
     private final SharedPreferences base;
     private final Map<OnSharedPreferenceChangeListener,OnSharedPreferenceChangeListener> listeners=new IdentityHashMap<>();

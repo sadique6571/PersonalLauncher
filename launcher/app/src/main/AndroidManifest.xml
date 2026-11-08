@@ -102,6 +102,8 @@
             android:excludeFromRecents="true"
             android:stateNotNeeded="true"
             android:clearTaskOnLaunch="true"
+            android:icon="@mipmap/ic_launcher"
+            android:banner="@drawable/banner"
             android:label="@string/personal_app_name" />
         <activity android:name=".LandscapeActivity" android:exported="false" android:excludeFromRecents="true" />
         <activity android:name=".ScreensaverSetupActivity" android:exported="true" />
@@ -119,6 +121,8 @@
             android:name=".MainActivity"
             android:targetActivity=".PersonalHomeActivity"
             android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:banner="@drawable/banner"
             android:label="@string/personal_app_name">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
