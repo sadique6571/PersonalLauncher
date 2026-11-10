@@ -12,8 +12,11 @@ final class GlassDockLayout {
         int heightLimit=Math.max(64,Math.min(128,(screenHeightDp-300)/2));
         return Math.max(48,Math.min(heightLimit,Math.round(Math.max(1,contentWidthDp)*.78f)));
     }
+    static int compactCellWidth(int rowWidth,int columns){columns=Math.max(2,Math.min(6,columns));int minimumSpan=(int)Math.floor(SPANS/(columns+.98));return Math.max(1,rowWidth*minimumSpan/SPANS);}
+    static int wideBodyHeight(int contentWidthDp,int screenHeightDp){return Math.min(iconSide(contentWidthDp,screenHeightDp),Math.max(48,Math.round(contentWidthDp/1.45f)));}
+    static int wideBodyWidth(int availableWidth,int height){return Math.max(1,Math.min(availableWidth,Math.round(height*1.45f)));}
     static int captionHeight(int textSp,float fontScale){return Math.max(28,Math.min(64,Math.round(Math.max(12,Math.min(22,textSp))*Math.max(1,fontScale)*1.5f+8)));}
-    static int iconTileHeight(int contentWidthDp,int screenHeightDp,int captionHeight){return iconSide(contentWidthDp,screenHeightDp)+captionHeight;}
+    static int iconTileHeight(int contentWidthDp,int screenHeightDp,int captionHeight){return wideBodyHeight(contentWidthDp,screenHeightDp)+captionHeight;}
     static int reflectionHeight(int cardHeight){return Math.max(16,Math.min(32,Math.round(cardHeight*.20f)));}
     static int dockHeight(int cardWidthDp,int screenHeightDp){int tile=iconTileHeight(cardWidthDp,screenHeightDp,captionHeight(16,1));return tile+reflectionHeight(tile)+60;}
     static int span(int position,int columns,int previous,int selected,float transition){

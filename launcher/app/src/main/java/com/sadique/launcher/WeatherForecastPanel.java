@@ -38,6 +38,7 @@ final class WeatherForecastPanel {
             for(WeatherForecast.Day day:data.days){String title=day.date;try{title=LocalDate.parse(day.date).format(DateTimeFormatter.ofPattern("EEE, d MMM",Locale.ENGLISH));}catch(java.time.DateTimeException ignored){}
                 row(title+String.format(Locale.getDefault()," · %.0f° / %.0f°",day.high,day.low),LandscapeModel.condition(day.code)+rain(day.rain));}
             rows.addView(GlassSettings.label(host,"Weather data: "+data.source,10,ThemeStyle.muted(ThemePreferences.get(host))));
+            rows.addView(GlassSettings.label(host,host.getString(R.string.moon_image_credit),10,ThemeStyle.muted(ThemePreferences.get(host))));
         }
         if(restore&&rows.getChildCount()>2)rows.getChildAt(2).requestFocus();
     }

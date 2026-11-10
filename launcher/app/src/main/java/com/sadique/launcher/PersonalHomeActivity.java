@@ -997,7 +997,7 @@ public final class PersonalHomeActivity extends Activity {
                         try{forecast=WeatherForecast.decode(persisted);fetched=timestamp;}catch(Exception invalid){forecast=null;}
                     }
                     if(forecast==null){forecast=WeatherForecast.fetch(Double.parseDouble(latitude),Double.parseDouble(longitude),fahrenheit);fetched=System.currentTimeMillis();}
-                    WeatherOrbView.prepareMoon();
+                    WeatherOrbView.prepareMoon(this);
                     encoded=forecast.encode();summary=forecast.summary(fahrenheit);
                 }else{summary=WeatherClient.fetch(Double.parseDouble(latitude),Double.parseDouble(longitude),fahrenheit);fetched=System.currentTimeMillis();}
             }catch(Exception unavailable){android.util.Log.w("PersonalWeather","Weather unavailable ("+unavailable.getClass().getSimpleName()+")");}
@@ -1368,17 +1368,18 @@ public final class PersonalHomeActivity extends Activity {
         if(grid.getPaddingTop()!=top) grid.setPadding(0,top,0,dp(14));
     }
 
-    private int referenceCardHeight(int cellWidth){
+    private int referenceCardHeight(int cellWidth){return referenceCardHeight(cellWidth,grid==null?4:grid.getColumnCount());}
+    private int referenceCardHeight(int cellWidth,int columns){
         int spacing=Math.max(0,Math.min(2,prefs.getInt("tile_spacing",1)));
         int margin=(tvGlass()?new int[]{dp(6),dp(10),dp(16)}:new int[]{dp(4),dp(8),dp(14)})[spacing];
-        int widthDp=Math.round((cellWidth-margin*2)/getResources().getDisplayMetrics().density);
+        int widthDp=Math.round((GlassDockLayout.compactCellWidth(cellWidth*columns,columns)-margin*2)/getResources().getDisplayMetrics().density);
         return dp(GlassDockLayout.iconTileHeight(widthDp,getResources().getConfiguration().screenHeightDp,referenceCaptionHeight()));
     }
     private int referenceCaptionHeight(){return GlassDockLayout.captionHeight(prefs.getInt("app_label_size",16),getResources().getConfiguration().fontScale);}
     private int referenceDockHeight(){
         int available=pageWidth>0?gridWidth():dp(Math.max(160,getResources().getConfiguration().screenWidthDp-(tv?64:32)));
         int cols=PersonalHomeModel.columns(Math.round(available/getResources().getDisplayMetrics().density),prefs.getInt(tv?"tv_columns":"phone_columns",0),prefs.getBoolean("large_tiles",false));
-        int card=referenceCardHeight(available/cols);
+        int card=referenceCardHeight(available/cols,cols);
         int spacing=Math.max(0,Math.min(2,prefs.getInt("tile_spacing",1)));
         int margin=new int[]{6,8,12}[spacing];
         return card+dp(GlassDockLayout.reflectionHeight(Math.round(card/getResources().getDisplayMetrics().density))+margin*2+44);
@@ -1438,7 +1439,7 @@ public final class PersonalHomeActivity extends Activity {
                 // Focus zoom: gentle scale animation.
                 float scale = focus ? (glassOs()?1f:tvGlass() ? 1.06f : 1.05f) : 1f;
                 float sy=glassOs()?1:scale;
-                float lift=glassOs()&&focus?-dp(8):0;
+                float lift=0;
                 v.animate().cancel();
                 if (MemoryProfile.effectiveTier(this, prefs) == MemoryProfile.TIER_LIGHT) {
                     v.setScaleX(scale); v.setScaleY(sy);v.setTranslationY(lift);
@@ -1478,7 +1479,7 @@ public final class PersonalHomeActivity extends Activity {
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED));
             };
             if (carriedApp != null) { open.run(); return; }
-            v.animate().scaleX(1.08f).scaleY(1.08f).alpha(.7f).setDuration(120).withEndAction(() -> {
+            v.animate().scaleX(glassOs()?1f:1.08f).scaleY(glassOs()?1f:1.08f).alpha(.7f).setDuration(120).withEndAction(() -> {
                 v.setScaleX(glassOs()?1f:1.05f); v.setScaleY(glassOs()?1:1.05f); v.setAlpha(1f);
                 open.run();
             }).start();

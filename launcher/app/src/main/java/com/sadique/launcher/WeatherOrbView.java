@@ -9,9 +9,20 @@ final class WeatherOrbView extends View {
     private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF destination=new RectF();
     private static volatile Bitmap moon;
-    static void prepareMoon(){
+    // NASA SVS, LRO/LOLA/LROC surface visualization; fixed weather artwork, not today's phase.
+    // Source: https://svs.gsfc.nasa.gov/5048/ (phase_full.1571_print.jpg), credit shown in forecast.
+    static void prepareMoon(Context context){
         if(moon!=null)return;
-        synchronized(WeatherOrbView.class){if(moon==null)moon=Bitmap.createBitmap(MoonTexture.pixels(128),128,128,Bitmap.Config.ARGB_8888);}
+        synchronized(WeatherOrbView.class){
+            if(moon!=null)return;
+            BitmapFactory.Options options=new BitmapFactory.Options();options.inSampleSize=8;options.inScaled=false;
+            Bitmap source=BitmapFactory.decodeResource(context.getResources(),R.drawable.weather_moon_nasa,options);
+            if(source==null)return;
+            Bitmap result=Bitmap.createBitmap(128,128,Bitmap.Config.ARGB_8888);Canvas c=new Canvas(result);
+            Paint photo=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);BitmapShader shader=new BitmapShader(source,Shader.TileMode.CLAMP,Shader.TileMode.CLAMP);
+            Matrix transform=new Matrix();transform.setScale(128f/source.getWidth(),128f/source.getHeight());shader.setLocalMatrix(transform);photo.setShader(shader);
+            c.drawCircle(64,64,54.5f,photo);moon=result;
+        }
     }
     private Bitmap artwork;private int code=-1;private boolean day=true;
     WeatherOrbView(Context context){super(context);setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);}
@@ -22,7 +33,7 @@ final class WeatherOrbView extends View {
         paint.setAlpha(255);
         paint.setShader(new RadialGradient(32,29,30,day?0x55ffe3a1:0x225e82a8,Color.TRANSPARENT,Shader.TileMode.CLAMP));c.drawCircle(32,29,30,paint);paint.setShader(null);
         if(day){paint.setShader(new RadialGradient(27,24,23,0xfffff0c0,0xffffb438,Shader.TileMode.CLAMP));c.drawCircle(32,29,18,paint);paint.setShader(null);}
-        else if(moon!=null){paint.setColor(Color.WHITE);paint.setFilterBitmap(true);c.drawBitmap(moon,null,new RectF(7,4,57,54),paint);}
+        else if(moon!=null){paint.setColor(Color.WHITE);paint.setFilterBitmap(true);c.drawBitmap(moon,null,new RectF(4,1,60,57),paint);}
         else {paint.setColor(0xffa2a9b0);c.drawCircle(32,29,21,paint);} // Worker prepares detail before normal weather binding.
         if(code>=2){
             paint.setAlpha(255);paint.setShader(new RadialGradient(32,45,26,new int[]{0xffb5c7d1,0xaa8da6b8,0x008da6b8},new float[]{0,.55f,1},Shader.TileMode.CLAMP));
