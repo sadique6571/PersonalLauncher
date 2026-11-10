@@ -1,0 +1,20 @@
+<resources>
+    <item name="statsCard" type="id" />
+    <item name="cpuVal" type="id" />
+    <item name="ramVal" type="id" />
+    <item name="memVal" type="id" />
+    <item name="cpuProgress" type="id" />
+    <item name="ramProgress" type="id" />
+    <item name="memProgress" type="id" />
+    <item name="volumeCapsule" type="id" />
+    <item name="volPercent" type="id" />
+    <item name="volTrack" type="id" />
+    <item name="volFill" type="id" />
+    <item name="volIcon" type="id" />
+    <item name="btDrawer" type="id" />
+    <item name="profileAvatar" type="id" />
+    <item name="profileName" type="id" />
+    <item name="btnBluetooth" type="id" />
+    <item name="btnControlCenter" type="id" />
+    <item name="controlCenterPanel" type="id" />
+</resources>

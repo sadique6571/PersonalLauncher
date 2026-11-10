@@ -149,4 +149,41 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
         c.drawRoundRect(rect, radius, radius, band);
         c.drawRoundRect(rect, radius, radius, edge);
     }
+    /** Full-card reflections for the active personal Home. No bitmap copies or background tray. */
+    static final class Reflections extends RecyclerView.ItemDecoration {
+        private final Paint mask=new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final android.graphics.PorterDuffXfermode dstIn=new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_IN);
+        private final RectF area=new RectF();
+        private Shader fade;
+        private float lastHeight=-1;
+        @Override public void onDrawOver(@NonNull Canvas c,@NonNull RecyclerView parent,@NonNull RecyclerView.State state) {
+            float density=parent.getResources().getDisplayMetrics().density;
+            for(int i=0;i<parent.getChildCount();i++) {
+                View child=parent.getChildAt(i);
+                if(!(child instanceof android.view.ViewGroup)||child.getTag()==null)continue;
+                android.view.ViewGroup group=(android.view.ViewGroup)child;
+                if(group.getChildCount()==0)continue;
+                View card=group.getChildAt(0);if(card.getWidth()<=0||card.getHeight()<=0)continue;
+                float sx=card.getScaleX(),sy=card.getScaleY();
+                float left=child.getLeft()+child.getTranslationX()+card.getLeft()+card.getTranslationX()+card.getPivotX()*(1-sx);
+                float top=child.getTop()+child.getTranslationY()+card.getTop()+card.getTranslationY()+card.getPivotY()*(1-sy);
+                float height=card.getHeight()*sy*.65f,start=top+card.getHeight()*sy+6*density;
+                if(start>=parent.getHeight()||start+height<=0)continue;
+                area.set(left,start,left+card.getWidth()*sx,start+height);
+                int layer=c.saveLayer(area,null);
+                int flipped=c.save();c.translate(left,start+height);c.scale(sx,-sy*.65f);card.draw(c);c.restoreToCount(flipped);
+                if(height!=lastHeight) {
+                    lastHeight=height;fade=new LinearGradient(0,0,0,height,new int[]{0xbf000000,0x40000000,0x00000000},new float[]{0,.5f,1},Shader.TileMode.CLAMP);
+                }
+                c.translate(0,start);mask.setShader(fade);mask.setXfermode(dstIn);
+                c.drawRect(area.left,0,area.right,height,mask);mask.setXfermode(null);mask.setShader(null);
+                c.restoreToCount(layer);
+            }
+        }
+        @Override public void getItemOffsets(@NonNull Rect out,@NonNull View view,@NonNull RecyclerView parent,@NonNull RecyclerView.State state) {
+            // Leave room between app rows; reflections never cover the next row's title.
+            if(view.getTag()!=null)out.bottom=Math.round(100*parent.getResources().getDisplayMetrics().density);
+        }
+    }
+
 }

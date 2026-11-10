@@ -112,6 +112,8 @@ final class HomeAppGrid<T> extends RecyclerView {
     }
 
     void rebind() { adapter.notifyItemRangeChanged(0, items.size()); }
+    /** Focus can change during RecyclerView layout; redraw safely without invalidating its offsets then. */
+    void refreshReflections() { if(isComputingLayout())postInvalidateOnAnimation();else invalidateItemDecorations(); }
     void focusKey(String pkg) {
         if (items.isEmpty()) { if (footer != null) footer.requestFocus(); return; }
         int position = 0;

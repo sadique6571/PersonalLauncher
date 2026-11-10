@@ -451,7 +451,10 @@ final class AppLibraryDialog {
     }
 
     private void changeHome(ResolveInfo app, boolean add) {
-        if (!LibraryApps.save(activity, app.activityInfo.packageName, add)) {
+        boolean saved=activity instanceof PersonalHomeActivity
+                ? ((PersonalHomeActivity)activity).libraryVisibility(app.activityInfo.packageName,add)
+                : LibraryApps.save(activity,app.activityInfo.packageName,add);
+        if (!saved) {
             Toast.makeText(activity, R.string.library_save_failed, Toast.LENGTH_LONG).show();
             return;
         }
