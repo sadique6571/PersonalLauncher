@@ -2109,6 +2109,7 @@ public final class PersonalHomeActivity extends Activity {
         applyLabelScheme(time, false, false);
         applyLabelScheme(ampm, false, false);
         applyLabelScheme(date, false, true);
+        applyLabelScheme(islamicDate, false, true);
         applyLabelScheme(appHeading, false, false);
     }
 
@@ -2119,7 +2120,7 @@ public final class PersonalHomeActivity extends Activity {
         if(glassOs()&&label==networkStatus)return;
         if(glassOs()&&label==ampm){label.setTextColor(Color.WHITE);return;}
         label.setTextColor(ThemeStyle.custom(prefs)?(muted?ThemeStyle.muted(prefs):ThemeStyle.foreground(prefs)):(muted ? 0xE6FFFFFF : 0xFFFFFFFF));
-        boolean clockLabel=label==time || label==ampm || label==date;
+        boolean clockLabel=label==time || label==ampm || label==date || label==islamicDate;
         boolean headerLabel=label==userName || label==greeting || label==homeWeather || label==networkStatus;
         if(headerLabel) label.setTextColor(HeaderAppearance.foreground(prefs));
         if(glassOs()&&label==networkStatus)return;
