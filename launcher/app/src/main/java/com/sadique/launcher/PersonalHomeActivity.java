@@ -64,12 +64,20 @@ public final class PersonalHomeActivity extends Activity {
     /** Dedicated app-loading worker: icon scans never block avatar/wallpaper/import, and a new scan cancels the old. */
     private final ExecutorService appWorker = Executors.newSingleThreadExecutor();
     private final ExecutorService weatherWorker = Executors.newSingleThreadExecutor();
-    private boolean weatherBusy;
+    private boolean weatherBusy,weatherForceRefresh,clockDatesInline;
+    private WeatherWidgetView weatherWidget;
+    private SweepAnalogClock analogClock;
+    private WeatherForecastPanel forecastPanel;
+    private WeatherForecast weatherSnapshot;
+    private String weatherSnapshotKey="";
+    private long weatherSnapshotAt;
+    private boolean weatherWidgetEnabled(){return prefs.getBoolean("weather_widget",ThemeStyle.id(prefs)==ThemeStyle.GLASS)&&!prefs.getBoolean("apps_only",false);}
+    private int clockAlignment(){return WeatherWidgetLayout.clockAlignment(weatherWidgetEnabled(),ThemeStyle.clockAlignment(prefs));}
     private long nextWeatherAttempt;
     private String lastWeatherRequestKey="";
     private final SharedPreferences.OnSharedPreferenceChangeListener weatherPreferences=(preferences,key)-> {
         if ("ambient_strength".equals(key)) updateAmbient();
-        if ("weather_lat".equals(key) || "weather_lon".equals(key) || "weather_fahrenheit".equals(key)) {
+        if ("weather_lat".equals(key) || "weather_lon".equals(key) || "weather_fahrenheit".equals(key) || "weather_city".equals(key)) {
             nextWeatherAttempt=0;
             handler.removeCallbacks(this.weatherRefresh); handler.post(this.weatherRefresh);
         }
@@ -414,6 +422,9 @@ public final class PersonalHomeActivity extends Activity {
     private void buildHome() {
         glassDefaults();
         if(telemetry!=null){telemetry.stop();telemetry=null;}
+        if(weatherWidget!=null){weatherWidget.active(false);weatherWidget=null;}
+        if(analogClock!=null){analogClock.active(false);analogClock=null;}
+        clockDatesInline=glassOs()&&getResources().getConfiguration().screenWidthDp>=700&&!weatherWidgetEnabled()&&prefs.getInt("clock_style",0)!=1;
         islamicDate=null;bluetoothStatus=null;focusedSpotlight=null;
         HeaderAppearance.clockDefaults(prefs);
         if (liquidBackdrop != null) { liquidBackdrop.close(); liquidBackdrop=null; }
@@ -563,7 +574,7 @@ public final class PersonalHomeActivity extends Activity {
         clockLayout = new LinearLayout(this);
         LinearLayout clock = clockLayout;
         clock.setOrientation(LinearLayout.VERTICAL);
-        clock.setGravity(glassOs()?Gravity.START:new int[]{Gravity.START,Gravity.CENTER_HORIZONTAL,Gravity.END}[ThemeStyle.clockAlignment(prefs)]);
+        clock.setGravity(weatherWidgetEnabled()||glassOs()?Gravity.START:new int[]{Gravity.START,Gravity.CENTER_HORIZONTAL,Gravity.END}[clockAlignment()]);
         boolean compact = getResources().getConfiguration().screenHeightDp < 480;
         clock.setPadding(0, dp(compact?0:tv?(ThemeStyle.custom(prefs)?32:10):16), 0, dp(compact ? 8 : 12));
         int clockSize = prefs.getInt("clock_size", tv ? 52 : 44);
@@ -589,7 +600,7 @@ public final class PersonalHomeActivity extends Activity {
         // Use the regular family with bold weight; the light family overrides the intended weight.
         time.setTypeface(android.graphics.Typeface.create(
                 ThemeStyle.clockFontFamily(prefs),ThemeStyle.clockBold(prefs)?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL));
-        // Analog mode: hide the digital time (keeps layout for clockY), SkyClock draws the face.
+        // Analog mode uses a bounded independent dial, including on the Glass gradient.
         boolean analogClock = prefs.getInt("clock_style", 0) == 1;
         // AM/PM is a separate view, not a span: it can never be clipped when
         // seconds make the string longest. (User 2026-11-01.)
@@ -613,11 +624,11 @@ public final class PersonalHomeActivity extends Activity {
         if (prefs.getBoolean("clock_shadow", true)) {
             date.setShadowLayer(dp(6), 0, dp(2), 0xcc000000);
         }
-        date.setGravity(Gravity.CENTER);
+        date.setGravity(weatherWidgetEnabled()?Gravity.START:Gravity.CENTER);
         if(glassOs()) {date.setId(R.id.date);ampm.setId(R.id.ampm);ampm.setTextSize(18);}
         LinearLayout timeRow = new LinearLayout(this);
         timeRow.setOrientation(LinearLayout.HORIZONTAL);
-        timeRow.setGravity(Gravity.CENTER_VERTICAL | new int[]{Gravity.START,Gravity.CENTER_HORIZONTAL,Gravity.END}[ThemeStyle.clockAlignment(prefs)]);
+        timeRow.setGravity(Gravity.CENTER_VERTICAL | new int[]{Gravity.START,Gravity.CENTER_HORIZONTAL,Gravity.END}[clockAlignment()]);
         timeRow.addView(time, new LinearLayout.LayoutParams(-2, -2));
         LinearLayout.LayoutParams ampmParams = new LinearLayout.LayoutParams(-2, -2);
         ampmParams.gravity = glassOs()?Gravity.CENTER_VERTICAL:Gravity.BOTTOM;
@@ -625,6 +636,15 @@ public final class PersonalHomeActivity extends Activity {
         timeRow.addView(ampm, ampmParams);
         clock.addView(timeRow, new LinearLayout.LayoutParams(-1, dp(clockSize + (compact ? 10 : 36))));
         clock.addView(date);
+        if(analogClock){
+            timeRow.setVisibility(View.GONE);
+            this.analogClock=new SweepAnalogClock(this);
+            int diameter=dp(Math.max(112,Math.min(160,clockSize*2)));
+            clock.addView(this.analogClock,0,new LinearLayout.LayoutParams(diameter,diameter));this.analogClock.active(resumed);
+            this.analogClock.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{
+                int[] pos=new int[2],origin=new int[2];v.getLocationInWindow(pos);root.getLocationInWindow(origin);sky.clockX=pos[0]-origin[0]+v.getWidth()/2f;sky.clockY=pos[1]-origin[1]+v.getHeight()/2f;sky.invalidate();
+            });
+        }
         if(glassOs()) {
             time.setTypeface(android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD));
             ampm.setTypeface(android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD));
@@ -634,7 +654,7 @@ public final class PersonalHomeActivity extends Activity {
             clock.setPadding(0,0,0,0);
             islamicDate=text("",13,MUTED);islamicDate.setId(R.id.lunarDate);
             clock.addView(islamicDate);
-            if(getResources().getConfiguration().screenWidthDp>=700) {
+            if(clockDatesInline) {
                 clock.removeView(date);clock.removeView(islamicDate);
                 View divider=new View(this);divider.setId(R.id.clockDivider);divider.setBackgroundColor(0x38ffffff);
                 LinearLayout.LayoutParams line=new LinearLayout.LayoutParams(dp(1.5f),dp(48));line.setMargins(dp(12),0,dp(12),0);timeRow.addView(divider,line);
@@ -645,7 +665,7 @@ public final class PersonalHomeActivity extends Activity {
         }
         if(!glassOs()) {islamicDate=text("",12,MUTED);islamicDate.setId(R.id.lunarDate);clock.addView(islamicDate);}
         timeRow.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{if(r-l!=or-ol&&time.getText().length()>0)fitClockText(time.getText());});
-        if(glassOs()) {
+        if(glassOs()&&!analogClock) {
             focusedSpotlight=text("",13,0xffffffff);focusedSpotlight.setSingleLine();focusedSpotlight.setEllipsize(android.text.TextUtils.TruncateAt.END);
             focusedSpotlight.setPadding(dp(13),dp(7),dp(13),dp(7));focusedSpotlight.setBackground(GlassOsUi.panel(this,999));
             LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-2,-2);sp.topMargin=dp(8);clock.addView(focusedSpotlight,sp);updateSpotlight();
@@ -666,7 +686,7 @@ public final class PersonalHomeActivity extends Activity {
         grid = new HomeAppGrid<>(this, app -> app.info.activityInfo.packageName,
                 (app, width) -> createAppTile(app, width, carriedApp != null && app.info.activityInfo.packageName.equals(carriedApp.info.activityInfo.packageName)));
         grid.setReferenceExpansion(glassOs());
-        grid.setUpFromApps(() -> { if (searchButton != null) searchButton.requestFocus(); });
+        grid.setUpFromApps(() -> { if(weatherWidget!=null&&weatherWidget.isShown())weatherWidget.requestFocus();else if (searchButton != null) searchButton.requestFocus(); });
         grid.setClipChildren(false);
         if(glassOs()) {
             grid.setId(R.id.grid);grid.setPadding(0,dp(12),0,dp(118));
@@ -689,22 +709,38 @@ public final class PersonalHomeActivity extends Activity {
         LinearLayout scrollContent = new LinearLayout(this);
         scrollContent.setOrientation(LinearLayout.VERTICAL);
         if(glassOs())scrollContent.setGravity(Gravity.CENTER_VERTICAL);
-        if (prefs.getBoolean("hide_clock", false) || prefs.getBoolean("apps_only", false)) clock.setVisibility(View.GONE);
-        int align = ThemeStyle.clockAlignment(prefs);
+        if ((!weatherWidgetEnabled()&&prefs.getBoolean("hide_clock",false)) || prefs.getBoolean("apps_only",false)) clock.setVisibility(View.GONE);
+        int align = clockAlignment();
         LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(-1, -2);
         clockParams.gravity = new int[]{Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END}[align];
-        if(glassOs()) {
-            LinearLayout stage=new LinearLayout(this);stage.setGravity(Gravity.CENTER_VERTICAL);
+        if(glassOs()||weatherWidgetEnabled()) {
+            LinearLayout stage=new LinearLayout(this);stage.setGravity(Gravity.CENTER_VERTICAL|Gravity.END);
             boolean wide=getResources().getConfiguration().screenWidthDp>=700;
             stage.setOrientation(wide?LinearLayout.HORIZONTAL:LinearLayout.VERTICAL);
-            if(wide) stage.addView(clock,new LinearLayout.LayoutParams(0,-2,1));else stage.addView(clock,clockParams);
-            LinearLayout instruments=new LinearLayout(this);instruments.setGravity(Gravity.CENTER_VERTICAL);
-            telemetry=new GlassTelemetry(this);
-            int cardWidth=wide?Math.min(315,getResources().getConfiguration().screenWidthDp/3):Math.min(280,getResources().getConfiguration().screenWidthDp-125);
-            instruments.addView(telemetry,new LinearLayout.LayoutParams(dp(cardWidth),-2));
+            if(wide)stage.addView(clock,new LinearLayout.LayoutParams(0,-2,1));else stage.addView(clock,clockParams);
+            LinearLayout instruments=new LinearLayout(this);instruments.setGravity(Gravity.CENTER_VERTICAL|Gravity.END);
+            if(!wide)instruments.setOrientation(LinearLayout.VERTICAL);
+            int available=getResources().getConfiguration().screenWidthDp-(tv?64:32);
+            if(weatherWidgetEnabled()){
+                weatherWidget=new WeatherWidgetView(this,this::showWeatherForecast);
+                LinearLayout.LayoutParams wp=new LinearLayout.LayoutParams(dp(Math.min(available,WeatherWidgetLayout.width(available,glassOs()))),-2);
+                if(glassOs()&&wide)wp.setMarginEnd(dp(12));else if(!wide)wp.bottomMargin=dp(10);
+                instruments.addView(weatherWidget,wp);
+                weatherWidget.setOnKeyListener((v,key,event)->{
+                    if(event.getAction()!=KeyEvent.ACTION_DOWN)return false;
+                    if(key==KeyEvent.KEYCODE_DPAD_DOWN){grid.focusKey(focusedPkg);return true;}
+                    if(key==KeyEvent.KEYCODE_DPAD_UP||key==KeyEvent.KEYCODE_DPAD_LEFT){if(searchButton!=null)searchButton.requestFocus();return true;}
+                    return key==KeyEvent.KEYCODE_DPAD_RIGHT;
+                });
+                weatherWidget.active(resumed);
+            }
+            if(glassOs()){
+                telemetry=new GlassTelemetry(this);
+                int cardWidth=wide?(weatherWidgetEnabled()?WeatherWidgetLayout.telemetryWidth(available):Math.min(315,getResources().getConfiguration().screenWidthDp/3)):Math.min(280,available);
+                instruments.addView(telemetry,new LinearLayout.LayoutParams(dp(cardWidth),-2));if(resumed)telemetry.start();
+            }
             stage.addView(instruments);if(prefs.getBoolean("apps_only",false))stage.setVisibility(View.GONE);scrollContent.addView(stage,new LinearLayout.LayoutParams(-1,-2));
-            if(resumed)telemetry.start();
-        }else scrollContent.addView(clock, clockParams);
+        }else scrollContent.addView(clock,clockParams);
         scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
         boolean referenceStage=glassOs()&&!prefs.getBoolean("apps_only",false);
         page.addView(scroll, referenceStage?new LinearLayout.LayoutParams(-1,0,1):new LinearLayout.LayoutParams(-1,-2));
@@ -819,7 +855,7 @@ public final class PersonalHomeActivity extends Activity {
             islamicDate.setText(HijriCalendar.format(today,prefs.getInt("hijri_adjustment",0)));
         }catch(java.time.DateTimeException unavailable){islamicDate.setText("Islamic date unavailable");}
         sky.minute = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
-        sky.clockStyle = prefs.getInt("clock_style", 0);
+        sky.clockStyle = 0; // The independent SweepAnalogClock draws analog mode in every theme.
         sky.invalidate();
         if (greeting != null) greeting.setText(greetingText());
     }
@@ -836,7 +872,7 @@ public final class PersonalHomeActivity extends Activity {
         int maxWidth = (pageWidth > 0 ? pageWidth : screenW) - dp(24);
         if (maxWidth <= 0) maxWidth = screenW - dp(24);
         if(glassOs() && time.getParent() instanceof View && ((View)time.getParent()).getWidth()>0)
-            maxWidth=Math.max(dp(70),((View)time.getParent()).getWidth()-dp(getResources().getConfiguration().screenWidthDp>=700?260:80));
+            maxWidth=Math.max(dp(70),((View)time.getParent()).getWidth()-dp(clockDatesInline?260:80));
         android.text.TextPaint paint = new android.text.TextPaint();
         paint.setTypeface(time.getTypeface());
         float sizePx = clockTextSize * density;
@@ -904,55 +940,69 @@ public final class PersonalHomeActivity extends Activity {
      * Small weather pill in the header. Shows cached weather immediately;
      * refreshes only when stale, or on city/unit change.
      */
-    private void refreshHomeWeather() {
-        if (homeWeather==null || !resumed || isDestroyed()) return;
-        String cacheKey=weatherCacheKey(); long now=System.currentTimeMillis();
-        String cached=prefs.getString("weather_cached",null); long cachedAt=prefs.getLong("weather_cached_at",0);
+    private boolean weatherOnline(){
         Network network=connectivity==null?null:connectivity.getActiveNetwork();
         NetworkCapabilities caps=network==null?null:connectivity.getNetworkCapabilities(network);
-        boolean canRequest=HomeWeatherPolicy.canAttempt(network!=null,
-                caps!=null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),
-                caps!=null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED));
-        homeWeather.setAlpha(1f); homeWeather.setVisibility(View.VISIBLE);
-        handler.removeCallbacks(weatherRefresh);
-        if (!canRequest) {
-            setHomeWeather("Unavailable"); nextWeatherAttempt=0;
-            handler.postDelayed(weatherRefresh,60_000L); return;
+        return HomeWeatherPolicy.canAttempt(network!=null,caps!=null&&caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),caps!=null&&caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED));
+    }
+    private boolean weatherNeedsForecast(){return weatherWidgetEnabled()||(forecastPanel!=null&&forecastPanel.isShowing());}
+    private String weatherCity(){return prefs.getString("weather_city",LandscapeModel.CITY);}
+    private void showWeatherForecast(){
+        forecastPanel=new WeatherForecastPanel(this,()->{weatherForceRefresh=true;nextWeatherAttempt=0;refreshHomeWeather();},()->WeatherSettings.show(this));
+        WeatherForecast available=weatherOnline()&&weatherSnapshotKey.equals(weatherCacheKey())&&HomeWeatherPolicy.fresh("forecast",weatherSnapshotKey,weatherCacheKey(),weatherSnapshotAt,System.currentTimeMillis(),WEATHER_CACHE_MS)?weatherSnapshot:null;
+        forecastPanel.show(available,weatherCity(),prefs.getBoolean("weather_fahrenheit",false));refreshHomeWeather();
+    }
+    private void bindWeatherForecast(WeatherForecast model){
+        if(weatherWidget!=null)weatherWidget.bind(model,weatherCity(),prefs.getBoolean("weather_fahrenheit",false));
+        if(forecastPanel!=null)forecastPanel.update(model,weatherCity(),prefs.getBoolean("weather_fahrenheit",false));
+    }
+    private void refreshHomeWeather() {
+        if(homeWeather==null||!resumed||isDestroyed())return;
+        String cacheKey=weatherCacheKey();long now=System.currentTimeMillis();boolean widget=weatherWidgetEnabled(),forecastNeeded=weatherNeedsForecast();
+        String requestKey=cacheKey+(forecastNeeded?"|forecast":"|current");
+        handler.removeCallbacks(weatherRefresh);homeWeather.setVisibility(widget?View.GONE:View.VISIBLE);
+        if(!weatherOnline()){setHomeWeather("Unavailable");bindWeatherForecast(null);nextWeatherAttempt=0;handler.postDelayed(weatherRefresh,60_000L);return;}
+        String cached=prefs.getString("weather_cached",null);long cachedAt=prefs.getLong("weather_cached_at",0);
+        boolean currentFresh=HomeWeatherPolicy.fresh(cached,prefs.getString("weather_cache_key",""),cacheKey,cachedAt,now,WEATHER_CACHE_MS);
+        boolean modelFresh=weatherSnapshot!=null&&HomeWeatherPolicy.fresh("forecast",weatherSnapshotKey,cacheKey,weatherSnapshotAt,now,WEATHER_CACHE_MS);
+        setHomeWeather(currentFresh?cached:"Unavailable");bindWeatherForecast(modelFresh?weatherSnapshot:null);
+        if(!weatherForceRefresh&&currentFresh&&(!forecastNeeded||modelFresh)){
+            handler.postDelayed(weatherRefresh,Math.max(60_000L,WEATHER_CACHE_MS-(now-(forecastNeeded?Math.min(cachedAt,weatherSnapshotAt):cachedAt))));return;
         }
-        if (HomeWeatherPolicy.fresh(cached,prefs.getString("weather_cache_key",""),cacheKey,cachedAt,now,WEATHER_CACHE_MS)) {
-            setHomeWeather(cached);
-            handler.postDelayed(weatherRefresh,Math.max(60_000L,WEATHER_CACHE_MS-(now-cachedAt))); return;
-        }
-        setHomeWeather("Unavailable");
-        if (weatherBusy) return;
-        if (cacheKey.equals(lastWeatherRequestKey) && now<nextWeatherAttempt) {
-            handler.postDelayed(weatherRefresh,Math.max(1000,nextWeatherAttempt-now)); return;
-        }
-        weatherBusy=true; lastWeatherRequestKey=cacheKey;
-        String latitude=prefs.getString("weather_lat",Double.toString(LandscapeModel.LATITUDE));
-        String longitude=prefs.getString("weather_lon",Double.toString(LandscapeModel.LONGITUDE));
+        if(weatherBusy)return;
+        if(!weatherForceRefresh&&requestKey.equals(lastWeatherRequestKey)&&now<nextWeatherAttempt){handler.postDelayed(weatherRefresh,Math.max(1000,nextWeatherAttempt-now));return;}
+        boolean force=weatherForceRefresh;weatherForceRefresh=false;weatherBusy=true;lastWeatherRequestKey=requestKey;
+        String latitude=prefs.getString("weather_lat",Double.toString(LandscapeModel.LATITUDE)),longitude=prefs.getString("weather_lon",Double.toString(LandscapeModel.LONGITUDE));
         boolean fahrenheit=prefs.getBoolean("weather_fahrenheit",false);
-        weatherWorker.execute(() -> {
-            String result;
-            try { result=WeatherClient.fetch(Double.parseDouble(latitude),Double.parseDouble(longitude),fahrenheit); }
-            catch(Exception unavailable) {
-                result=null;
-                android.util.Log.w("PersonalWeather","Home weather unavailable ("+unavailable.getClass().getSimpleName()+")");
-            }
-            String value=result;
-            handler.post(() -> {
-                weatherBusy=false;
-                if (isDestroyed()) return;
-                // A delayed response must never become the cache for a newly selected city/unit.
-                if (!cacheKey.equals(weatherCacheKey())) { nextWeatherAttempt=0; refreshHomeWeather(); return; }
-                long fetchedAt=System.currentTimeMillis();
-                if (value!=null) prefs.edit().putString("weather_cached",value).putLong("weather_cached_at",fetchedAt)
-                        .putString("weather_cache_key",cacheKey).apply();
-                nextWeatherAttempt=fetchedAt+(value==null?60_000L:WEATHER_CACHE_MS);
-                if (!resumed || homeWeather==null) return;
-                setHomeWeather(value==null?"Unavailable":value); homeWeather.setAlpha(1f); homeWeather.setVisibility(View.VISIBLE);
+        weatherWorker.execute(()->{
+            WeatherForecast forecast=null;String summary=null,encoded=null;long fetched=System.currentTimeMillis();
+            try{
+                if(forecastNeeded){
+                    String persisted=prefs.getString("weather_forecast_json",null);long timestamp=prefs.getLong("weather_forecast_at",0);
+                    if(!force&&HomeWeatherPolicy.fresh(persisted,prefs.getString("weather_forecast_key",""),cacheKey,timestamp,fetched,WEATHER_CACHE_MS)){
+                        try{forecast=WeatherForecast.decode(persisted);fetched=timestamp;}catch(Exception invalid){forecast=null;}
+                    }
+                    if(forecast==null){forecast=WeatherForecast.fetch(Double.parseDouble(latitude),Double.parseDouble(longitude),fahrenheit);fetched=System.currentTimeMillis();}
+                    encoded=forecast.encode();summary=forecast.summary(fahrenheit);
+                }else{summary=WeatherClient.fetch(Double.parseDouble(latitude),Double.parseDouble(longitude),fahrenheit);fetched=System.currentTimeMillis();}
+            }catch(Exception unavailable){android.util.Log.w("PersonalWeather","Weather unavailable ("+unavailable.getClass().getSimpleName()+")");}
+            WeatherForecast result=forecast;String value=summary,cache=encoded;long fetchedAt=fetched;
+            handler.post(()->{
+                weatherBusy=false;if(isDestroyed())return;
+                if(!cacheKey.equals(weatherCacheKey())){nextWeatherAttempt=0;refreshHomeWeather();return;}
+                if(value!=null){
+                    SharedPreferences.Editor saved=prefs.edit().putString("weather_cached",value).putLong("weather_cached_at",fetchedAt).putString("weather_cache_key",cacheKey);
+                    if(result!=null){weatherSnapshot=result;weatherSnapshotKey=cacheKey;weatherSnapshotAt=fetchedAt;saved.putString("weather_forecast_json",cache).putLong("weather_forecast_at",fetchedAt).putString("weather_forecast_key",cacheKey);}saved.apply();
+                }else{weatherSnapshot=null;weatherSnapshotKey="";prefs.edit().putLong("weather_cached_at",0).putLong("weather_forecast_at",0).apply();}
+                nextWeatherAttempt=System.currentTimeMillis()+(value==null?60_000L:WEATHER_CACHE_MS);
+                if(!resumed)return;
+                boolean online=weatherOnline();setHomeWeather(online&&value!=null?value:"Unavailable");
+                WeatherForecast ready=result!=null?result:weatherSnapshot!=null&&HomeWeatherPolicy.fresh("forecast",weatherSnapshotKey,cacheKey,weatherSnapshotAt,System.currentTimeMillis(),WEATHER_CACHE_MS)?weatherSnapshot:null;
+                bindWeatherForecast(online?ready:null);
+                homeWeather.setVisibility(weatherWidgetEnabled()?View.GONE:View.VISIBLE);
                 handler.removeCallbacks(weatherRefresh);
-                handler.postDelayed(weatherRefresh,value==null?60_000L:WEATHER_CACHE_MS);
+                if((weatherNeedsForecast()&&!forecastNeeded)||weatherForceRefresh){nextWeatherAttempt=0;handler.post(weatherRefresh);}
+                else handler.postDelayed(weatherRefresh,value==null?60_000L:Math.max(60_000L,WEATHER_CACHE_MS-(System.currentTimeMillis()-fetchedAt)));
             });
         });
     }
@@ -1735,17 +1785,18 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void launcherSettings() {
-        String[] cats = {"Tiles", "Clock", "Theme", "Wallpaper", "Apps", "System"};
-        String[] catHints = {"App cards layout", "Time display", "Colors & appearance", "Background", "Your apps", "Launcher system"};
+        String[] cats = {"Tiles", "Clock", "Theme", "Wallpaper", "Weather", "Apps", "System"};
+        String[] catHints = {"App cards layout", "Time display", "Colors & appearance", "Background", "Widget, city and forecast", "Your apps", "Launcher system"};
         int[] catIcons = {R.drawable.ic_apps, R.drawable.ic_clock, R.drawable.ic_palette,
-                R.drawable.ic_picture, R.drawable.ic_apps, R.drawable.ic_settings};
+                R.drawable.ic_picture, R.drawable.ic_brightness, R.drawable.ic_apps, R.drawable.ic_settings};
         GlassSettings.options(this, "Launcher settings", cats, catHints, catIcons, which -> {
             switch (which) {
                 case 0: tileSettings(); break;
                 case 1: clockSettings(); break;
                 case 2: themeSettings(); break;
                 case 3: wallpaperMenu(); break;
-                case 4: appMenu(); break;
+                case 4: weatherMenu(); break;
+                case 5: appMenu(); break;
                 default: systemMenu(); break;
             }
         });
@@ -2206,6 +2257,8 @@ public final class PersonalHomeActivity extends Activity {
             case "Clock size": return indexOf(ThemeStyle.custom(prefs)?DemoGeometry.clockSizes(tv):tv?new int[]{42,52,62}:new int[]{36,44,52},prefs.getInt("clock_size",tv?52:44));
             case "Clock style": return prefs.getInt("clock_style", 0);
             case "Clock font": return prefs.getInt("clock_font", 0);
+            case "Home weather widget": return prefs.getBoolean("weather_widget",ThemeStyle.id(prefs)==ThemeStyle.GLASS)?0:1;
+            case "Widget animation": return prefs.getBoolean("weather_widget_animation",true)?0:1;
             case "Hijri day adjustment": return Math.max(0,Math.min(4,prefs.getInt("hijri_adjustment",0)+2));
             case "Time format": return prefs.getBoolean("time_24h", false) ? 1 : 0;
             case "Clock alignment": return prefs.getInt("clock_align", 1);
@@ -2265,6 +2318,19 @@ public final class PersonalHomeActivity extends Activity {
         dialog.show();
     }
 
+    private void weatherMenu(){
+        GlassSettings.options(this,"Weather",new String[]{"Home weather widget","Widget animation","Weather city","Temperature unit","Hourly / daily forecast"},
+            new String[]{"Saved separately for this theme","Animate only while Home is visible","Shared weather location","Celsius or Fahrenheit","Open weather details"},
+            new int[]{R.drawable.ic_brightness,R.drawable.ic_brightness,R.drawable.ic_picture,R.drawable.ic_brightness,R.drawable.ic_brightness},which->{
+                if(which==0)chooseSetting("Home weather widget",new String[]{"On","Off"},value->{
+                    SharedPreferences.Editor edit=prefs.edit().putBoolean("weather_widget",value==0);if(value==0)edit.putBoolean("apps_only",false);edit.apply();buildHomeSoon();
+                });
+                else if(which==1)chooseSetting("Widget animation",new String[]{"On","Off"},value->{prefs.edit().putBoolean("weather_widget_animation",value==0).apply();if(weatherWidget!=null)weatherWidget.active(resumed);});
+                else if(which==2)WeatherSettings.show(this);
+                else if(which==3)chooseSetting("Temperature unit",new String[]{"Celsius","Fahrenheit"},value->prefs.edit().putBoolean("weather_fahrenheit",value==1).apply());
+                else showWeatherForecast();
+            });
+    }
     private void screensaverSettings() {
         chooseSetting("Online landscape screensaver", new String[]{"Preview", "Weather city", "Temperature unit", "Clock position", "Start after idle", "Set automatic screensaver"}, which -> {
             if (which == 0) launch(new Intent(this, LandscapeActivity.class));
@@ -2609,7 +2675,7 @@ public final class PersonalHomeActivity extends Activity {
         super.onResume();
         resumed = true;
         if(bluetooth!=null){bluetooth.start();updateBluetooth();}
-        if(telemetry!=null)telemetry.start();
+        if(telemetry!=null)telemetry.start();if(weatherWidget!=null)weatherWidget.active(true);if(analogClock!=null)analogClock.active(true);
         GitHubUpdates.resume(this);
         VolumeAutoStart.request(this);
         HomeAutomation.onResume(this);
@@ -2643,6 +2709,7 @@ public final class PersonalHomeActivity extends Activity {
         VolumeKeys.stop();
         VolumeSlider.hide(this);
         resumed = false;
+        if(weatherWidget!=null)weatherWidget.active(false);if(analogClock!=null)analogClock.active(false);
         if(bluetooth!=null)bluetooth.stop();if(telemetry!=null)telemetry.stop();
         if (grid != null && grid.getLayoutManager() != null) gridState = grid.getLayoutManager().onSaveInstanceState();
         if (focusedPkg != null) prefs.edit().putString("home_focus_pkg", focusedPkg).apply();
@@ -2699,6 +2766,7 @@ public final class PersonalHomeActivity extends Activity {
         if (liquidBackdrop != null) { liquidBackdrop.close(); liquidBackdrop=null; }
         if (headerBackdrop != null) { headerBackdrop.close(); headerBackdrop=null; }
         unregisterReceiver(appChanges);
+        if(weatherWidget!=null)weatherWidget.active(false);if(analogClock!=null)analogClock.active(false);if(forecastPanel!=null)forecastPanel.close();
         if(bluetooth!=null)bluetooth.stop();if(telemetry!=null)telemetry.stop();
         if(appLibrary!=null)appLibrary.close();
         if (panel != null) panel.dismiss();
