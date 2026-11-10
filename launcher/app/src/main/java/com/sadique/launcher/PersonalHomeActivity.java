@@ -871,7 +871,7 @@ public final class PersonalHomeActivity extends Activity {
         int screenW = getResources().getDisplayMetrics().widthPixels;
         int maxWidth = (pageWidth > 0 ? pageWidth : screenW) - dp(24);
         if (maxWidth <= 0) maxWidth = screenW - dp(24);
-        if(glassOs() && time.getParent() instanceof View && ((View)time.getParent()).getWidth()>0)
+        if((glassOs()||weatherWidgetEnabled()) && time.getParent() instanceof View && ((View)time.getParent()).getWidth()>0)
             maxWidth=Math.max(dp(70),((View)time.getParent()).getWidth()-dp(clockDatesInline?260:80));
         android.text.TextPaint paint = new android.text.TextPaint();
         paint.setTypeface(time.getTypeface());

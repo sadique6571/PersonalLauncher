@@ -19,7 +19,7 @@ final class SweepAnalogClock extends View {
         super(context);frameMs=MemoryProfile.effectiveTier(context,ThemePreferences.get(context))==MemoryProfile.TIER_LIGHT?33:16;
         setContentDescription("Analog clock");setFocusable(false);
     }
-    void active(boolean value){active=value;removeCallbacks(frame);invalidate();}
+    void active(boolean value){active=value;if(value)calendar.setTimeZone(java.util.TimeZone.getDefault());removeCallbacks(frame);invalidate();}
     @Override protected void onDetachedFromWindow(){removeCallbacks(frame);super.onDetachedFromWindow();}
     @Override protected void onWindowVisibilityChanged(int visibility){super.onWindowVisibilityChanged(visibility);if(visibility!=VISIBLE)removeCallbacks(frame);else invalidate();}
     @Override protected void onSizeChanged(int w,int h,int ow,int oh){super.onSizeChanged(w,h,ow,oh);dial=null;}
