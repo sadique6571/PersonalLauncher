@@ -47,6 +47,8 @@ public final class ContinueWatchingView extends LinearLayout {
     private ExecutorService artworkWorker;
     private CancellationSignal query;
     private boolean running, observing;
+    private final boolean compact;
+    private String focusedEntry;
     private int generation;
     private final Runnable refresh = this::reload;
     private final ContentObserver observer = new ContentObserver(handler) {
@@ -56,16 +58,18 @@ public final class ContinueWatchingView extends LinearLayout {
     public ContinueWatchingView(Activity host, Consumer<String> focusTitle) {
         super(host); this.host = host; this.focusTitle = focusTitle;
         prefs = ThemePreferences.get(host);
-        setOrientation(VERTICAL); setPadding(0, dp(22), 0, dp(12));
-        heading = label("Continue watching", 23);
+        compact=ThemeStyle.id(prefs)==ThemeStyle.GLASS;
+        setOrientation(VERTICAL); setPadding(0, dp(compact?8:22), 0, dp(compact?8:12));
+        heading = label("Continue watching", compact?18:23);
         addView(heading);
         TvHorizontalShelf scroll = new TvHorizontalShelf(host);
         scroll.setHorizontalScrollBarEnabled(false);
         cards = new LinearLayout(host);
-        cards.setPadding(0, dp(10), 0, dp(10));
+        cards.setPadding(0, dp(compact?6:10), 0, dp(compact?6:10));
         scroll.addView(cards, new LayoutParams(-2, -2));
         addView(scroll, new LayoutParams(-1, -2));
-        explanation = label("Only resume entries shared by supported TV apps appear here.", 14);
+        explanation = label("Only resume entries shared by supported TV apps appear here.", compact?12:14);
+        explanation.setFocusable(true);
         addView(explanation);
         allow = new Button(host);
         allow.setText("Allow TV Watch Next access"); allow.setAllCaps(false);
@@ -111,25 +115,23 @@ public final class ContinueWatchingView extends LinearLayout {
     }
 
     public void reload() {
-        // The Netflix/YouTube banner rows already show continue-watching content,
-        // so this row hides while any banner row is enabled (avoids duplication).
-        boolean bannersOn = prefs.getBoolean("row_netflix", false)
-                || prefs.getBoolean("row_youtube", false);
-        boolean enabled = prefs.getBoolean("continue_watching", true) && !bannersOn;
+        // This active Home does not render the legacy Netflix/YouTube banner rows.
+        boolean enabled = prefs.getBoolean("continue_watching", true);
         setVisibility(enabled ? VISIBLE : GONE);
         int request = ++generation;
         if (query != null) query.cancel();
         if (!running || !enabled) { cards.removeAllViews(); return; }
         query = new CancellationSignal();
         CancellationSignal cancellation = query;
-        cards.removeAllViews();
+        boolean hadFocus=hasFocus();
+        cards.removeAllViews();explanation.setFocusable(true);
         if (host.getPackageManager().resolveContentProvider(TvContract.AUTHORITY, 0) == null) {
-            allow.setVisibility(GONE); explanation.setText("Resume is available on Android TVs with a shared Watch Next provider."); return;
+            allow.setVisibility(GONE); explanation.setText("Resume is available on Android TVs with a shared Watch Next provider.");if(hadFocus)focusEntry();return;
         }
         boolean permitted = host.checkSelfPermission(PERMISSION) == PackageManager.PERMISSION_GRANTED;
         allow.setVisibility(permitted ? GONE : VISIBLE);
-        if (!permitted) { explanation.setText("Allow TV listings access to read shared Watch Next entries. Some TVs restrict this feature."); return; }
-        explanation.setText("Loading shared resume entries…");
+        if (!permitted) { explanation.setText("Allow TV listings access to read shared Watch Next entries. Some TVs restrict this feature.");explanation.setFocusable(false);if(hadFocus)focusEntry();return; }
+        explanation.setText("Loading shared resume entries…");if(hadFocus)focusEntry();
         worker.execute(() -> {
             List<Item> entries = new ArrayList<>();
             String error = null;
@@ -156,7 +158,10 @@ public final class ContinueWatchingView extends LinearLayout {
             String message = error;
             handler.post(() -> {
                 if (!running || request != generation) return;
+                boolean restore=hasFocus();
                 for (Item item : entries) addCard(item);
+                explanation.setFocusable(entries.isEmpty());
+                if(restore)focusEntry();
                 explanation.setText(message != null ? message : entries.isEmpty()
                         ? "No shared resume items yet. Apps must publish Watch Next entries; private histories cannot be read."
                         : "Shared by your TV apps · select a title to resume");
@@ -164,15 +169,23 @@ public final class ContinueWatchingView extends LinearLayout {
         });
     }
 
+    boolean focusEntry(){
+        if(cards.getChildCount()>0){
+            if(focusedEntry!=null)for(int i=0;i<cards.getChildCount();i++)if(focusedEntry.equals(cards.getChildAt(i).getTag()))return cards.getChildAt(i).requestFocus();
+            return cards.getChildAt(0).requestFocus();
+        }
+        if(allow.getVisibility()==VISIBLE)return allow.requestFocus();
+        return explanation.requestFocus();
+    }
     private void addCard(Item item) {
         LinearLayout card = new LinearLayout(host); card.setOrientation(VERTICAL);
-        card.setPadding(dp(16), dp(16), dp(16), dp(16)); card.setFocusable(true); card.setClickable(true);
+        card.setPadding(dp(compact?10:16), dp(compact?10:16), dp(compact?10:16), dp(compact?10:16)); card.setFocusable(true); card.setClickable(true);
         card.setBackground(background(false)); card.setContentDescription("Resume " + item.title + " in " + item.owner + ". " + host.getString(R.string.h_save_hold));
         ImageView poster = new ImageView(host);
         poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
         poster.setBackground(background(false)); poster.setClipToOutline(true);
         poster.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
-        card.addView(poster, new LayoutParams(-1, dp(106)));
+        card.addView(poster, new LayoutParams(-1, dp(compact?68:106)));
         try { poster.setImageDrawable(host.getPackageManager().getApplicationIcon(item.pkg)); }
         catch (PackageManager.NameNotFoundException ignored) { }
         int request = generation;
@@ -183,15 +196,16 @@ public final class ContinueWatchingView extends LinearLayout {
                 if (running && request == generation) poster.setImageBitmap(bitmap);
             });
         });
-        TextView title = label(item.title, 19); title.setPadding(0, dp(10), 0, 0); title.setMaxLines(2); title.setMinLines(2); title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        TextView title = label(item.title, compact?14:19); title.setPadding(0, dp(compact?6:10), 0, 0); title.setMaxLines(2); title.setMinLines(2); title.setEllipsize(android.text.TextUtils.TruncateAt.END);
         card.addView(title, new LayoutParams(-1, -2));
-        TextView owner = label(item.owner, 13); owner.setPadding(0, dp(6), 0, dp(8)); card.addView(owner);
+        TextView owner = label(item.owner, compact?11:13); owner.setPadding(0, dp(compact?4:6), 0, dp(compact?4:8)); card.addView(owner);
         if (item.duration > 0) {
             ProgressBar progress = new ProgressBar(host, null, android.R.attr.progressBarStyleHorizontal);
             progress.setMax(1000); progress.setProgress(WatchNextModel.progress(item.position, item.duration));
             card.addView(progress, new LayoutParams(-1, dp(6)));
         }
-        card.setOnFocusChangeListener((v, focused) -> { card.setBackground(background(focused)); if (focused) focusTitle.accept(item.owner); });
+        card.setTag(item.pkg+"|"+item.intent);
+        card.setOnFocusChangeListener((v, focused) -> { card.setBackground(background(focused)); if (focused) {focusedEntry=(String)card.getTag();focusTitle.accept(item.owner);} });
         card.setOnClickListener(v -> {
             try {
                 Intent intent = Intent.parseUri(item.intent, Intent.URI_INTENT_SCHEME);
@@ -206,6 +220,7 @@ public final class ContinueWatchingView extends LinearLayout {
         cards.addView(card, position);
     }
     private GradientDrawable background(boolean focused) {
+        if(compact)return GlassAppCard.surface(host,GlassSettings.themeAccent(host),focused,dp(16));
         GradientDrawable shape = new GradientDrawable(); shape.setColor(0xe00a2036); shape.setCornerRadius(dp(16));
         shape.setStroke(dp(focused ? 3 : 1), focused ? 0xff40d9ff : 0xff28435e); return shape;
     }

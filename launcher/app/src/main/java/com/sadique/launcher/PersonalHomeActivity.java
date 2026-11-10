@@ -82,7 +82,7 @@ public final class PersonalHomeActivity extends Activity {
     private int profileEpoch;
     private TextView userName, time, date, ampm, networkStatus, appHeading, greeting, homeWeather;
     private ImageView avatar;
-    private TextView bluetoothStatus, solarDate, islamicDate, focusedSpotlight;
+    private TextView bluetoothStatus, islamicDate, focusedSpotlight;
     private String spotlightName="",spotlightCategory="";
     private GlassBluetooth bluetooth;
     private GlassTelemetry telemetry;
@@ -94,6 +94,8 @@ public final class PersonalHomeActivity extends Activity {
             prefs.edit().putBoolean("glass_os_defaults_v1",true).putString("wallpaper_mode","solid")
                 .putInt("wallpaper_source",0).putInt("header_bg_mode",0).putBoolean("header_glass_v2",true).putInt("clock_size",82)
                 .putBoolean("focus_glow",true).putInt("ambient_strength",100).apply();
+        if(glassOs()&&!prefs.getBoolean("glass_resume_v3",false))
+            prefs.edit().putBoolean("glass_resume_v3",true).putBoolean("continue_watching",true).apply();
         if(glassOs()&&!prefs.getBoolean("glass_reference_v2",false))
             prefs.edit().putBoolean("glass_reference_v2",true).putInt("header_bg_mode",1).putBoolean("header_glass_v2",true).apply();
     }
@@ -412,7 +414,7 @@ public final class PersonalHomeActivity extends Activity {
     private void buildHome() {
         glassDefaults();
         if(telemetry!=null){telemetry.stop();telemetry=null;}
-        solarDate=null;islamicDate=null;bluetoothStatus=null;focusedSpotlight=null;
+        islamicDate=null;bluetoothStatus=null;focusedSpotlight=null;
         HeaderAppearance.clockDefaults(prefs);
         if (liquidBackdrop != null) { liquidBackdrop.close(); liquidBackdrop=null; }
         if (headerBackdrop != null) { headerBackdrop.close(); headerBackdrop=null; }
@@ -618,28 +620,31 @@ public final class PersonalHomeActivity extends Activity {
         timeRow.setGravity(Gravity.CENTER_VERTICAL | new int[]{Gravity.START,Gravity.CENTER_HORIZONTAL,Gravity.END}[ThemeStyle.clockAlignment(prefs)]);
         timeRow.addView(time, new LinearLayout.LayoutParams(-2, -2));
         LinearLayout.LayoutParams ampmParams = new LinearLayout.LayoutParams(-2, -2);
-        ampmParams.gravity = Gravity.BOTTOM;
-        ampmParams.bottomMargin = dp(6);
+        ampmParams.gravity = glassOs()?Gravity.CENTER_VERTICAL:Gravity.BOTTOM;
+        ampmParams.bottomMargin = dp(glassOs()?0:6);if(glassOs())ampmParams.setMarginStart(dp(8));
         timeRow.addView(ampm, ampmParams);
         clock.addView(timeRow, new LinearLayout.LayoutParams(-1, dp(clockSize + (compact ? 10 : 36))));
         clock.addView(date);
         if(glassOs()) {
             time.setTypeface(android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD));
             ampm.setTypeface(android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD));
-            ampm.setTextColor(accentColor());ampm.setBackground(GlassOsUi.panel(this,10));ampm.setPadding(dp(8),dp(4),dp(8),dp(4));
+            GradientDrawable ampmBadge=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0xff1b3855,0xff102941});ampmBadge.setCornerRadius(dp(10));ampmBadge.setStroke(dp(1),0x7796bdf5);
+            ampm.setTextColor(Color.WHITE);ampm.setTextSize(20);ampm.setBackground(ampmBadge);ampm.setPadding(dp(8),dp(4),dp(8),dp(4));
+            ampm.setMinWidth(dp(56));ampm.setMinHeight(dp(36));ampm.setGravity(Gravity.CENTER);ampm.setShadowLayer(0,0,0,Color.TRANSPARENT);
             clock.setPadding(0,0,0,0);
-            solarDate=text("",13,MUTED);solarDate.setId(R.id.shamsiDate);
             islamicDate=text("",13,MUTED);islamicDate.setId(R.id.lunarDate);
-            clock.addView(solarDate);clock.addView(islamicDate);
+            clock.addView(islamicDate);
             if(getResources().getConfiguration().screenWidthDp>=700) {
-                clock.removeView(date);clock.removeView(solarDate);clock.removeView(islamicDate);
+                clock.removeView(date);clock.removeView(islamicDate);
                 View divider=new View(this);divider.setId(R.id.clockDivider);divider.setBackgroundColor(0x38ffffff);
                 LinearLayout.LayoutParams line=new LinearLayout.LayoutParams(dp(1.5f),dp(48));line.setMargins(dp(12),0,dp(12),0);timeRow.addView(divider,line);
                 LinearLayout dates=new LinearLayout(this);dates.setOrientation(LinearLayout.VERTICAL);
-                date.setTextSize(18);date.setTypeface(date.getTypeface(),android.graphics.Typeface.BOLD);date.setGravity(Gravity.START);dates.addView(date);dates.addView(solarDate);dates.addView(islamicDate);
+                date.setTextSize(18);date.setTypeface(date.getTypeface(),android.graphics.Typeface.BOLD);date.setGravity(Gravity.START);dates.addView(date);dates.addView(islamicDate);
                 timeRow.addView(dates,new LinearLayout.LayoutParams(0,-2,1));
             }
         }
+        if(!glassOs()) {islamicDate=text("",12,MUTED);islamicDate.setId(R.id.lunarDate);clock.addView(islamicDate);}
+        timeRow.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{if(r-l!=or-ol&&time.getText().length()>0)fitClockText(time.getText());});
         if(glassOs()) {
             focusedSpotlight=text("",13,0xffffffff);focusedSpotlight.setSingleLine();focusedSpotlight.setEllipsize(android.text.TextUtils.TruncateAt.END);
             focusedSpotlight.setPadding(dp(13),dp(7),dp(13),dp(7));focusedSpotlight.setBackground(GlassOsUi.panel(this,999));
@@ -705,7 +710,7 @@ public final class PersonalHomeActivity extends Activity {
         page.addView(scroll, referenceStage?new LinearLayout.LayoutParams(-1,0,1):new LinearLayout.LayoutParams(-1,-2));
         if(ThemeStyle.custom(prefs)||glassOs()) appHeading.setVisibility(View.GONE);
         page.addView(appHeading);
-        page.addView(appBody,referenceStage?new LinearLayout.LayoutParams(-1,dp(GlassDockLayout.dockHeight(getResources().getConfiguration().screenHeightDp))):new LinearLayout.LayoutParams(-1,0,1));
+        page.addView(appBody,referenceStage?new LinearLayout.LayoutParams(-1,referenceDockHeight()):new LinearLayout.LayoutParams(-1,0,1));
         // Focus-glow tracker: keep the wallpaper glow on the focused tile no matter
         // which scroller moved.
         View.OnScrollChangeListener glowTracker = (v, x, y, oldX, oldY) -> {
@@ -734,6 +739,10 @@ public final class PersonalHomeActivity extends Activity {
             int width = page.getWidth() - page.getPaddingLeft() - page.getPaddingRight();
             if (width > 0 && width != pageWidth) {
                 pageWidth = width;
+                if(glassOs()&&!prefs.getBoolean("apps_only",false)){
+                    LinearLayout.LayoutParams body=(LinearLayout.LayoutParams)appBody.getLayoutParams();
+                    int height=referenceDockHeight();if(body.height!=height){body.height=height;appBody.setLayoutParams(body);}
+                }
                 if (cachedApps != null) renderApps(cachedApps);
                 else loadApps();
             }
@@ -804,9 +813,11 @@ public final class PersonalHomeActivity extends Activity {
             boolean analog = prefs.getInt("clock_style", 0) == 1;
             ampm.setVisibility(analog ? View.INVISIBLE : (ampmText.isEmpty() ? View.GONE : View.VISIBLE));
         }
-        date.setText(new java.text.SimpleDateFormat("EEE, d MMM yyyy", Locale.getDefault()).format(now.getTime()));
-        if(solarDate!=null)solarDate.setText(Shamsi.today(getResources()));
-        if(islamicDate!=null)islamicDate.setText(Lunar.today(getResources(),0));
+        date.setText(new java.text.SimpleDateFormat("EEE, d MMM yyyy", Locale.ENGLISH).format(now.getTime()));
+        if(islamicDate!=null)try{
+            java.time.LocalDate today=java.time.LocalDate.of(now.get(Calendar.YEAR),now.get(Calendar.MONTH)+1,now.get(Calendar.DAY_OF_MONTH));
+            islamicDate.setText(HijriCalendar.format(today,prefs.getInt("hijri_adjustment",0)));
+        }catch(java.time.DateTimeException unavailable){islamicDate.setText("Islamic date unavailable");}
         sky.minute = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
         sky.clockStyle = prefs.getInt("clock_style", 0);
         sky.invalidate();
@@ -825,7 +836,7 @@ public final class PersonalHomeActivity extends Activity {
         int maxWidth = (pageWidth > 0 ? pageWidth : screenW) - dp(24);
         if (maxWidth <= 0) maxWidth = screenW - dp(24);
         if(glassOs() && time.getParent() instanceof View && ((View)time.getParent()).getWidth()>0)
-            maxWidth=Math.max(dp(70),((View)time.getParent()).getWidth()-dp(getResources().getConfiguration().screenWidthDp>=700?190:60));
+            maxWidth=Math.max(dp(70),((View)time.getParent()).getWidth()-dp(getResources().getConfiguration().screenWidthDp>=700?260:80));
         android.text.TextPaint paint = new android.text.TextPaint();
         paint.setTypeface(time.getTypeface());
         float sizePx = clockTextSize * density;
@@ -1291,8 +1302,20 @@ public final class PersonalHomeActivity extends Activity {
         if(grid.getPaddingTop()!=top) grid.setPadding(0,top,0,dp(14));
     }
 
+    private int referenceCardHeight(int cellWidth){
+        int spacing=Math.max(0,Math.min(2,prefs.getInt("tile_spacing",1)));
+        int margin=(tvGlass()?new int[]{dp(6),dp(10),dp(16)}:new int[]{dp(4),dp(8),dp(14)})[spacing];
+        int widthDp=Math.round((cellWidth-margin*2)/getResources().getDisplayMetrics().density);
+        return dp(GlassDockLayout.cardHeight(widthDp,getResources().getConfiguration().screenHeightDp));
+    }
+    private int referenceDockHeight(){
+        int available=pageWidth>0?gridWidth():dp(Math.max(160,getResources().getConfiguration().screenWidthDp-(tv?64:32)));
+        int cols=PersonalHomeModel.columns(Math.round(available/getResources().getDisplayMetrics().density),prefs.getInt(tv?"tv_columns":"phone_columns",0),prefs.getBoolean("large_tiles",false));
+        return referenceCardHeight(available/cols)*2+dp(48);
+    }
     private View createAppTile(App app, int width, boolean moving) {
         requestAppIcon(app);
+        boolean compactReference=glassOs()&&referenceCardHeight(width)<dp(112*getResources().getConfiguration().fontScale);
         android.widget.FrameLayout tile = ThemeStyle.custom(prefs)?new DemoTile(this,ThemeStyle.id(prefs),tileRadius()):new android.widget.FrameLayout(this);
         tile.setBackground(appSurface(app.accent,false));
         tile.setOutlineProvider(new ViewOutlineProvider() {
@@ -1337,10 +1360,11 @@ public final class PersonalHomeActivity extends Activity {
         } else if(glassOs()) {
             icon.setScaleType(ImageView.ScaleType.FIT_CENTER);icon.setPadding(dp(5),dp(5),dp(5),dp(5));
             GradientDrawable logoBg=new GradientDrawable();logoBg.setColor(0x57000000);logoBg.setCornerRadius(dp(12));logoBg.setStroke(dp(1),0x38ffffff);icon.setBackground(logoBg);
-            android.widget.FrameLayout.LayoutParams logo=new android.widget.FrameLayout.LayoutParams(dp(42),dp(42),Gravity.TOP|Gravity.START);logo.setMargins(dp(12),dp(12),0,0);tile.addView(icon,logo);
-            LinearLayout copy=new LinearLayout(this);copy.setOrientation(LinearLayout.VERTICAL);copy.setPadding(dp(12),0,dp(12),dp(10));
-            TextView title=text(app.name,15,0xffffffff);title.setTag("reference_app_title");title.setTypeface(title.getTypeface(),android.graphics.Typeface.BOLD);title.setSingleLine();title.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            TextView subtitle=text(appCategory(app),10,0xd6ffffff);subtitle.setSingleLine();subtitle.setEllipsize(android.text.TextUtils.TruncateAt.END);copy.addView(title);copy.addView(subtitle);
+            int logoSize=compactReference?32:40;
+            android.widget.FrameLayout.LayoutParams logo=new android.widget.FrameLayout.LayoutParams(dp(logoSize),dp(logoSize),Gravity.TOP|Gravity.START);logo.setMargins(dp(compactReference?8:12),dp(compactReference?8:12),0,0);tile.addView(icon,logo);
+            LinearLayout copy=new LinearLayout(this);copy.setOrientation(LinearLayout.VERTICAL);copy.setPadding(dp(compactReference?8:12),0,dp(compactReference?8:12),dp(compactReference?8:10));
+            TextView title=text(app.name,compactReference?12:14,0xffffffff);title.setTag("reference_app_title");title.setTypeface(title.getTypeface(),android.graphics.Typeface.BOLD);title.setSingleLine();title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            TextView subtitle=text(appCategory(app),10,0xd6ffffff);subtitle.setTag("reference_app_subtitle");subtitle.setVisibility(compactReference?View.GONE:View.VISIBLE);subtitle.setSingleLine();subtitle.setEllipsize(android.text.TextUtils.TruncateAt.END);copy.addView(title);copy.addView(subtitle);
             tile.addView(copy,new android.widget.FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM));
         }else tile.addView(icon, new android.widget.FrameLayout.LayoutParams(-1, -1));
         if(glassOs()) {
@@ -1354,7 +1378,8 @@ public final class PersonalHomeActivity extends Activity {
             if (!moving) tile.setForeground(tileBorder(app.accent, focus));
             if (focus) focusedPkg = app.info.activityInfo.packageName;
             if(glassOs()&&!moving)grid.expandKey(focus?app.info.activityInfo.packageName:null);
-            View title=tile.findViewWithTag("reference_app_title");if(title instanceof TextView)((TextView)title).setTextSize(focus?18:15);
+            View title=tile.findViewWithTag("reference_app_title");if(title instanceof TextView)((TextView)title).setTextSize(compactReference?(focus?14:12):(focus?17:14));
+            View subtitle=tile.findViewWithTag("reference_app_subtitle");if(subtitle!=null)subtitle.setVisibility(compactReference?View.GONE:View.VISIBLE);
             if (!moving) {
                 // Focus zoom: gentle scale animation.
                 float scale = focus ? (glassOs()?1f:tvGlass() ? 1.06f : 1.05f) : 1f;
@@ -1424,7 +1449,7 @@ public final class PersonalHomeActivity extends Activity {
         int vm = (tvGlass() ? new int[]{dp(8), dp(12), dp(18)} : new int[]{dp(5), dp(10), dp(16)})[spacing];
         position.width = width - hm * 2;
         position.height = ThemeStyle.custom(prefs)?Math.max(dp(54),Math.round(position.width/DemoGeometry.ratio()))+Math.round(DemoGeometry.footer(ThemeStyle.id(prefs),dp(1))):Math.round(position.width*9f/16f);
-        if(glassOs()){position.height=Math.min(dp(GlassDockLayout.cardHeight(getResources().getConfiguration().screenHeightDp)),Math.max(dp(100),Math.round(position.width*.85f)));position.width=-1;}
+        if(glassOs()){position.height=referenceCardHeight(width);position.width=-1;}
         position.setMargins(hm, vm, hm, vm);
         tile.setLayoutParams(position);
         tile.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
@@ -1844,9 +1869,9 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void clockSettings() {
-        String[] labels = {"Clock size", "Clock style", "Clock font", "Time format", "Clock alignment", "Clock seconds", "Clock glow", "Clock shadow", "Hide clock", "Hide greeting"};
-        String[] hints = {"Small, normal or large", "Digital or analog", "Bold, serif or mono", "12-hour or 24-hour", "Left, center or right", "Show seconds", "Halo behind the clock", "Shadow for readability", "Hide the clock", "Hide the greeting"};
-        int[] icons = {R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock};
+        String[] labels = {"Clock size", "Clock style", "Clock font", "Time format", "Clock alignment", "Clock seconds", "Clock glow", "Clock shadow", "Hide clock", "Hide greeting", "Hijri day adjustment"};
+        String[] hints = {"Small, normal or large", "Digital or analog", "Bold, serif or mono", "12-hour or 24-hour", "Left, center or right", "Show seconds", "Halo behind the clock", "Shadow for readability", "Hide the clock", "Hide the greeting", "Adjust for local moon sighting"};
+        int[] icons = {R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock};
         Runnable[] choices = {
             () -> chooseSetting("Clock size", new String[]{"Small", "Normal", "Large"}, which -> {
                 prefs.edit().putInt("clock_size", (ThemeStyle.custom(prefs)?DemoGeometry.clockSizes(tv):tv?new int[]{42,52,62}:new int[]{36,44,52})[which]).apply(); buildHomeSoon();
@@ -1882,6 +1907,7 @@ public final class PersonalHomeActivity extends Activity {
             () -> chooseSetting("Hide greeting", new String[]{"Show", "Hide"}, which -> {
                 prefs.edit().putBoolean("hide_greeting", which == 1).apply(); buildHomeSoon();
             }),
+            () -> chooseSetting("Hijri day adjustment",new String[]{"-2 days","-1 day","Calculated date","+1 day","+2 days"},which->{prefs.edit().putInt("hijri_adjustment",which-2).apply();updateClock();}),
         };
         subMenu("Clock", labels, hints, icons, choices);
     }
@@ -2016,7 +2042,11 @@ public final class PersonalHomeActivity extends Activity {
             this::rearrangeApps,
             () -> chooseSetting("Continue watching", new String[]{"Show below apps", "Hide row", "Allow TV Watch Next access"}, which -> {
                 if (which == 2) continueWatching.requestAccess();
-                else { prefs.edit().putBoolean("continue_watching", which == 0).apply(); continueWatching.reload(); }
+                else {
+                    SharedPreferences.Editor settings=prefs.edit().putBoolean("continue_watching",which==0);
+                    if(which==0)settings.putBoolean("apps_only",false);settings.apply();
+                    buildHomeSoon();
+                }
             }),
         };
         subMenu("Apps", labels, hints, icons, choices);
@@ -2079,6 +2109,7 @@ public final class PersonalHomeActivity extends Activity {
         applyLabelScheme(time, false, false);
         applyLabelScheme(ampm, false, false);
         applyLabelScheme(date, false, true);
+        applyLabelScheme(islamicDate, false, true);
         applyLabelScheme(appHeading, false, false);
     }
 
@@ -2087,13 +2118,12 @@ public final class PersonalHomeActivity extends Activity {
     private void applyLabelScheme(android.widget.TextView label, boolean dark, boolean muted) {
         if (label == null) return;
         if(glassOs()&&label==networkStatus)return;
-        if(glassOs()&&label==ampm){label.setTextColor(accentColor());return;}
+        if(glassOs()&&label==ampm){label.setTextColor(Color.WHITE);return;}
         label.setTextColor(ThemeStyle.custom(prefs)?(muted?ThemeStyle.muted(prefs):ThemeStyle.foreground(prefs)):(muted ? 0xE6FFFFFF : 0xFFFFFFFF));
-        boolean clockLabel=label==time || label==ampm || label==date;
+        boolean clockLabel=label==time || label==ampm || label==date || label==islamicDate;
         boolean headerLabel=label==userName || label==greeting || label==homeWeather || label==networkStatus;
         if(headerLabel) label.setTextColor(HeaderAppearance.foreground(prefs));
         if(glassOs()&&label==networkStatus)return;
-        if(glassOs()&&label==ampm){label.setTextColor(accentColor());return;}
         if(clockLabel) label.setTextColor(wallpaperClockInk);
         if(clockLabel && !prefs.getBoolean("clock_shadow",true)) label.setShadowLayer(0,0,0,Color.TRANSPARENT);
         else {
@@ -2176,6 +2206,7 @@ public final class PersonalHomeActivity extends Activity {
             case "Clock size": return indexOf(ThemeStyle.custom(prefs)?DemoGeometry.clockSizes(tv):tv?new int[]{42,52,62}:new int[]{36,44,52},prefs.getInt("clock_size",tv?52:44));
             case "Clock style": return prefs.getInt("clock_style", 0);
             case "Clock font": return prefs.getInt("clock_font", 0);
+            case "Hijri day adjustment": return Math.max(0,Math.min(4,prefs.getInt("hijri_adjustment",0)+2));
             case "Time format": return prefs.getBoolean("time_24h", false) ? 1 : 0;
             case "Clock alignment": return prefs.getInt("clock_align", 1);
             case "Clock seconds": return prefs.getBoolean("clock_seconds", false) ? 1 : 0;

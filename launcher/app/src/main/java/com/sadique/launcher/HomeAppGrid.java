@@ -21,6 +21,7 @@ final class HomeAppGrid<T> extends RecyclerView {
     private final Factory<T> factory;
     private List<T> items = Collections.emptyList();
     private View footer;
+    private boolean pendingFooter;
     private String pendingFocus;
     private int cellWidth,columns=4;
     private boolean referenceExpansion;
@@ -44,7 +45,7 @@ final class HomeAppGrid<T> extends RecyclerView {
     @Override protected void onDetachedFromWindow(){removeCallbacks(applyExpansion);if(expansionAnimator!=null)expansionAnimator.cancel();super.onDetachedFromWindow();}
     private Runnable upFromApps;
     void setUpFromApps(Runnable action) { upFromApps = action; }
-    void cancelPendingFocus() { pendingFocus = null; }
+    void cancelPendingFocus() { pendingFocus = null; pendingFooter=false; }
 
     HomeAppGrid(Context context, Function<T, String> key, Factory<T> factory) {
         super(context);
@@ -123,22 +124,30 @@ final class HomeAppGrid<T> extends RecyclerView {
         if (position < 0 || position >= items.size()) return false;
         if (event.getAction() != android.view.KeyEvent.ACTION_DOWN || event.isCanceled()) return true;
         int next = horizontal ? AppGridNavigation.horizontal(position, items.size(), code == android.view.KeyEvent.KEYCODE_DPAD_RIGHT)
-                : AppGridNavigation.vertical(position, items.size(), columns, code == android.view.KeyEvent.KEYCODE_DPAD_DOWN);
+                : AppGridNavigation.verticalWithFooter(position,items.size(),columns,code==android.view.KeyEvent.KEYCODE_DPAD_DOWN,footer!=null&&footer.getVisibility()!=GONE);
         if (next < 0) {
             pendingFocus = null;
             if (upFromApps != null) upFromApps.run();
-        } else if (next != position) focusKey(key.apply(items.get(next)));
-        else if (code == android.view.KeyEvent.KEYCODE_DPAD_DOWN && footer != null && footer.isShown() && footer.hasFocusable()) {
-            pendingFocus = null; footer.requestFocus();
-        }
+        } else if(next==items.size()&&footer!=null)focusFooter();
+        else if (next != position) focusKey(key.apply(items.get(next)));
         return true;
     }
 
     void rebind() { adapter.notifyItemRangeChanged(0, items.size()); }
     /** Focus can change during RecyclerView layout; redraw safely without invalidating its offsets then. */
     void refreshReflections() { if(isComputingLayout())postInvalidateOnAnimation();else invalidateItemDecorations(); }
+    private void focusFooter(){
+        if(footer==null||footer.getVisibility()==GONE)return;
+        pendingFocus=null;pendingFooter=true;scrollToPosition(items.size());restoreFooterFocus();post(this::restoreFooterFocus);
+    }
+    private void restoreFooterFocus(){
+        if(!pendingFooter||footer==null||footer.getParent()==null||!footer.isShown())return;
+        boolean focused=footer instanceof ContinueWatchingView?((ContinueWatchingView)footer).focusEntry():footer.requestFocus();
+        if(focused)pendingFooter=false;
+    }
     void focusKey(String pkg) {
-        if (items.isEmpty()) { if (footer != null) footer.requestFocus(); return; }
+        pendingFooter=false;
+        if (items.isEmpty()) { focusFooter(); return; }
         int position = 0;
         for (int i = 0; i < items.size(); i++) if (key.apply(items.get(i)).equals(pkg)) { position = i; break; }
         pendingFocus = key.apply(items.get(position));
@@ -199,7 +208,7 @@ final class HomeAppGrid<T> extends RecyclerView {
                 frame.addView(tile, tile.getLayoutParams());
             }
         }
-        @Override public void onViewAttachedToWindow(Cell cell) { restorePendingFocus(); }
+        @Override public void onViewAttachedToWindow(Cell cell) { restorePendingFocus(); restoreFooterFocus(); }
         @Override public void onViewRecycled(Cell cell) {
             ((FrameLayout) cell.itemView).removeAllViews(); cell.itemView.setTag(null);
         }

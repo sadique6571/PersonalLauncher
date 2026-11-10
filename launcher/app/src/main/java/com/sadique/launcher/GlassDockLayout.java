@@ -4,8 +4,11 @@ package com.sadique.launcher;
 final class GlassDockLayout {
     static final int SPANS=360; // Divisible by every supported column count.
     private GlassDockLayout(){}
-    static int cardHeight(int screenHeightDp){return Math.max(96,Math.min(160,(screenHeightDp-312)/2));}
-    static int dockHeight(int screenHeightDp){return cardHeight(screenHeightDp)*2+48;}
+    static int cardHeight(int cardWidthDp,int screenHeightDp){
+        int available=Math.max(88,Math.min(136,(screenHeightDp-312)/2));
+        return Math.min(available,Math.max(80,Math.round(Math.max(1,cardWidthDp)*.625f)));
+    }
+    static int dockHeight(int cardWidthDp,int screenHeightDp){return cardHeight(cardWidthDp,screenHeightDp)*2+48;}
     static int span(int position,int columns,int previous,int selected,float transition){
         columns=Math.max(2,Math.min(6,columns));transition=Math.max(0,Math.min(1,transition));
         int row=position/columns,col=position%columns;double total=0,before=0,through=0;
