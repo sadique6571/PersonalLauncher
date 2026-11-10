@@ -998,6 +998,7 @@ public final class PersonalHomeActivity extends Activity {
                     }
                     if(forecast==null){forecast=WeatherForecast.fetch(Double.parseDouble(latitude),Double.parseDouble(longitude),fahrenheit);fetched=System.currentTimeMillis();}
                     WeatherOrbView.prepareMoon(this);
+                    WeatherImages.prepare(this);
                     encoded=forecast.encode();summary=forecast.summary(fahrenheit);
                 }else{summary=WeatherClient.fetch(Double.parseDouble(latitude),Double.parseDouble(longitude),fahrenheit);fetched=System.currentTimeMillis();}
             }catch(Exception unavailable){android.util.Log.w("PersonalWeather","Weather unavailable ("+unavailable.getClass().getSimpleName()+")");}
