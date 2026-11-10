@@ -24,6 +24,7 @@ final class AppAccentAvatar extends ImageView {
         ring.setShader(new LinearGradient(0,0,Math.max(1,getWidth()),Math.max(1,getHeight()),0xffffffff,accent,Shader.TileMode.CLAMP));
     }
     @Override protected void onSizeChanged(int w,int h,int oldw,int oldh) {
+        super.onSizeChanged(w,h,oldw,oldh);
         last=null; rebuildRing(); clip.reset(); clip.addCircle(w/2f,h/2f,Math.max(0,Math.min(w,h)/2f-dp(2)),Path.Direction.CW);
     }
     @Override protected void onDraw(Canvas c) {

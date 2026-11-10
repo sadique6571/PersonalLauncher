@@ -632,7 +632,7 @@ public final class PersonalHomeActivity extends Activity {
                 View divider=new View(this);divider.setId(R.id.clockDivider);divider.setBackgroundColor(0x38ffffff);
                 LinearLayout.LayoutParams line=new LinearLayout.LayoutParams(dp(1.5f),dp(48));line.setMargins(dp(12),0,dp(12),0);timeRow.addView(divider,line);
                 LinearLayout dates=new LinearLayout(this);dates.setOrientation(LinearLayout.VERTICAL);
-                date.setTextSize(14);date.setGravity(Gravity.START);dates.addView(date);dates.addView(solarDate);dates.addView(islamicDate);
+                date.setTextSize(18);date.setGravity(Gravity.START);dates.addView(date);dates.addView(solarDate);dates.addView(islamicDate);
                 timeRow.addView(dates,new LinearLayout.LayoutParams(0,-2,1));
             }
         }
@@ -660,6 +660,7 @@ public final class PersonalHomeActivity extends Activity {
         grid.setClipToPadding(false);
         appBody = new LinearLayout(this);
         appBody.setOrientation(LinearLayout.VERTICAL);
+        if(glassOs()){appBody.setClipChildren(false);page.setClipChildren(false);}
         // App cards float directly on wallpaper in every visual style.
         boolean liquidGlass=TvGlassStyle.enabled(prefs);
         appBody.setBackground(null); appBody.setPadding(0,0,0,0); appBody.setClipToOutline(false);
@@ -1346,8 +1347,8 @@ public final class PersonalHomeActivity extends Activity {
                 v.animate().cancel();
                 if (MemoryProfile.effectiveTier(this, prefs) == MemoryProfile.TIER_LIGHT) {
                     v.setScaleX(scale); v.setScaleY(sy);v.setTranslationY(lift);
-                } else v.animate().scaleX(scale).scaleY(sy).translationY(lift).setUpdateListener(a->grid.invalidateItemDecorations()).setDuration(tvGlass() ? 180 : 150).start();
-                if(glassOs())grid.invalidateItemDecorations();
+                } else v.animate().scaleX(scale).scaleY(sy).translationY(lift).setUpdateListener(a->grid.refreshReflections()).setDuration(tvGlass() ? 180 : 150).start();
+                if(glassOs())grid.refreshReflections();
             }
             tile.setTranslationZ(focus && prefs.getBoolean("focus_glow", true) ? dp(10) : 0);
             if(glassOs()&&tile.getParent() instanceof View)((View)tile.getParent()).setTranslationZ(focus?dp(10):0);
@@ -2057,6 +2058,7 @@ public final class PersonalHomeActivity extends Activity {
      *  readable on any wallpaper. Replaces the old per-label adaptive colors. */
     private void applyLabelScheme(android.widget.TextView label, boolean dark, boolean muted) {
         if (label == null) return;
+        if(glassOs()&&label==networkStatus)return;
         label.setTextColor(ThemeStyle.custom(prefs)?(muted?ThemeStyle.muted(prefs):ThemeStyle.foreground(prefs)):(muted ? 0xE6FFFFFF : 0xFFFFFFFF));
         boolean clockLabel=label==time || label==ampm || label==date;
         boolean headerLabel=label==userName || label==greeting || label==homeWeather || label==networkStatus;
