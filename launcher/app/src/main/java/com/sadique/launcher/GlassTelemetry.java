@@ -15,8 +15,7 @@ final class GlassTelemetry extends LinearLayout {
     private volatile Handler sampling;
     private final TextView[] values=new TextView[3];
     private final ProgressBar[] bars=new ProgressBar[3];
-    private long totalPrev=-1,idlePrev;
-    private boolean cpuUnavailable;
+    private final TextView[] labels=new TextView[3];
     GlassTelemetry(Activity host) {
         super(host);setOrientation(VERTICAL);setId(R.id.statsCard);
         int pad=GlassSettings.dp(host,14);setPadding(pad,pad,pad,pad);
@@ -29,7 +28,7 @@ final class GlassTelemetry extends LinearLayout {
         int[] colors={0xff38bdf8,0xff34d399,0xfff59e0b};String[] names={"CPU","RAM","MEMORY"};
         for(int i=0;i<3;i++) {
             LinearLayout row=new LinearLayout(host);row.setPadding(0,GlassSettings.dp(host,10),0,0);
-            row.addView(GlassSettings.label(host,names[i],10,0xffc5cede),new LayoutParams(0,-2,1));
+            labels[i]=GlassSettings.label(host,names[i],10,0xffc5cede);row.addView(labels[i],new LayoutParams(0,-2,1));
             values[i]=GlassSettings.label(host,"—",10,0xfff0f7ff);values[i].setId(ids[i]);row.addView(values[i]);addView(row);
             bars[i]=new ProgressBar(host,null,android.R.attr.progressBarStyleHorizontal);bars[i].setId(progress[i]);bars[i].setMax(100);
             android.graphics.drawable.GradientDrawable background=new android.graphics.drawable.GradientDrawable();background.setColor(0x18ffffff);background.setCornerRadius(GlassSettings.dp(host,999));
@@ -43,15 +42,18 @@ final class GlassTelemetry extends LinearLayout {
     }
     void start() {
         if(thread!=null)return;
-        totalPrev=-1;cpuUnavailable=false;
+        CpuUsageSampler cpuSampler=new CpuUsageSampler(new AndroidCpuSource());
         thread=new HandlerThread("glass-stats");thread.start();Handler bg=new Handler(thread.getLooper());sampling=bg;
         bg.post(new Runnable(){@Override public void run(){
             if(sampling!=bg)return;
-            int cpu=cpu();ActivityManager.MemoryInfo memory=new ActivityManager.MemoryInfo();
+            CpuUsageSampler.Sample cpu=cpuSampler.sample();ActivityManager.MemoryInfo memory=new ActivityManager.MemoryInfo();
             ActivityManager am=getContext().getSystemService(ActivityManager.class);if(am!=null)am.getMemoryInfo(memory);
             long total=Environment.getDataDirectory().getTotalSpace(),free=Environment.getDataDirectory().getFreeSpace();
             ui.post(()->{if(sampling!=bg)return;
-                values[0].setText(cpu<0?"Unavailable":cpu+"%");bars[0].setProgress(Math.max(0,cpu));
+                labels[0].setText(cpu.system?"CPU":"Launcher CPU");
+                values[0].setText(cpu.ready()?String.format(Locale.getDefault(),"%.1f%%",cpu.percent):"Sampling…");
+                values[0].setContentDescription(cpu.system?"Total CPU usage":"Launcher process usage as a share of CPU capacity");
+                bars[0].setProgress(cpu.ready()?(int)Math.round(cpu.percent):0);
                 int ram=GlassOsMetrics.percent(memory.totalMem-memory.availMem,memory.totalMem);
                 values[1].setText(memory.totalMem<=0?"Unavailable":String.format(Locale.getDefault(),"%d%% • %.1f / %.1f GB",ram,gb(memory.totalMem-memory.availMem),gb(memory.totalMem)));
                 bars[1].setProgress(ram);
@@ -62,14 +64,4 @@ final class GlassTelemetry extends LinearLayout {
     }
     void stop(){Handler bg=sampling;sampling=null;if(bg!=null)bg.removeCallbacksAndMessages(null);if(thread!=null){thread.quitSafely();thread=null;}ui.removeCallbacksAndMessages(null);}
     private static double gb(long n){return n/1073741824d;}
-    private int cpu(){
-        if(cpuUnavailable)return -1;
-        try(BufferedReader r=new BufferedReader(new FileReader("/proc/stat"))){
-            long[] ticks=GlassOsMetrics.cpuTicks(r.readLine());
-            if(ticks==null){cpuUnavailable=true;return -1;}
-            long total=ticks[0],idle=ticks[1];
-            long delta=total-totalPrev,busy=delta-(idle-idlePrev);int value=totalPrev<0||delta<=0?-1:GlassOsMetrics.percent(busy,delta);
-            totalPrev=total;idlePrev=idle;return value;
-        }catch(IOException|SecurityException|NumberFormatException e){cpuUnavailable=true;return -1;}
-    }
 }

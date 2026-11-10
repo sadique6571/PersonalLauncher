@@ -32,16 +32,6 @@ final class HomeDashboard {
             if (!actions.keepPanel(action)) panel.dismiss();
             actions.open(action);
         }));
-        if(ThemeStyle.id(prefs)==ThemeStyle.GLASS) {
-            rows.addView(GlassSettings.label(host,"Ambient backdrop glow",12,0xffcbd5e1));
-            android.widget.SeekBar glow=new GlassSeekBar(host);glow.setMax(100);glow.setProgress(prefs.getInt("ambient_strength",100));
-            glow.setContentDescription("Ambient backdrop glow");
-            glow.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener(){
-                @Override public void onProgressChanged(android.widget.SeekBar bar,int value,boolean user){if(user)prefs.edit().putInt("ambient_strength",value).apply();}
-                @Override public void onStartTrackingTouch(android.widget.SeekBar bar){}
-                @Override public void onStopTrackingTouch(android.widget.SeekBar bar){}
-            });rows.addView(glow,new LinearLayout.LayoutParams(-1,GlassSettings.dp(host,40)));
-        }
         section(host, rows, R.string.h_personalize);
         row(host, rows, R.string.h_launcher_settings, R.string.h_layout_hint, R.drawable.ic_palette, () -> actions.open(SETTINGS));
         if (!floating) row(host, rows, R.string.h_single_identity, 0, R.drawable.ic_person, () -> { panel.dismiss(); actions.open(IDENTITY); });

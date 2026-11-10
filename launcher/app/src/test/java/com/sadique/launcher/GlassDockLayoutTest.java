@@ -2,12 +2,14 @@ package com.sadique.launcher;
 import org.junit.Test;
 import static org.junit.Assert.*;
 public class GlassDockLayoutTest {
-    @Test public void cardAndItsFullReflectionFitTheAllocatedDockAtTvSizes(){
-        for(int height:new int[]{480,540,600,720,1080}){
-            int card=GlassDockLayout.cardHeight(height);assertTrue(card>=96&&card<=160);
-            assertTrue(GlassDockLayout.dockHeight(height)>=card*2+46);
+    @Test public void cardHeightFollowsWidthAndStillLeavesSpaceForItsFullReflection(){
+        for(int screen:new int[]{480,540,600,720,1080})for(int width:new int[]{100,128,160,192,256,400}){
+            int card=GlassDockLayout.cardHeight(width,screen);assertTrue(card>=80&&card<=136);
+            assertTrue(GlassDockLayout.dockHeight(width,screen)>=card*2+46);
         }
-        assertEquals(114,GlassDockLayout.cardHeight(540));assertEquals(160,GlassDockLayout.cardHeight(1080));
+        assertEquals(80,GlassDockLayout.cardHeight(128,720));
+        assertEquals(120,GlassDockLayout.cardHeight(192,720));
+        assertTrue(GlassDockLayout.cardHeight(128,720)<GlassDockLayout.cardHeight(192,720));
     }
     @Test public void expandingAcrossRowsNeverChangesRowMembershipOrOverflows(){
         for(int columns=2;columns<=6;columns++)for(int from=-1;from<columns*3;from++)for(int to=-1;to<columns*3;to++)for(int tick=0;tick<=10;tick++)for(int row=0;row<3;row++){

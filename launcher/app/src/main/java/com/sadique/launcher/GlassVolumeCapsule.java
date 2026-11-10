@@ -69,14 +69,14 @@ final class GlassVolumeCapsule extends LinearLayout {
         private Drawable symbol;
         Track(Context context,SharedPreferences prefs){super(context);light=ThemeStyle.light(prefs);setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);}
         void level(float value){fraction=value;invalidate();}
-        void accent(int value){if(gradient==null||accent!=value){accent=value;gradient=new LinearGradient(0,0,0,1,new int[]{0xffffffff,0xffdbeafe,value},new float[]{0,.45f,1},Shader.TileMode.CLAMP);}invalidate();}
+        void accent(int value){if(gradient==null||accent!=value){accent=value;gradient=new LinearGradient(0,0,0,1,new int[]{0xffffffff,0xfff4f6fa,ThemeStyle.id(ThemePreferences.get(getContext()))==ThemeStyle.GLASS?0xffe9edf5:(value|0xff000000)},new float[]{0,.45f,1},Shader.TileMode.CLAMP);}invalidate();}
         void symbol(int value){if(value!=resource){resource=value;symbol=TvSymbols.icon(getContext(),value);place();}invalidate();}
         private void place(){if(symbol!=null){int side=dp(22),left=(getWidth()-side)/2,bottom=getHeight()-dp(14);symbol.setBounds(left,bottom-side,left+side,bottom);}}
         @Override protected void onSizeChanged(int w,int h,int ow,int oh){super.onSizeChanged(w,h,ow,oh);bounds.set(dp(1),dp(1),w-dp(1),h-dp(1));outline.reset();outline.addRoundRect(bounds,w/2f,w/2f,Path.Direction.CW);place();}
         @Override protected void onDraw(Canvas c){
             paint.setShader(null);paint.setStyle(Paint.Style.FILL);paint.setColor(light?0x18000000:0x18ffffff);c.drawRoundRect(bounds,getWidth()/2f,getWidth()/2f,paint);
             float fillHeight=bounds.height()*fraction,top=bounds.bottom-fillHeight;
-            if(fillHeight>0&&gradient!=null){int save=c.save();c.clipPath(outline);fillMatrix.setScale(1,fillHeight);fillMatrix.postTranslate(0,top);gradient.setLocalMatrix(fillMatrix);paint.setShader(gradient);c.drawRect(bounds.left,top,bounds.right,bounds.bottom,paint);paint.setShader(null);c.restoreToCount(save);}
+            if(fillHeight>0&&gradient!=null){int save=c.save();c.clipPath(outline);fillMatrix.setScale(1,fillHeight);fillMatrix.postTranslate(0,top);gradient.setLocalMatrix(fillMatrix);paint.setAlpha(255);paint.setShader(gradient);c.drawRect(bounds.left,top,bounds.right,bounds.bottom,paint);paint.setShader(null);c.restoreToCount(save);}
             paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(dp(1));paint.setColor(light?0x24000000:0x29ffffff);c.drawRoundRect(bounds,getWidth()/2f,getWidth()/2f,paint);paint.setStyle(Paint.Style.FILL);
             if(symbol!=null){int save=c.save();c.clipRect(0,0,getWidth(),top);symbol.setColorFilter(foreground,PorterDuff.Mode.SRC_IN);symbol.draw(c);c.restoreToCount(save);
                 save=c.save();c.clipRect(0,top,getWidth(),getHeight());symbol.setColorFilter(Color.luminance(accent)>.179?0xff142239:0xfff8fafc,PorterDuff.Mode.SRC_IN);symbol.draw(c);c.restoreToCount(save);}

@@ -9,6 +9,10 @@ final class AppGridNavigation {
         if (position / columns == (count - 1) / columns) return position;
         return Math.min(count - 1, position + columns);
     }
+    static int verticalWithFooter(int position,int count,int columns,boolean down,boolean footerEnabled){
+        int next=vertical(position,count,columns,down);
+        return down&&footerEnabled&&next==position&&position>=0&&position<count?count:next;
+    }
     static int horizontal(int position, int count, boolean right) {
         if (count <= 0 || position < 0 || position >= count) return -1;
         return Math.max(0, Math.min(count - 1, position + (right ? 1 : -1)));
