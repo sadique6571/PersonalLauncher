@@ -660,10 +660,10 @@ public final class PersonalHomeActivity extends Activity {
             timeRow.setVisibility(View.GONE);clock.removeView(date);clock.removeView(islamicDate);
             LinearLayout analogRow=new LinearLayout(this);analogRow.setGravity(Gravity.CENTER_VERTICAL);analogRow.setPadding(dp(glassOs()?16:8),0,0,0);
             this.analogClock=new SweepAnalogClock(this);
-            int preferred=dp(glassOs()?224:204);
+            int preferred=dp(glassOs()?208:196);
             analogRow.addView(this.analogClock,new LinearLayout.LayoutParams(preferred,preferred));
             LinearLayout dates=new LinearLayout(this);dates.setOrientation(LinearLayout.VERTICAL);dates.setGravity(Gravity.CENTER_VERTICAL);
-            date.setTextSize(glassOs()?16:15);date.setGravity(Gravity.START);date.setMaxLines(2);islamicDate.setTextSize(14);islamicDate.setMaxLines(2);islamicDate.setPadding(0,dp(10),0,0);
+            date.setTextSize(15);date.setGravity(Gravity.START);date.setMaxLines(2);islamicDate.setTextSize(13);islamicDate.setMaxLines(2);islamicDate.setPadding(0,dp(10),0,0);
             dates.addView(date,new LinearLayout.LayoutParams(-1,-2));dates.addView(islamicDate,new LinearLayout.LayoutParams(-1,-2));
             LinearLayout.LayoutParams dpDates=new LinearLayout.LayoutParams(0,-2,1);dpDates.setMarginStart(dp(16));analogRow.addView(dates,dpDates);
             clock.addView(analogRow,0,new LinearLayout.LayoutParams(-1,-2));this.analogClock.active(resumed);
@@ -1425,13 +1425,13 @@ public final class PersonalHomeActivity extends Activity {
             }
             caption.setMarginStart(logoWidth+dp(24)); caption.setMarginEnd(dp(10)); tile.addView(title,caption);
         } else if(glassOs()) {
-            icon.setTag("reference_app_logo");icon.setScaleType(ImageView.ScaleType.FIT_CENTER);icon.setPadding(dp(5),dp(5),dp(5),dp(5));
+            icon.setTag("reference_app_logo");icon.setScaleType(ImageView.ScaleType.FIT_CENTER);icon.setPadding(dp(2),dp(2),dp(2),dp(2));
             GradientDrawable logoBg=new GradientDrawable();logoBg.setColor(0x57000000);logoBg.setCornerRadius(dp(12));logoBg.setStroke(dp(1),0x38ffffff);icon.setBackground(logoBg);
-            int logoSize=compactReference?32:40;
+            int logoSize=compactReference?44:52;
             android.widget.FrameLayout.LayoutParams logo=new android.widget.FrameLayout.LayoutParams(dp(logoSize),dp(logoSize),Gravity.TOP|Gravity.START);logo.setMargins(dp(compactReference?8:12),dp(compactReference?8:12),0,0);tile.addView(icon,logo);
             LinearLayout copy=new LinearLayout(this);copy.setTag("reference_app_copy");copy.setOrientation(LinearLayout.VERTICAL);copy.setPadding(dp(compactReference?8:12),0,dp(compactReference?8:12),dp(compactReference?8:10));
-            TextView title=text(app.name,compactReference?12:14,0xffffffff);title.setTag("reference_app_title");title.setTypeface(title.getTypeface(),android.graphics.Typeface.BOLD);title.setSingleLine();title.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            TextView subtitle=text(appCategory(app),10,0xd6ffffff);subtitle.setTag("reference_app_subtitle");subtitle.setVisibility(compactReference?View.GONE:View.VISIBLE);subtitle.setSingleLine();subtitle.setEllipsize(android.text.TextUtils.TruncateAt.END);copy.addView(title);copy.addView(subtitle);
+            TextView title=text(app.name,compactReference?14:15,0xffffffff);title.setShadowLayer(dp(2),0,dp(1),0xee000000);title.setTag("reference_app_title");title.setTypeface(title.getTypeface(),android.graphics.Typeface.BOLD);title.setSingleLine();title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            TextView subtitle=text(appCategory(app),10,0xd6ffffff);subtitle.setTag("reference_app_subtitle");subtitle.setVisibility(View.GONE);subtitle.setSingleLine();subtitle.setEllipsize(android.text.TextUtils.TruncateAt.END);copy.addView(title);copy.addView(subtitle);
             tile.addView(copy,new android.widget.FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM));
         }else tile.addView(icon, new android.widget.FrameLayout.LayoutParams(-1, -1));
         if(glassOs()) {
@@ -1446,12 +1446,12 @@ public final class PersonalHomeActivity extends Activity {
             if (focus) focusedPkg = app.info.activityInfo.packageName;
             if(glassOs()&&!moving)grid.expandKey(focus?app.info.activityInfo.packageName:null);
             View title=tile.findViewWithTag("reference_app_title");if(title instanceof TextView){
-                TextView caption=(TextView)title;caption.setTextSize(compactReference?(focus?14:12):(focus?17:14));caption.setSingleLine(!focus);caption.setMaxLines(focus?2:1);
+                TextView caption=(TextView)title;caption.setTextSize(compactReference?(focus?16:14):(focus?18:15));caption.setSingleLine(!focus);caption.setMaxLines(focus?2:1);
             }
             if(glassOs()){
                 View logo=tile.findViewWithTag("reference_app_logo"),copy=tile.findViewWithTag("reference_app_copy");
                 if(logo!=null&&copy instanceof LinearLayout){
-                    int side=focus?(compactReference?40:48):(compactReference?32:40),inset=compactReference?8:12;
+                    int side=focus?(compactReference?52:60):(compactReference?44:52),inset=compactReference?8:12;
                     android.widget.FrameLayout.LayoutParams lp=new android.widget.FrameLayout.LayoutParams(dp(side),dp(side),(focus?Gravity.CENTER_VERTICAL:Gravity.TOP)|Gravity.START);
                     lp.setMarginStart(dp(inset));if(!focus)lp.topMargin=dp(inset);logo.setLayoutParams(lp);
                     android.widget.FrameLayout.LayoutParams cp=new android.widget.FrameLayout.LayoutParams(-1,focus?-1:-2,focus?Gravity.CENTER_VERTICAL:Gravity.BOTTOM);
@@ -1460,7 +1460,7 @@ public final class PersonalHomeActivity extends Activity {
                     copy.setPadding(focus?0:dp(inset),focus?dp(18):0,dp(inset),focus?dp(4):dp(compactReference?8:10));copy.setLayoutParams(cp);
                 }
             }
-            View subtitle=tile.findViewWithTag("reference_app_subtitle");if(subtitle!=null)subtitle.setVisibility(compactReference?View.GONE:View.VISIBLE);
+            View subtitle=tile.findViewWithTag("reference_app_subtitle");if(subtitle!=null)subtitle.setVisibility(focus&&!compactReference?View.VISIBLE:View.GONE);
             if (!moving) {
                 // Focus zoom: gentle scale animation.
                 float scale = focus ? (glassOs()?1f:tvGlass() ? 1.06f : 1.05f) : 1f;

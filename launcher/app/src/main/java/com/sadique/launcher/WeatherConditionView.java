@@ -27,17 +27,6 @@ final class WeatherConditionView extends View {
         int top=code<0?0xff152131:!day?0xff071529:code>=3?0xff294657:0xff206491;
         int bottom=code<0?0xff07111f:!day?0xff14283a:code>=3?0xff50646b:0xff8eafb7;
         paint.setShader(new LinearGradient(0,0,0,220,top,bottom,Shader.TileMode.CLAMP));c.drawRect(bounds,paint);paint.setShader(null);
-        if(code>=0&&code<=3){
-            if(day){
-                paint.setShader(new RadialGradient(259,47,70,new int[]{0xffffe8a5,0x55ffdf9b,0x00ffdf9b},new float[]{0,.2f,1},Shader.TileMode.CLAMP));c.drawCircle(259,47,70,paint);
-                paint.setShader(new RadialGradient(256,44,14,0xfffffff4,0xffffe9b6,Shader.TileMode.CLAMP));c.drawCircle(256,44,14,paint);
-            }else{
-                paint.setShader(new RadialGradient(258,44,37,0x55bddeff,0x00bddeff,Shader.TileMode.CLAMP));c.drawCircle(258,44,37,paint);
-                paint.setShader(new RadialGradient(252,39,24,0xfff1f4ec,0xff9bb4bc,Shader.TileMode.CLAMP));c.drawCircle(257,44,17,paint);paint.setShader(null);
-                paint.setColor(0x2262717e);c.drawCircle(251,40,4,paint);c.drawCircle(263,48,5,paint);c.drawCircle(255,52,2.5f,paint);
-                paint.setColor(0x778ea7bf);for(int i=0;i<18;i++)c.drawCircle(12+(i*47)%300,8+(i*23)%94,i%4==0?.8f:.4f,paint);
-            }
-        }
         paint.setShader(null);paint.setColor(0xff162b37);Path ridge=new Path();ridge.moveTo(0,185);ridge.cubicTo(45,153,68,174,109,155);ridge.cubicTo(159,128,198,172,239,152);ridge.cubicTo(285,136,309,154,320,148);ridge.lineTo(320,220);ridge.lineTo(0,220);ridge.close();c.drawPath(ridge,paint);
         paint.setShader(new LinearGradient(0,0,0,220,new int[]{0x18030b17,0x55030b17,0xee030b17},new float[]{0,.48f,1},Shader.TileMode.CLAMP));c.drawRect(bounds,paint);paint.setShader(null);
     }
