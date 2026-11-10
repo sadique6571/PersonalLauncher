@@ -11,11 +11,13 @@ public class GlassDockLayoutTest {
             if(screen==540)assertTrue(GlassDockLayout.dockHeight(width,screen)<=244);
         }
     }
-    @Test public void cleanIconsHaveBoundedSquaresAndRoomForExternalCaptions(){
+    @Test public void fixedWideIconsFitTheirViewportAndKeepExternalCaptions(){
         for(int screen:new int[]{480,540,600,720,1080})for(int width:new int[]{96,128,160,192,256,400}){
             int side=GlassDockLayout.iconSide(width,screen),caption=GlassDockLayout.captionHeight(16,1);
             assertTrue(side>=48&&side<=128);assertTrue(side<=width);
-            assertEquals(side+caption,GlassDockLayout.iconTileHeight(width,screen,caption));
+            int body=GlassDockLayout.wideBodyHeight(width,screen),bodyWidth=GlassDockLayout.wideBodyWidth(width,body);
+            assertEquals(body+caption,GlassDockLayout.iconTileHeight(width,screen,caption));
+            assertTrue(bodyWidth<=width);assertEquals(1.45,bodyWidth/(double)body,.025);
             assertTrue(GlassDockLayout.reflectionHeight(side+caption)<side/2);
         }
         assertTrue(GlassDockLayout.captionHeight(20,1.5f)>GlassDockLayout.captionHeight(16,1));

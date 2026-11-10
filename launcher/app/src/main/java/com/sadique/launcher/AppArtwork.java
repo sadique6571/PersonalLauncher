@@ -83,7 +83,7 @@ final class AppArtwork {
         if(mark) {
             Bitmap logo=Bitmap.createBitmap(256,256,Bitmap.Config.ARGB_8888);
             Canvas logoCanvas=new Canvas(logo);
-            float scale=Math.min(220f/bitmap.getWidth(),220f/bitmap.getHeight())*logoScale;
+            float scale=ArtworkFit.scale(bitmap.getWidth(),bitmap.getHeight(),logoScale);
             float w=bitmap.getWidth()*scale,h=bitmap.getHeight()*scale;
             logoCanvas.drawBitmap(bitmap,null,new RectF((256-w)/2,(256-h)/2,(256+w)/2,(256+h)/2),
                     new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG));

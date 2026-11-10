@@ -48,11 +48,11 @@ final class IconCache {
     }
 
     private File file(String pkg, long version) {
-        return new File(dir, safe(pkg) + "_" + version + "_s" + logoSize + (mark?"_mark_v2":"") + ".png");
+        return new File(dir, safe(pkg) + "_" + version + "_s" + logoSize + (mark?"_mark_v3":"") + ".png");
     }
 
     private String accentKey(String pkg, long version) {
-        return "icon_accent_" + safe(pkg) + "_" + version + "_s" + logoSize + (mark?"_mark_v2":"");
+        return "icon_accent_" + safe(pkg) + "_" + version + "_s" + logoSize + (mark?"_mark_v3":"");
     }
 
     boolean mark() { return mark; }

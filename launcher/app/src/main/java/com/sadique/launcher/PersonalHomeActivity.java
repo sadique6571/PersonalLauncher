@@ -699,7 +699,7 @@ public final class PersonalHomeActivity extends Activity {
         appHeading.setPadding(dp(4), dp(8), 0, dp(12));
         grid = new HomeAppGrid<>(this, app -> app.info.activityInfo.packageName,
                 (app, width) -> createAppTile(app, width, carriedApp != null && app.info.activityInfo.packageName.equals(carriedApp.info.activityInfo.packageName)));
-        grid.setReferenceExpansion(glassOs());
+        grid.setReferenceExpansion(false);
         grid.setUpFromApps(() -> { if(weatherWidget!=null&&weatherWidget.isShown())weatherWidget.requestFocus();else if (searchButton != null) searchButton.requestFocus(); });
         grid.setClipChildren(false);
         if(glassOs()) {
@@ -997,7 +997,7 @@ public final class PersonalHomeActivity extends Activity {
                         try{forecast=WeatherForecast.decode(persisted);fetched=timestamp;}catch(Exception invalid){forecast=null;}
                     }
                     if(forecast==null){forecast=WeatherForecast.fetch(Double.parseDouble(latitude),Double.parseDouble(longitude),fahrenheit);fetched=System.currentTimeMillis();}
-                    WeatherOrbView.prepareMoon();
+                    WeatherOrbView.prepareMoon(this);
                     encoded=forecast.encode();summary=forecast.summary(fahrenheit);
                 }else{summary=WeatherClient.fetch(Double.parseDouble(latitude),Double.parseDouble(longitude),fahrenheit);fetched=System.currentTimeMillis();}
             }catch(Exception unavailable){android.util.Log.w("PersonalWeather","Weather unavailable ("+unavailable.getClass().getSimpleName()+")");}
@@ -1433,12 +1433,11 @@ public final class PersonalHomeActivity extends Activity {
             if(tile instanceof GlassIconTile)((GlassIconTile)tile).appearance(app.accent,focus||moving);
             else {tile.setBackground(appSurface(app.accent,focus));if(!moving)tile.setForeground(tileBorder(app.accent,focus));}
             if(focus)focusedPkg=app.info.activityInfo.packageName;
-            if(glassOs()&&!moving)grid.expandKey(focus?app.info.activityInfo.packageName:null);
             if (!moving) {
                 // Focus zoom: gentle scale animation.
                 float scale = focus ? (glassOs()?1f:tvGlass() ? 1.06f : 1.05f) : 1f;
                 float sy=glassOs()?1:scale;
-                float lift=glassOs()&&focus?-dp(8):0;
+                float lift=0;
                 v.animate().cancel();
                 if (MemoryProfile.effectiveTier(this, prefs) == MemoryProfile.TIER_LIGHT) {
                     v.setScaleX(scale); v.setScaleY(sy);v.setTranslationY(lift);
@@ -1478,7 +1477,7 @@ public final class PersonalHomeActivity extends Activity {
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED));
             };
             if (carriedApp != null) { open.run(); return; }
-            v.animate().scaleX(1.08f).scaleY(1.08f).alpha(.7f).setDuration(120).withEndAction(() -> {
+            v.animate().scaleX(glassOs()?1f:1.08f).scaleY(glassOs()?1f:1.08f).alpha(.7f).setDuration(120).withEndAction(() -> {
                 v.setScaleX(glassOs()?1f:1.05f); v.setScaleY(glassOs()?1:1.05f); v.setAlpha(1f);
                 open.run();
             }).start();
