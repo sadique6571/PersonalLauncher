@@ -36,7 +36,7 @@ final class GlassTelemetry extends LinearLayout {
             int[] ends={0xff818cf8,0xff10b981,0xffec4899};
             android.graphics.drawable.GradientDrawable gradient=new android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,new int[]{colors[i],ends[i]});gradient.setCornerRadius(GlassSettings.dp(host,999));
             android.graphics.drawable.ClipDrawable fill=new android.graphics.drawable.ClipDrawable(gradient,android.view.Gravity.START,android.graphics.drawable.ClipDrawable.HORIZONTAL);
-            android.graphics.drawable.LayerDrawable progress=new android.graphics.drawable.LayerDrawable(new android.graphics.drawable.Drawable[]{background,fill});progress.setId(0,android.R.id.background);progress.setId(1,android.R.id.progress);bars[i].setProgressDrawable(progress);
+            android.graphics.drawable.LayerDrawable progressLayers=new android.graphics.drawable.LayerDrawable(new android.graphics.drawable.Drawable[]{background,fill});progressLayers.setId(0,android.R.id.background);progressLayers.setId(1,android.R.id.progress);bars[i].setProgressDrawable(progressLayers);
             addView(bars[i],new LayoutParams(-1,GlassSettings.dp(host,7)));
         }
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO); // Measurements never steal remote focus.

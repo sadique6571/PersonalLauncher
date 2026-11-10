@@ -636,7 +636,7 @@ public final class PersonalHomeActivity extends Activity {
                 View divider=new View(this);divider.setId(R.id.clockDivider);divider.setBackgroundColor(0x38ffffff);
                 LinearLayout.LayoutParams line=new LinearLayout.LayoutParams(dp(1.5f),dp(48));line.setMargins(dp(12),0,dp(12),0);timeRow.addView(divider,line);
                 LinearLayout dates=new LinearLayout(this);dates.setOrientation(LinearLayout.VERTICAL);
-                date.setTextSize(18);date.setGravity(Gravity.START);dates.addView(date);dates.addView(solarDate);dates.addView(islamicDate);
+                date.setTextSize(18);date.setTypeface(date.getTypeface(),android.graphics.Typeface.BOLD);date.setGravity(Gravity.START);dates.addView(date);dates.addView(solarDate);dates.addView(islamicDate);
                 timeRow.addView(dates,new LinearLayout.LayoutParams(0,-2,1));
             }
         }
@@ -1774,7 +1774,7 @@ public final class PersonalHomeActivity extends Activity {
     }
     private void styleStatusBar(View bar) {
         int mode=headerBgMode();
-        GradientDrawable background=mode==0 ? null : TvGlassStyle.header(dp(tvGlass()?28:18),dp(1),prefs,mode==2);
+        GradientDrawable background=mode==0 ? null : glassOs()?GlassOsUi.panel(this,26):TvGlassStyle.header(dp(tvGlass()?28:18),dp(1),prefs,mode==2);
         bar.setBackground(background); bar.setClipToOutline(background!=null&&!ThemeStyle.custom(prefs));
         if (bar==header) bar.setPadding(background==null?0:dp(12),background==null?0:dp(8),
                 background==null?0:dp(12),background==null?0:dp(8));
@@ -2087,11 +2087,13 @@ public final class PersonalHomeActivity extends Activity {
     private void applyLabelScheme(android.widget.TextView label, boolean dark, boolean muted) {
         if (label == null) return;
         if(glassOs()&&label==networkStatus)return;
+        if(glassOs()&&label==ampm){label.setTextColor(accentColor());return;}
         label.setTextColor(ThemeStyle.custom(prefs)?(muted?ThemeStyle.muted(prefs):ThemeStyle.foreground(prefs)):(muted ? 0xE6FFFFFF : 0xFFFFFFFF));
         boolean clockLabel=label==time || label==ampm || label==date;
         boolean headerLabel=label==userName || label==greeting || label==homeWeather || label==networkStatus;
         if(headerLabel) label.setTextColor(HeaderAppearance.foreground(prefs));
         if(glassOs()&&label==networkStatus)return;
+        if(glassOs()&&label==ampm){label.setTextColor(accentColor());return;}
         if(clockLabel) label.setTextColor(wallpaperClockInk);
         if(clockLabel && !prefs.getBoolean("clock_shadow",true)) label.setShadowLayer(0,0,0,Color.TRANSPARENT);
         else {
