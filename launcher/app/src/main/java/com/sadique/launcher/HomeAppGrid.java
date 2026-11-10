@@ -22,7 +22,26 @@ final class HomeAppGrid<T> extends RecyclerView {
     private List<T> items = Collections.emptyList();
     private View footer;
     private String pendingFocus;
-    private int cellWidth;
+    private int cellWidth,columns=4;
+    private boolean referenceExpansion;
+    private String expandedKey,pendingExpansion;
+    private int priorExpanded=-1,nextExpanded=-1;
+    private float expansion=1;
+    private android.animation.ValueAnimator expansionAnimator;
+    private final Runnable applyExpansion=this::applyExpansion;
+    void setReferenceExpansion(boolean enabled){referenceExpansion=enabled;manager.setSpanCount(enabled?GlassDockLayout.SPANS:columns);}
+    void expandKey(String key){if(!referenceExpansion)return;pendingExpansion=key;removeCallbacks(applyExpansion);post(applyExpansion);}
+    private int index(String value){if(value!=null)for(int i=0;i<items.size();i++)if(value.equals(key.apply(items.get(i))))return i;return -1;}
+    private void applyExpansion(){
+        if(java.util.Objects.equals(expandedKey,pendingExpansion))return;
+        if(expansionAnimator!=null)expansionAnimator.cancel();
+        priorExpanded=index(expandedKey);nextExpanded=index(pendingExpansion);expandedKey=pendingExpansion;expansion=0;
+        if(MemoryProfile.effectiveTier(getContext(),ThemePreferences.get(getContext()))==MemoryProfile.TIER_LIGHT){expansion=1;relayoutExpansion();return;}
+        expansionAnimator=android.animation.ValueAnimator.ofFloat(0,1);expansionAnimator.setDuration(260);
+        expansionAnimator.addUpdateListener(a->{expansion=(float)a.getAnimatedValue();relayoutExpansion();});expansionAnimator.start();
+    }
+    private void relayoutExpansion(){manager.getSpanSizeLookup().invalidateSpanIndexCache();manager.getSpanSizeLookup().invalidateSpanGroupIndexCache();requestLayout();refreshReflections();}
+    @Override protected void onDetachedFromWindow(){removeCallbacks(applyExpansion);if(expansionAnimator!=null)expansionAnimator.cancel();super.onDetachedFromWindow();}
     private Runnable upFromApps;
     void setUpFromApps(Runnable action) { upFromApps = action; }
     void cancelPendingFocus() { pendingFocus = null; }
@@ -30,10 +49,13 @@ final class HomeAppGrid<T> extends RecyclerView {
     HomeAppGrid(Context context, Function<T, String> key, Factory<T> factory) {
         super(context);
         this.key = key; this.factory = factory;
-        manager = new GridLayoutManager(context, 4);
+        manager = new GridLayoutManager(context, 4){
+            @Override public int getColumnCountForAccessibility(RecyclerView.Recycler recycler,RecyclerView.State state){return columns;}
+        };
         manager.setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
             @Override public int getSpanSize(int position) {
-                return position < items.size() ? 1 : manager.getSpanCount();
+                if(position>=items.size())return manager.getSpanCount();
+                return referenceExpansion?GlassDockLayout.span(position,columns,priorExpanded,nextExpanded,expansion):1;
             }
         });
         setLayoutManager(manager);
@@ -53,15 +75,16 @@ final class HomeAppGrid<T> extends RecyclerView {
         adapter.notifyDataSetChanged();
     }
 
-    int getColumnCount() { return manager.getSpanCount(); }
+    int getColumnCount() { return columns; }
     int appCount() { return items.size(); }
 
     void submit(List<T> next, int columns, int width) {
         List<T> before = items;
-        boolean resized = manager.getSpanCount() != columns || cellWidth != width;
+        boolean resized = this.columns != columns || cellWidth != width;
         cellWidth = width;
-        manager.setSpanCount(columns);
+        this.columns=columns;manager.setSpanCount(referenceExpansion?GlassDockLayout.SPANS:columns);
         items = new ArrayList<>(next);
+        if(referenceExpansion){if(expansionAnimator!=null)expansionAnimator.cancel();priorExpanded=-1;nextExpanded=index(expandedKey);expansion=1;manager.getSpanSizeLookup().invalidateSpanIndexCache();manager.getSpanSizeLookup().invalidateSpanGroupIndexCache();}
         // Snapshot both lists: adapter positions may change again before a pending layout runs.
         List<T> after = items;
         if (resized) adapter.notifyDataSetChanged();
@@ -100,7 +123,7 @@ final class HomeAppGrid<T> extends RecyclerView {
         if (position < 0 || position >= items.size()) return false;
         if (event.getAction() != android.view.KeyEvent.ACTION_DOWN || event.isCanceled()) return true;
         int next = horizontal ? AppGridNavigation.horizontal(position, items.size(), code == android.view.KeyEvent.KEYCODE_DPAD_RIGHT)
-                : AppGridNavigation.vertical(position, items.size(), manager.getSpanCount(), code == android.view.KeyEvent.KEYCODE_DPAD_DOWN);
+                : AppGridNavigation.vertical(position, items.size(), columns, code == android.view.KeyEvent.KEYCODE_DPAD_DOWN);
         if (next < 0) {
             pendingFocus = null;
             if (upFromApps != null) upFromApps.run();
@@ -167,7 +190,7 @@ final class HomeAppGrid<T> extends RecyclerView {
                         super.onInitializeAccessibilityNodeInfo(host, info);
                         int current = cell.getBindingAdapterPosition();
                         if (current != RecyclerView.NO_POSITION) {
-                            int columns = manager.getSpanCount();
+                            int columns = getColumnCount();
                             info.setCollectionItemInfo(android.view.accessibility.AccessibilityNodeInfo.CollectionItemInfo.obtain(
                                     current / columns, 1, current % columns, 1, false));
                         }

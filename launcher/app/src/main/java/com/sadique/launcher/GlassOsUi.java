@@ -14,13 +14,13 @@ final class GlassOsUi {
     static GradientDrawable panel(Activity host,int radius) {
         android.content.SharedPreferences prefs=ThemePreferences.get(host);
         int alpha=PanelTransparency.alpha(alpha(prefs),prefs,false);
-        GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{(alpha<<24)|0x0e1320,(alpha<<24)|0x0a101b});
+        GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{(alpha<<24)|0x132539,(Math.min(255,alpha+25)<<24)|0x09182a});
         d.setCornerRadius(GlassSettings.dp(host,radius));
         int edge=Math.round((TvGlassStyle.edge(prefs)>>>24)*.47f);
         d.setStroke(GlassSettings.dp(host,1),(edge<<24)|0xffffff);return d;
     }
     private static int alpha(android.content.SharedPreferences prefs){
         float finish=TvGlassStyle.finish(prefs)==1?.65f:TvGlassStyle.finish(prefs)==2?1.2f:1;
-        return Math.min(245,Math.round(168*TvGlassStyle.intensity(prefs)/70f*finish));
+        return Math.min(245,Math.round(194*TvGlassStyle.intensity(prefs)/70f*finish));
     }
 }
