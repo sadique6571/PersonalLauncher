@@ -68,7 +68,7 @@ public final class PersonalHomeActivity extends Activity {
     private long nextWeatherAttempt;
     private String lastWeatherRequestKey="";
     private final SharedPreferences.OnSharedPreferenceChangeListener weatherPreferences=(preferences,key)-> {
-        if ("ambient_strength".equals(key) && sky!=null) sky.invalidate();
+        if ("ambient_strength".equals(key)) updateAmbient();
         if ("weather_lat".equals(key) || "weather_lon".equals(key) || "weather_fahrenheit".equals(key)) {
             nextWeatherAttempt=0;
             handler.removeCallbacks(this.weatherRefresh); handler.post(this.weatherRefresh);
@@ -397,6 +397,7 @@ public final class PersonalHomeActivity extends Activity {
                 if (actions.getChildAt(i).isFocusable()) buttons.add(actions.getChildAt(i));
             int index = buttons.indexOf(focused);
             if (index >= 0) {
+                if(glassOs()&&index==0&&code==KeyEvent.KEYCODE_DPAD_LEFT&&avatar.getParent() instanceof View){((View)avatar.getParent()).requestFocus();return true;}
                 int next = Math.max(0, Math.min(buttons.size() - 1, index + (code == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1)));
                 if (grid != null) grid.cancelPendingFocus();
                 buttons.get(next).requestFocus();
@@ -626,6 +627,14 @@ public final class PersonalHomeActivity extends Activity {
             solarDate=text("",11,MUTED);solarDate.setId(R.id.shamsiDate);
             islamicDate=text("",11,MUTED);islamicDate.setId(R.id.lunarDate);
             clock.addView(solarDate);clock.addView(islamicDate);
+            if(getResources().getConfiguration().screenWidthDp>=700) {
+                clock.removeView(date);clock.removeView(solarDate);clock.removeView(islamicDate);
+                View divider=new View(this);divider.setId(R.id.clockDivider);divider.setBackgroundColor(0x38ffffff);
+                LinearLayout.LayoutParams line=new LinearLayout.LayoutParams(dp(1.5f),dp(48));line.setMargins(dp(12),0,dp(12),0);timeRow.addView(divider,line);
+                LinearLayout dates=new LinearLayout(this);dates.setOrientation(LinearLayout.VERTICAL);
+                date.setTextSize(14);date.setGravity(Gravity.START);dates.addView(date);dates.addView(solarDate);dates.addView(islamicDate);
+                timeRow.addView(dates,new LinearLayout.LayoutParams(0,-2,1));
+            }
         }
         time.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             int[] position = new int[2], origin = new int[2];
@@ -805,7 +814,7 @@ public final class PersonalHomeActivity extends Activity {
         int maxWidth = (pageWidth > 0 ? pageWidth : screenW) - dp(24);
         if (maxWidth <= 0) maxWidth = screenW - dp(24);
         if(glassOs() && time.getParent() instanceof View && ((View)time.getParent()).getWidth()>0)
-            maxWidth=Math.max(dp(70),((View)time.getParent()).getWidth()-dp(60));
+            maxWidth=Math.max(dp(70),((View)time.getParent()).getWidth()-dp(getResources().getConfiguration().screenWidthDp>=700?190:60));
         android.text.TextPaint paint = new android.text.TextPaint();
         paint.setTypeface(time.getTypeface());
         float sizePx = clockTextSize * density;
@@ -1605,6 +1614,7 @@ public final class PersonalHomeActivity extends Activity {
         panel = HomeNotificationsUi.show(this);
     }
 
+    private void updateAmbient(){if(sky!=null)sky.invalidate();}
     private void updateGlassAccent(int color) {
         glassAccent=color;
         if(avatar instanceof AppAccentAvatar)((AppAccentAvatar)avatar).accent(color);
@@ -1612,14 +1622,14 @@ public final class PersonalHomeActivity extends Activity {
         if(sky!=null)sky.invalidate();
     }
     private void updateBluetooth(){if(bluetoothStatus!=null&&bluetooth!=null)bluetoothStatus.setText(bluetooth.connectedName());}
-    @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){
-        super.onRequestPermissionsResult(code,permissions,results);
-        if(code==GlassBluetooth.PERMISSION)bluetooth.requestingPermission=false;
-        if(code==GlassBluetooth.PERMISSION&&results.length>0&&results[0]==android.content.pm.PackageManager.PERMISSION_GRANTED){bluetooth.stop();bluetooth.start();bluetooth.show();}
+    boolean libraryVisibility(String pkg,boolean visible){
+        Set<String> hidden=new HashSet<>(prefs.getStringSet("hidden_apps",Collections.emptySet()));
+        if(visible)hidden.remove(pkg);else hidden.add(pkg);
+        prefs.edit().putStringSet("hidden_apps",hidden).apply();return true;
     }
     private void showAppLibrary(){
         if(appLibrary!=null)appLibrary.close();
-        appLibrary=new AppLibraryDialog(this,false,true,false,true,pkg->true,this::refreshApps,()->{},Collections.emptySet());appLibrary.show();
+        appLibrary=new AppLibraryDialog(this,false,true,false,true,pkg->!prefs.getStringSet("hidden_apps",Collections.emptySet()).contains(pkg),this::refreshApps,()->{},Collections.emptySet());appLibrary.show();
     }
     private void showSettings() {
         if (panel != null && panel.isShowing()) { panel.dismiss(); return; }
@@ -1876,7 +1886,7 @@ public final class PersonalHomeActivity extends Activity {
         // "Dark mode" removed 2026-11-01 (user): the theme glass color covers it.
         String[] labels = {"Visual style", "Theme", "Accent color", "Launcher font", "Glass intensity", "Glass finish", "Glass edge", "Panel transparency", "Header background", "Avatar shape", "Reset current theme"};
         String[] hints = {"Eight independent visual styles", "Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels", "Soft, Clear or Frosted panels", "Reflection around glass surfaces", "Solid panels when off; app drawer stays transparent", "Status-bar glass in this theme", "Round or rounded-square profile photo", "Restore defaults for the active style"};
-        int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_person, R.drawable.ic_refresh};
+        int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_person, android.R.drawable.ic_popup_sync};
         Runnable[] choices = {
             () -> chooseSetting("Visual style", new String[]{"Sadique Glass OS", "Classic", "Dune Loom", "Pearl Current", "Cobalt Rail", "Sage Fold", "Pine Mist", "Amber Night"}, this::switchVisualStyle),
             () -> chooseSetting("Theme", new String[]{ThemeStyle.custom(prefs)?"Theme default":"Midnight Cyan", "Sunset Orange", "Deep Purple", "Custom"}, which -> {
@@ -2614,6 +2624,10 @@ public final class PersonalHomeActivity extends Activity {
 
     @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(request, permissions, results);
+        if(request==GlassBluetooth.PERMISSION){
+            bluetooth.requestingPermission=false;
+            if(results.length>0&&results[0]==android.content.pm.PackageManager.PERMISSION_GRANTED){bluetooth.stop();bluetooth.start();bluetooth.show();}
+        }
         if (request == ContinueWatchingView.PERMISSION_REQUEST && continueWatching != null) continueWatching.reload();
     }
 
