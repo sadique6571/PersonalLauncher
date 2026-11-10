@@ -20,14 +20,28 @@ final class HomeDashboard {
     static AlertDialog show(Activity host, String network, Runnable rebuild, Actions actions, boolean floating) {
         LinearLayout rows = HomeLibraryUi.rows(host);
         AlertDialog panel = GlassSettings.panel(host, TvGlassStyle.enabled(ThemePreferences.get(host)) ? "Control Center" : host.getString(R.string.h_dashboard), rows, true);
+        android.content.SharedPreferences prefs=ThemePreferences.get(host);
+        if(ThemeStyle.id(prefs)==ThemeStyle.GLASS) {
+            rows.setId(R.id.controlCenterPanel);
+            rows.addView(GlassSettings.label(host,prefs.getString("name","Sadique Sadiq")+" • Android TV",12,0xffa5b4cf));
+            rows.addView(GlassSettings.row(host,"Close",null,android.R.drawable.ic_menu_close_clear_cancel,GlassSettings.themeAccent(host),panel::dismiss));
+        }
         rows.addView(GlassSettings.label(host, network, 12, 0xffb5cadd));
         section(host, rows, R.string.h_quick_settings);
-        pair(host, rows, panel, actions, R.string.h_wifi, R.drawable.ic_wifi, WIFI,
-                R.string.h_bluetooth, android.R.drawable.stat_sys_data_bluetooth, BLUETOOTH);
-        pair(host, rows, panel, actions, R.string.h_inputs, R.drawable.ic_input, INPUTS,
-                R.string.h_display, R.drawable.ic_picture, DISPLAY);
-        pair(host, rows, panel, actions, R.string.h_sound, R.drawable.ic_volume, SOUND,
-                R.string.h_screensaver, R.drawable.ic_picture, SCREENSAVER);
+        rows.addView(new ControlCenterGrid(host, action -> {
+            if (!actions.keepPanel(action)) panel.dismiss();
+            actions.open(action);
+        }));
+        if(ThemeStyle.id(prefs)==ThemeStyle.GLASS) {
+            rows.addView(GlassSettings.label(host,"Ambient backdrop glow",12,0xffcbd5e1));
+            android.widget.SeekBar glow=new GlassSeekBar(host);glow.setMax(100);glow.setProgress(prefs.getInt("ambient_strength",100));
+            glow.setContentDescription("Ambient backdrop glow");
+            glow.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener(){
+                @Override public void onProgressChanged(android.widget.SeekBar bar,int value,boolean user){if(user)prefs.edit().putInt("ambient_strength",value).apply();}
+                @Override public void onStartTrackingTouch(android.widget.SeekBar bar){}
+                @Override public void onStopTrackingTouch(android.widget.SeekBar bar){}
+            });rows.addView(glow,new LinearLayout.LayoutParams(-1,GlassSettings.dp(host,40)));
+        }
         section(host, rows, R.string.h_personalize);
         row(host, rows, R.string.h_launcher_settings, R.string.h_layout_hint, R.drawable.ic_palette, () -> actions.open(SETTINGS));
         if (!floating) row(host, rows, R.string.h_single_identity, 0, R.drawable.ic_person, () -> { panel.dismiss(); actions.open(IDENTITY); });

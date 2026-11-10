@@ -11,13 +11,16 @@ final class DemoCardSurface extends GradientDrawable {
     private float width,height,lastRadius=-1; private int lastLeft=-1,lastTop=-1;
     private final int top,bottom,opacity;
     DemoCardSurface(int radius,int unit,boolean focused,SharedPreferences prefs) {
+        this(radius,unit,focused,prefs,true);
+    }
+    DemoCardSurface(int radius,int unit,boolean focused,SharedPreferences prefs,boolean drawer) {
         this.unit=unit; this.focused=focused; style=ThemeStyle.id(prefs); accent=ThemeStyle.focusAccent(prefs);
         footer=DemoGeometry.footer(style,unit); edge=TvGlassStyle.edge(prefs)>>>24;
         top=ThemeStyle.materialColor(prefs,ThemeStyle.baseTop(prefs),false);
         bottom=ThemeStyle.materialColor(prefs,ThemeStyle.baseBottom(prefs),false);
         float s=TvGlassStyle.intensity(prefs)/100f;
         int max=TvGlassStyle.finish(prefs)==1?210:TvGlassStyle.finish(prefs)==2?255:245;
-        opacity=Math.round(max*(2*s-s*s));
+        opacity=PanelTransparency.alpha(Math.round(max*(2*s-s*s)),prefs,drawer);
         setColor(Color.TRANSPARENT); setCornerRadius(radius);
         line.setStyle(Paint.Style.STROKE); bevel.setStyle(Paint.Style.STROKE); bevel.setStrokeWidth(unit);
         line.setStrokeWidth(unit*(focused?new int[]{2,3,5}[Math.max(0,Math.min(2,prefs.getInt("focus_border",1)))]:1));

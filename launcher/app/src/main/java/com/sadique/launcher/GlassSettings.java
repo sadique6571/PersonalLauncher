@@ -361,10 +361,14 @@ final class GlassSettings {
         return shell;
     }
     private static void refreshViews(Activity host, View view) {
+        if (view instanceof ControlCenterGrid) ((ControlCenterGrid) view).refresh();
         if ("settings_shell".equals(view.getTag())) styleShell(host, view);
         if (view.isFocusable() && view.getBackground() instanceof GradientDrawable)
             view.setBackground("wide_card".equals(view.getTag())
-                    ? cardBackground(host, view.isFocused()) : background(host, view.isFocused() || view.isSelected()));
+                    ? cardBackground(host, view.isFocused())
+                    : "control_center_tile".equals(view.getTag()) && view.getParent().getParent() instanceof ControlCenterGrid
+                    ? ((ControlCenterGrid) view.getParent().getParent()).surface(view.isFocused())
+                    : background(host, view.isFocused() || view.isSelected()));
         if (view instanceof TextView) {
             TextView text = (TextView) view;
             int style = text.getTypeface() == null ? Typeface.NORMAL : text.getTypeface().getStyle();
@@ -381,6 +385,7 @@ final class GlassSettings {
             android.view.ViewGroup group = (android.view.ViewGroup) view;
             for (int i = 0; i < group.getChildCount(); i++) refreshViews(host, group.getChildAt(i));
         }
+        if(view instanceof ControlCenterGrid)((ControlCenterGrid)view).status();
     }
 
     static void options(Activity host, String title, String[] names, String[] hints, int[] icons, java.util.function.IntConsumer selected) {
