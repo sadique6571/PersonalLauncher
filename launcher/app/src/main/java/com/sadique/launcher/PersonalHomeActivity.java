@@ -179,8 +179,8 @@ public final class PersonalHomeActivity extends Activity {
             boolean focused = tile.isFocused();
             Object tag = tile.getTag();
             int accent = tag instanceof Integer ? (Integer) tag : CYAN;
-            tile.setBackground(appSurface(accent,focused));
-            tile.setForeground(tileBorder(accent, focused));
+            if(tile instanceof GlassIconTile)((GlassIconTile)tile).appearance(accent,focused);
+            else {tile.setBackground(appSurface(accent,focused));tile.setForeground(tileBorder(accent,focused));}
         }
         if (sky != null) sky.invalidate();
     }
@@ -706,7 +706,7 @@ public final class PersonalHomeActivity extends Activity {
             grid.setId(R.id.grid);grid.setPadding(0,dp(16),0,dp(18));
             grid.addItemDecoration(new DockDecoration.Reflections());
         }
-        grid.setClipToPadding(false);
+        grid.setClipToPadding(glassOs());
         appBody = new LinearLayout(this);
         appBody.setOrientation(LinearLayout.VERTICAL);
         if(glassOs()){appBody.setClipChildren(true);appBody.setClipToPadding(true);}
@@ -997,6 +997,7 @@ public final class PersonalHomeActivity extends Activity {
                         try{forecast=WeatherForecast.decode(persisted);fetched=timestamp;}catch(Exception invalid){forecast=null;}
                     }
                     if(forecast==null){forecast=WeatherForecast.fetch(Double.parseDouble(latitude),Double.parseDouble(longitude),fahrenheit);fetched=System.currentTimeMillis();}
+                    WeatherOrbView.prepareMoon();
                     encoded=forecast.encode();summary=forecast.summary(fahrenheit);
                 }else{summary=WeatherClient.fetch(Double.parseDouble(latitude),Double.parseDouble(longitude),fahrenheit);fetched=System.currentTimeMillis();}
             }catch(Exception unavailable){android.util.Log.w("PersonalWeather","Weather unavailable ("+unavailable.getClass().getSimpleName()+")");}
@@ -1186,7 +1187,8 @@ public final class PersonalHomeActivity extends Activity {
         }
         if (carriedApp != null) return;
         View tile = tileViews.get(pkg);
-        if (tile instanceof android.widget.FrameLayout) {
+        if(tile instanceof GlassIconTile){((GlassIconTile)tile).artwork(icon,accent);tile.setTag(accent);if(tile.isFocused())updateGlassAccent(accent);}
+        else if (tile instanceof android.widget.FrameLayout) {
             View iconView = ((android.widget.FrameLayout) tile).getChildAt(0);
             if (iconView instanceof ImageView) ((ImageView) iconView).setImageDrawable(icon);
             tile.setForeground(tileBorder(accent, tile.isFocused()));
@@ -1370,20 +1372,21 @@ public final class PersonalHomeActivity extends Activity {
         int spacing=Math.max(0,Math.min(2,prefs.getInt("tile_spacing",1)));
         int margin=(tvGlass()?new int[]{dp(6),dp(10),dp(16)}:new int[]{dp(4),dp(8),dp(14)})[spacing];
         int widthDp=Math.round((cellWidth-margin*2)/getResources().getDisplayMetrics().density);
-        return dp(GlassDockLayout.cardHeight(widthDp,getResources().getConfiguration().screenHeightDp));
+        return dp(GlassDockLayout.iconTileHeight(widthDp,getResources().getConfiguration().screenHeightDp,referenceCaptionHeight()));
     }
+    private int referenceCaptionHeight(){return GlassDockLayout.captionHeight(prefs.getInt("app_label_size",16),getResources().getConfiguration().fontScale);}
     private int referenceDockHeight(){
         int available=pageWidth>0?gridWidth():dp(Math.max(160,getResources().getConfiguration().screenWidthDp-(tv?64:32)));
         int cols=PersonalHomeModel.columns(Math.round(available/getResources().getDisplayMetrics().density),prefs.getInt(tv?"tv_columns":"phone_columns",0),prefs.getBoolean("large_tiles",false));
         int card=referenceCardHeight(available/cols);
         int spacing=Math.max(0,Math.min(2,prefs.getInt("tile_spacing",1)));
-        int margin=new int[]{8,12,18}[spacing];
+        int margin=new int[]{6,8,12}[spacing];
         return card+dp(GlassDockLayout.reflectionHeight(Math.round(card/getResources().getDisplayMetrics().density))+margin*2+44);
     }
     private View createAppTile(App app, int width, boolean moving) {
         requestAppIcon(app);
-        boolean compactReference=glassOs()&&referenceCardHeight(width)<dp(112*getResources().getConfiguration().fontScale);
-        android.widget.FrameLayout tile = ThemeStyle.custom(prefs)?new DemoTile(this,ThemeStyle.id(prefs),tileRadius()):new android.widget.FrameLayout(this);
+        android.widget.FrameLayout tile = glassOs()?new GlassIconTile(this,app.name,app.icon,app.accent,referenceCardHeight(width)-dp(referenceCaptionHeight()),dp(referenceCaptionHeight()),tileRadius(),moving):ThemeStyle.custom(prefs)?new DemoTile(this,ThemeStyle.id(prefs),tileRadius()):new android.widget.FrameLayout(this);
+        if(!(tile instanceof GlassIconTile)){
         tile.setBackground(appSurface(app.accent,false));
         tile.setOutlineProvider(new ViewOutlineProvider() {
             @Override public void getOutline(View view,Outline outline) {
@@ -1391,17 +1394,18 @@ public final class PersonalHomeActivity extends Activity {
             }
         });
         tile.setClipToOutline(!ThemeStyle.custom(prefs));
+        }else tile.setClipToOutline(false);
         tile.setElevation(perfAllows("parallax") ? dp(tvGlass() ? 4 : 3) : 0);
         tile.setFocusable(true);
         tile.setClickable(true);
         tile.setContentDescription(app.name);
         tile.setTag(app.accent);
-        tile.setForeground(tileBorder(app.accent, false));
+        if(!(tile instanceof GlassIconTile))tile.setForeground(tileBorder(app.accent, false));
         if (moving) {
             tile.setScaleX(1.07f);
             tile.setScaleY(1.07f);
             tile.setElevation(dp(10));
-            tile.setForeground(tileBorder(accentColor(), true));
+            if(tile instanceof GlassIconTile)((GlassIconTile)tile).appearance(app.accent,true);else tile.setForeground(tileBorder(accentColor(), true));
         }
         ImageView icon = new ImageView(this);
         if (app.icon != null) icon.setImageDrawable(app.icon);
@@ -1424,43 +1428,12 @@ public final class PersonalHomeActivity extends Activity {
                 rule.setMarginStart(logoWidth+dp(15)); rule.topMargin=dp(18); rule.bottomMargin=dp(18); tile.addView(separator,rule);
             }
             caption.setMarginStart(logoWidth+dp(24)); caption.setMarginEnd(dp(10)); tile.addView(title,caption);
-        } else if(glassOs()) {
-            icon.setTag("reference_app_logo");icon.setScaleType(ImageView.ScaleType.FIT_CENTER);icon.setPadding(dp(2),dp(2),dp(2),dp(2));
-            GradientDrawable logoBg=new GradientDrawable();logoBg.setColor(0x57000000);logoBg.setCornerRadius(dp(12));logoBg.setStroke(dp(1),0x38ffffff);icon.setBackground(logoBg);
-            int logoSize=compactReference?44:52;
-            android.widget.FrameLayout.LayoutParams logo=new android.widget.FrameLayout.LayoutParams(dp(logoSize),dp(logoSize),Gravity.TOP|Gravity.START);logo.setMargins(dp(compactReference?8:12),dp(compactReference?8:12),0,0);tile.addView(icon,logo);
-            LinearLayout copy=new LinearLayout(this);copy.setTag("reference_app_copy");copy.setOrientation(LinearLayout.VERTICAL);copy.setPadding(dp(compactReference?8:12),0,dp(compactReference?8:12),dp(compactReference?8:10));
-            TextView title=text(app.name,compactReference?14:15,0xffffffff);title.setShadowLayer(dp(2),0,dp(1),0xee000000);title.setTag("reference_app_title");title.setTypeface(title.getTypeface(),android.graphics.Typeface.BOLD);title.setSingleLine();title.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            TextView subtitle=text(appCategory(app),10,0xd6ffffff);subtitle.setTag("reference_app_subtitle");subtitle.setVisibility(View.GONE);subtitle.setSingleLine();subtitle.setEllipsize(android.text.TextUtils.TruncateAt.END);copy.addView(title);copy.addView(subtitle);
-            tile.addView(copy,new android.widget.FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM));
-        }else tile.addView(icon, new android.widget.FrameLayout.LayoutParams(-1, -1));
-        if(glassOs()) {
-            TextView badge=text("OPEN",9,0xffdbeafe);badge.setTag("glass_open_badge");badge.setVisibility(View.GONE);
-            badge.setPadding(dp(6),dp(2),dp(6),dp(2));badge.setBackground(GlassOsUi.panel(this,999));
-            android.widget.FrameLayout.LayoutParams bp=new android.widget.FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.END);bp.topMargin=dp(8);bp.setMarginEnd(dp(8));tile.addView(badge,bp);
-        }
+        }else if(!(tile instanceof GlassIconTile))tile.addView(icon,new android.widget.FrameLayout.LayoutParams(-1,-1));
         tile.setOnFocusChangeListener((v, focus) -> {
-            View badge=tile.findViewWithTag("glass_open_badge");if(badge!=null)badge.setVisibility(focus?View.VISIBLE:View.GONE);
-            tile.setBackground(appSurface(app.accent,focus));
-            if (!moving) tile.setForeground(tileBorder(app.accent, focus));
-            if (focus) focusedPkg = app.info.activityInfo.packageName;
+            if(tile instanceof GlassIconTile)((GlassIconTile)tile).appearance(app.accent,focus||moving);
+            else {tile.setBackground(appSurface(app.accent,focus));if(!moving)tile.setForeground(tileBorder(app.accent,focus));}
+            if(focus)focusedPkg=app.info.activityInfo.packageName;
             if(glassOs()&&!moving)grid.expandKey(focus?app.info.activityInfo.packageName:null);
-            View title=tile.findViewWithTag("reference_app_title");if(title instanceof TextView){
-                TextView caption=(TextView)title;caption.setTextSize(compactReference?(focus?16:14):(focus?18:15));caption.setSingleLine(!focus);caption.setMaxLines(focus?2:1);
-            }
-            if(glassOs()){
-                View logo=tile.findViewWithTag("reference_app_logo"),copy=tile.findViewWithTag("reference_app_copy");
-                if(logo!=null&&copy instanceof LinearLayout){
-                    int side=focus?(compactReference?52:60):(compactReference?44:52),inset=compactReference?8:12;
-                    android.widget.FrameLayout.LayoutParams lp=new android.widget.FrameLayout.LayoutParams(dp(side),dp(side),(focus?Gravity.CENTER_VERTICAL:Gravity.TOP)|Gravity.START);
-                    lp.setMarginStart(dp(inset));if(!focus)lp.topMargin=dp(inset);logo.setLayoutParams(lp);
-                    android.widget.FrameLayout.LayoutParams cp=new android.widget.FrameLayout.LayoutParams(-1,focus?-1:-2,focus?Gravity.CENTER_VERTICAL:Gravity.BOTTOM);
-                    if(focus)cp.setMarginStart(dp(side+inset+10));
-                    ((LinearLayout)copy).setGravity(focus?Gravity.CENTER_VERTICAL:Gravity.BOTTOM);
-                    copy.setPadding(focus?0:dp(inset),focus?dp(18):0,dp(inset),focus?dp(4):dp(compactReference?8:10));copy.setLayoutParams(cp);
-                }
-            }
-            View subtitle=tile.findViewWithTag("reference_app_subtitle");if(subtitle!=null)subtitle.setVisibility(focus&&!compactReference?View.VISIBLE:View.GONE);
             if (!moving) {
                 // Focus zoom: gentle scale animation.
                 float scale = focus ? (glassOs()?1f:tvGlass() ? 1.06f : 1.05f) : 1f;
@@ -1527,7 +1500,7 @@ public final class PersonalHomeActivity extends Activity {
         android.widget.FrameLayout.LayoutParams position = new android.widget.FrameLayout.LayoutParams(-1, -2);
         int spacing = Math.max(0, Math.min(2, prefs.getInt("tile_spacing", 1)));
         int hm = (tvGlass() ? new int[]{dp(6), dp(10), dp(16)} : new int[]{dp(4), dp(8), dp(14)})[spacing];
-        int vm = (tvGlass() ? new int[]{dp(8), dp(12), dp(18)} : new int[]{dp(5), dp(10), dp(16)})[spacing];
+        int vm = (glassOs()?new int[]{dp(6),dp(8),dp(12)}:tvGlass() ? new int[]{dp(8), dp(12), dp(18)} : new int[]{dp(5), dp(10), dp(16)})[spacing];
         position.width = width - hm * 2;
         position.height = ThemeStyle.custom(prefs)?Math.max(dp(54),Math.round(position.width/DemoGeometry.ratio()))+Math.round(DemoGeometry.footer(ThemeStyle.id(prefs),dp(1))):Math.round(position.width*9f/16f);
         if(glassOs()){position.height=referenceCardHeight(width);position.width=-1;}

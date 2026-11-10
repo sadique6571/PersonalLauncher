@@ -2,17 +2,24 @@ package com.sadique.launcher;
 import org.junit.Test;
 import static org.junit.Assert.*;
 public class GlassDockLayoutTest {
-    @Test public void shorterReflectionLeavesMoreStageRoomWithoutOverlappingRows(){
+    @Test public void iconDockLeavesRoomForCaptionAndShortReflection(){
         for(int screen:new int[]{480,540,600,720,1080})for(int width:new int[]{100,128,160,192,256,400}){
-            int card=GlassDockLayout.cardHeight(width,screen);assertTrue(card>=80&&card<=136);
-            int reflection=GlassDockLayout.reflectionHeight(card);
-            assertTrue(reflection>=24&&reflection<=48);assertTrue(reflection<card/2);
-            assertEquals(card+reflection+68,GlassDockLayout.dockHeight(width,screen));
-            assertTrue(GlassDockLayout.dockHeight(width,screen)<card*2+48);
+            int tile=GlassDockLayout.iconTileHeight(width,screen,GlassDockLayout.captionHeight(16,1));
+            int reflection=GlassDockLayout.reflectionHeight(tile);
+            assertTrue(reflection>=16&&reflection<=32);assertTrue(reflection<tile/2);
+            assertEquals(tile+reflection+60,GlassDockLayout.dockHeight(width,screen));
+            if(screen==540)assertTrue(GlassDockLayout.dockHeight(width,screen)<=244);
         }
-        assertEquals(80,GlassDockLayout.cardHeight(128,720));
-        assertEquals(120,GlassDockLayout.cardHeight(192,720));
-        assertTrue(GlassDockLayout.cardHeight(128,720)<GlassDockLayout.cardHeight(192,720));
+    }
+    @Test public void cleanIconsHaveBoundedSquaresAndRoomForExternalCaptions(){
+        for(int screen:new int[]{480,540,600,720,1080})for(int width:new int[]{96,128,160,192,256,400}){
+            int side=GlassDockLayout.iconSide(width,screen),caption=GlassDockLayout.captionHeight(16,1);
+            assertTrue(side>=48&&side<=128);assertTrue(side<=width);
+            assertEquals(side+caption,GlassDockLayout.iconTileHeight(width,screen,caption));
+            assertTrue(GlassDockLayout.reflectionHeight(side+caption)<side/2);
+        }
+        assertTrue(GlassDockLayout.captionHeight(20,1.5f)>GlassDockLayout.captionHeight(16,1));
+        assertTrue(GlassDockLayout.iconSide(160,540)>GlassDockLayout.iconSide(160,480));
     }
     @Test public void expandingAcrossRowsNeverChangesRowMembershipOrOverflows(){
         for(int columns=2;columns<=6;columns++)for(int from=-1;from<columns*3;from++)for(int to=-1;to<columns*3;to++)for(int tick=0;tick<=10;tick++)for(int row=0;row<3;row++){

@@ -158,7 +158,9 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
         private float lastHeight=-1;
         @Override public void onDrawOver(@NonNull Canvas c,@NonNull RecyclerView parent,@NonNull RecyclerView.State state) {
             float density=parent.getResources().getDisplayMetrics().density;
-            int viewport=c.save();c.clipRect(0,0,parent.getWidth(),parent.getHeight());
+            int viewport=c.save();
+            if(parent.getClipToPadding())c.clipRect(parent.getPaddingLeft(),parent.getPaddingTop(),parent.getWidth()-parent.getPaddingRight(),parent.getHeight()-parent.getPaddingBottom());
+            else c.clipRect(0,0,parent.getWidth(),parent.getHeight());
             for(int i=0;i<parent.getChildCount();i++) {
                 View child=parent.getChildAt(i);
                 if(!(child instanceof android.view.ViewGroup)||child.getTag()==null)continue;

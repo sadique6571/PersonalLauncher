@@ -22,6 +22,7 @@ final class WeatherConditionView extends View {
     @Override protected void onWindowVisibilityChanged(int visibility){super.onWindowVisibilityChanged(visibility);if(visibility!=VISIBLE)removeCallbacks(frame);else invalidate();}
     @Override protected void onSizeChanged(int w,int h,int ow,int oh){super.onSizeChanged(w,h,ow,oh);backdrop=null;}
     private void makeBackdrop(){
+        paint.setAlpha(255);
         int width=Math.max(1,Math.min(512,getWidth())),height=Math.max(1,Math.round(width*220f/320));
         backdrop=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);Canvas c=new Canvas(backdrop);c.scale(width/320f,height/220f);
         int top=code<0?0xff152131:!day?0xff071529:code>=3?0xff294657:0xff206491;
