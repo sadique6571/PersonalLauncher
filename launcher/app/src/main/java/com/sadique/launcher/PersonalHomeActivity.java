@@ -1946,7 +1946,7 @@ public final class PersonalHomeActivity extends Activity {
         }
         applyAppearance();
         buildHomeSoon();
-        toast("Theme settings reset to defaults");
+        Toast.makeText(this,"Theme settings reset to defaults",Toast.LENGTH_SHORT).show();
     }
 
     private void wallpaperMenu() {
