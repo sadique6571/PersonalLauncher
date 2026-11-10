@@ -99,7 +99,7 @@ final class ControlCenterGrid extends LinearLayout {
         SharedPreferences prefs=ThemePreferences.get(host);
         int radius=GlassSettings.dp(host,ControlCenterLayout.radius(ThemeStyle.id(prefs)));
         if(ThemeStyle.id(prefs)==ThemeStyle.GLASS){
-            GradientDrawable card=GlassOsUi.panel(host,22);card.setStroke(GlassSettings.dp(host,focused?2:1),focused?0xccffffff:0x28ffffff);return card;
+            GradientDrawable card=GlassOsUi.panel(host,22);card.setStroke(GlassSettings.dp(host,focused?2:1),focused?0xccffffff:(Math.round((TvGlassStyle.edge(prefs)>>>24)*.47f)<<24)|0xffffff);return card;
         }
         if(ThemeStyle.custom(prefs)) return new DemoCardSurface(radius,GlassSettings.dp(host,1),focused,prefs,false);
         GradientDrawable result=GlassSettings.background(host,focused); result.setCornerRadius(radius); return result;

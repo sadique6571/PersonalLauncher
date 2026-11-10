@@ -7,15 +7,20 @@ final class GlassOsUi {
     private GlassOsUi() { }
     static GradientDrawable controls(Activity host){
         GradientDrawable d=panel(host,26);
-        boolean transparent=PanelTransparency.enabled(ThemePreferences.get(host));
-        d.setColors(new int[]{transparent?0xeb0a0e18:0xff0a0e18,transparent?0xf00c111e:0xff0c111e});
-        d.setStroke(GlassSettings.dp(host,1),0x38ffffff);return d;
+        android.content.SharedPreferences prefs=ThemePreferences.get(host);
+        int alpha=PanelTransparency.alpha(Math.min(250,Math.round(235*alpha(prefs)/168f)),prefs,false);
+        d.setColors(new int[]{(alpha<<24)|0x0a0e18,(alpha<<24)|0x0c111e});return d;
     }
     static GradientDrawable panel(Activity host,int radius) {
-        GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0xa80e1320,0xb00a101b});
-        d.setCornerRadius(GlassSettings.dp(host,radius));d.setStroke(GlassSettings.dp(host,1),0x28ffffff);
-        if(!PanelTransparency.enabled(ThemePreferences.get(host)))d.setAlpha(255);
-        if(!PanelTransparency.enabled(ThemePreferences.get(host)))d.setColors(new int[]{0xff0e1320,0xff0a101b});
-        return d;
+        android.content.SharedPreferences prefs=ThemePreferences.get(host);
+        int alpha=PanelTransparency.alpha(alpha(prefs),prefs,false);
+        GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{(alpha<<24)|0x0e1320,(alpha<<24)|0x0a101b});
+        d.setCornerRadius(GlassSettings.dp(host,radius));
+        int edge=Math.round((TvGlassStyle.edge(prefs)>>>24)*.47f);
+        d.setStroke(GlassSettings.dp(host,1),(edge<<24)|0xffffff);return d;
+    }
+    private static int alpha(android.content.SharedPreferences prefs){
+        float finish=TvGlassStyle.finish(prefs)==1?.65f:TvGlassStyle.finish(prefs)==2?1.2f:1;
+        return Math.min(245,Math.round(168*TvGlassStyle.intensity(prefs)/70f*finish));
     }
 }

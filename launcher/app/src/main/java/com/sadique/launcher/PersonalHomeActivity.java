@@ -1745,7 +1745,7 @@ public final class PersonalHomeActivity extends Activity {
         styleStatusBar(header);
     }
     private void styleStatusBar(View bar) {
-        int mode=glassOs()?0:headerBgMode();
+        int mode=headerBgMode();
         GradientDrawable background=mode==0 ? null : TvGlassStyle.header(dp(tvGlass()?28:18),dp(1),prefs,mode==2);
         bar.setBackground(background); bar.setClipToOutline(background!=null&&!ThemeStyle.custom(prefs));
         if (bar==header) bar.setPadding(background==null?0:dp(12),background==null?0:dp(8),

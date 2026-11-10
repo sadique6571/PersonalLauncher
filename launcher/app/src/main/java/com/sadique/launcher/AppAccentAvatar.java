@@ -14,7 +14,7 @@ final class AppAccentAvatar extends ImageView {
     private Drawable last;
     private int accent=0xffe50914;
     private boolean online;
-    private int cachedWidth,cachedHeight;
+    private int cachedWidth,cachedHeight,shape=-1;
     AppAccentAvatar(Context context) { super(context); setScaleType(ScaleType.CENTER_CROP); }
     void accent(int color) { accent=color; rebuildRing(); invalidate(); }
     void online(boolean value) { online=value; invalidate(); }
@@ -25,9 +25,16 @@ final class AppAccentAvatar extends ImageView {
     }
     @Override protected void onSizeChanged(int w,int h,int oldw,int oldh) {
         super.onSizeChanged(w,h,oldw,oldh);
-        last=null; rebuildRing(); clip.reset(); clip.addCircle(w/2f,h/2f,Math.max(0,Math.min(w,h)/2f-dp(2)),Path.Direction.CW);
+        last=null; rebuildRing(); geometry();
+    }
+    private void geometry(){
+        shape=ThemePreferences.get(getContext()).getInt("avatar_shape",0);
+        clip.reset();float inset=dp(2);
+        if(shape==0)clip.addCircle(getWidth()/2f,getHeight()/2f,Math.max(0,Math.min(getWidth(),getHeight())/2f-inset),Path.Direction.CW);
+        else clip.addRoundRect(inset,inset,getWidth()-inset,getHeight()-inset,dp(11),dp(11),Path.Direction.CW);
     }
     @Override protected void onDraw(Canvas c) {
+        if(shape!=ThemePreferences.get(getContext()).getInt("avatar_shape",0))geometry();
         Drawable drawable=getDrawable();
         if(drawable!=last||cachedWidth!=getWidth()||cachedHeight!=getHeight()) {
             last=drawable; cachedWidth=getWidth();cachedHeight=getHeight(); photo.setShader(null);
@@ -44,7 +51,8 @@ final class AppAccentAvatar extends ImageView {
         int save=c.save();c.clipPath(clip);
         if(photo.getShader()!=null)c.drawRect(0,0,getWidth(),getHeight(),photo);else super.onDraw(c);
         c.restoreToCount(save);
-        c.drawCircle(getWidth()/2f,getHeight()/2f,Math.max(0,Math.min(getWidth(),getHeight())/2f-dp(1)),ring);
+        if(shape==0)c.drawCircle(getWidth()/2f,getHeight()/2f,Math.max(0,Math.min(getWidth(),getHeight())/2f-dp(1)),ring);
+        else c.drawRoundRect(dp(1),dp(1),getWidth()-dp(1),getHeight()-dp(1),dp(12),dp(12),ring);
         float x=getWidth()*.83f,y=getHeight()*.83f;
         dot.setColor(0xff0e1320);c.drawCircle(x,y,dp(4.5f),dot);
         dot.setColor(online?0xff22c55e:0xffef4444);c.drawCircle(x,y,dp(3),dot);
