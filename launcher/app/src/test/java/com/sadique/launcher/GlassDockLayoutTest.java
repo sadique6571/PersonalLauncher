@@ -2,10 +2,13 @@ package com.sadique.launcher;
 import org.junit.Test;
 import static org.junit.Assert.*;
 public class GlassDockLayoutTest {
-    @Test public void cardHeightFollowsWidthAndStillLeavesSpaceForItsFullReflection(){
+    @Test public void shorterReflectionLeavesMoreStageRoomWithoutOverlappingRows(){
         for(int screen:new int[]{480,540,600,720,1080})for(int width:new int[]{100,128,160,192,256,400}){
             int card=GlassDockLayout.cardHeight(width,screen);assertTrue(card>=80&&card<=136);
-            assertTrue(GlassDockLayout.dockHeight(width,screen)>=card*2+46);
+            int reflection=GlassDockLayout.reflectionHeight(card);
+            assertTrue(reflection>=24&&reflection<=48);assertTrue(reflection<card/2);
+            assertEquals(card+reflection+68,GlassDockLayout.dockHeight(width,screen));
+            assertTrue(GlassDockLayout.dockHeight(width,screen)<card*2+48);
         }
         assertEquals(80,GlassDockLayout.cardHeight(128,720));
         assertEquals(120,GlassDockLayout.cardHeight(192,720));

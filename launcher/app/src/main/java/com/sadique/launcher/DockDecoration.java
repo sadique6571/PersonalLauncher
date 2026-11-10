@@ -158,6 +158,7 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
         private float lastHeight=-1;
         @Override public void onDrawOver(@NonNull Canvas c,@NonNull RecyclerView parent,@NonNull RecyclerView.State state) {
             float density=parent.getResources().getDisplayMetrics().density;
+            int viewport=c.save();c.clipRect(0,0,parent.getWidth(),parent.getHeight());
             for(int i=0;i<parent.getChildCount();i++) {
                 View child=parent.getChildAt(i);
                 if(!(child instanceof android.view.ViewGroup)||child.getTag()==null)continue;
@@ -167,11 +168,11 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
                 float sx=card.getScaleX(),sy=card.getScaleY();
                 float left=child.getLeft()+child.getTranslationX()+card.getLeft()+card.getTranslationX()+card.getPivotX()*(1-sx);
                 float top=child.getTop()+child.getTranslationY()+card.getTop()+card.getTranslationY()+card.getPivotY()*(1-sy);
-                float height=card.getHeight()*sy,start=top+card.getHeight()*sy+6*density;
+                float height=GlassDockLayout.reflectionHeight(Math.round(card.getHeight()/density))*density*sy,start=top+card.getHeight()*sy+6*density;
                 if(start>=parent.getHeight()||start+height<=0)continue;
                 area.set(left,start,left+card.getWidth()*sx,start+height);
                 int layer=c.saveLayer(area,null);
-                int flipped=c.save();c.translate(left,start+height);c.scale(sx,-sy);card.draw(c);c.restoreToCount(flipped);
+                int upright=c.save();c.translate(left,start);c.scale(sx,height/card.getHeight());card.draw(c);c.restoreToCount(upright);
                 if(height!=lastHeight) {
                     lastHeight=height;fade=new LinearGradient(0,0,0,height,new int[]{0xbf000000,0x40000000,0x00000000},new float[]{0,.5f,1},Shader.TileMode.CLAMP);
                 }
@@ -179,11 +180,12 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
                 c.drawRect(area.left,0,area.right,height,mask);mask.setXfermode(null);mask.setShader(null);
                 c.restoreToCount(layer);
             }
+            c.restoreToCount(viewport);
         }
         @Override public void getItemOffsets(@NonNull Rect out,@NonNull View view,@NonNull RecyclerView parent,@NonNull RecyclerView.State state) {
             // Leave room between app rows; reflections never cover the next row's title.
             if(view.getTag()!=null&&view instanceof android.view.ViewGroup&&((android.view.ViewGroup)view).getChildCount()>0)
-                out.bottom=((android.view.ViewGroup)view).getChildAt(0).getLayoutParams().height+Math.round(10*parent.getResources().getDisplayMetrics().density);
+                out.bottom=Math.round((GlassDockLayout.reflectionHeight(Math.round(((android.view.ViewGroup)view).getChildAt(0).getLayoutParams().height/parent.getResources().getDisplayMetrics().density))+10)*parent.getResources().getDisplayMetrics().density);
         }
     }
 

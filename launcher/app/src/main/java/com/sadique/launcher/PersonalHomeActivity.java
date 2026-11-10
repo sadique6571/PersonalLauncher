@@ -407,10 +407,10 @@ public final class PersonalHomeActivity extends Activity {
         } else if (code != KeyEvent.KEYCODE_DPAD_UP) {
             java.util.List<View> buttons = new java.util.ArrayList<>();
             for (int i = 0; i < actions.getChildCount(); i++)
-                if (actions.getChildAt(i).isFocusable()) buttons.add(actions.getChildAt(i));
+                if (actions.getChildAt(i).isFocusable()&&actions.getChildAt(i).isShown()) buttons.add(actions.getChildAt(i));
             int index = buttons.indexOf(focused);
             if (index >= 0) {
-                if(glassOs()&&index==0&&code==KeyEvent.KEYCODE_DPAD_LEFT&&avatar.getParent() instanceof View){((View)avatar.getParent()).requestFocus();return true;}
+                if(glassOs()&&index==0&&code==KeyEvent.KEYCODE_DPAD_LEFT&&avatar.getParent() instanceof View){if(grid!=null)grid.cancelPendingFocus();((View)avatar.getParent()).requestFocus();return true;}
                 int next = Math.max(0, Math.min(buttons.size() - 1, index + (code == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1)));
                 if (grid != null) grid.cancelPendingFocus();
                 buttons.get(next).requestFocus();
@@ -499,7 +499,7 @@ public final class PersonalHomeActivity extends Activity {
             identityCard.setFocusable(true);identityCard.setOnKeyListener((v,c,e)-> {
                 if(c==KeyEvent.KEYCODE_DPAD_RIGHT && e.getAction()==KeyEvent.ACTION_DOWN){networkStatus.requestFocus();return true;}
                 if(c==KeyEvent.KEYCODE_DPAD_DOWN && e.getAction()==KeyEvent.ACTION_DOWN){grid.focusKey(focusedPkg);return true;}
-                return false;
+                return c==KeyEvent.KEYCODE_DPAD_LEFT||c==KeyEvent.KEYCODE_DPAD_UP||c==KeyEvent.KEYCODE_DPAD_RIGHT||c==KeyEvent.KEYCODE_DPAD_DOWN;
             });
             identityCard.setOnFocusChangeListener((v,f)->v.setAlpha(f?1:.88f));
         }
@@ -554,6 +554,7 @@ public final class PersonalHomeActivity extends Activity {
             bluetoothStatus=text("Bluetooth",11,0xffdbeafe);bluetoothStatus.setId(R.id.btnBluetooth);
             bluetoothStatus.setMaxWidth(dp(130));bluetoothStatus.setSingleLine();bluetoothStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
             bluetoothStatus.setPadding(dp(10),dp(8),dp(10),dp(8));bluetoothStatus.setGravity(Gravity.CENTER);
+            android.graphics.drawable.Drawable btIcon=TvSymbols.icon(this,android.R.drawable.stat_sys_data_bluetooth);btIcon.setBounds(0,0,dp(18),dp(18));bluetoothStatus.setCompoundDrawablePadding(dp(5));bluetoothStatus.setCompoundDrawables(btIcon,null,null,null);
             bluetoothStatus.setBackground(GlassOsUi.panel(this,999));bluetoothStatus.setFocusable(true);
             bluetoothStatus.setOnFocusChangeListener((v,f)->v.setBackground(surface(f)));
             bluetoothStatus.setOnClickListener(v->bluetooth.show());bluetoothStatus.setOnKeyListener((v,c,e)->toolbarKey(v,e));
@@ -636,15 +637,6 @@ public final class PersonalHomeActivity extends Activity {
         timeRow.addView(ampm, ampmParams);
         clock.addView(timeRow, new LinearLayout.LayoutParams(-1, dp(clockSize + (compact ? 10 : 36))));
         clock.addView(date);
-        if(analogClock){
-            timeRow.setVisibility(View.GONE);
-            this.analogClock=new SweepAnalogClock(this);
-            int diameter=dp(Math.max(112,Math.min(160,clockSize*2)));
-            clock.addView(this.analogClock,0,new LinearLayout.LayoutParams(diameter,diameter));this.analogClock.active(resumed);
-            this.analogClock.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{
-                int[] pos=new int[2],origin=new int[2];v.getLocationInWindow(pos);root.getLocationInWindow(origin);sky.clockX=pos[0]-origin[0]+v.getWidth()/2f;sky.clockY=pos[1]-origin[1]+v.getHeight()/2f;sky.invalidate();
-            });
-        }
         if(glassOs()) {
             time.setTypeface(android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD));
             ampm.setTypeface(android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD));
@@ -664,6 +656,28 @@ public final class PersonalHomeActivity extends Activity {
             }
         }
         if(!glassOs()) {islamicDate=text("",12,MUTED);islamicDate.setId(R.id.lunarDate);clock.addView(islamicDate);}
+        if(analogClock){
+            timeRow.setVisibility(View.GONE);clock.removeView(date);clock.removeView(islamicDate);
+            LinearLayout analogRow=new LinearLayout(this);analogRow.setGravity(Gravity.CENTER_VERTICAL);analogRow.setPadding(dp(glassOs()?16:8),0,0,0);
+            this.analogClock=new SweepAnalogClock(this);
+            int preferred=dp(glassOs()?224:204);
+            analogRow.addView(this.analogClock,new LinearLayout.LayoutParams(preferred,preferred));
+            LinearLayout dates=new LinearLayout(this);dates.setOrientation(LinearLayout.VERTICAL);dates.setGravity(Gravity.CENTER_VERTICAL);
+            date.setTextSize(glassOs()?16:15);date.setGravity(Gravity.START);date.setMaxLines(2);islamicDate.setTextSize(14);islamicDate.setMaxLines(2);islamicDate.setPadding(0,dp(10),0,0);
+            dates.addView(date,new LinearLayout.LayoutParams(-1,-2));dates.addView(islamicDate,new LinearLayout.LayoutParams(-1,-2));
+            LinearLayout.LayoutParams dpDates=new LinearLayout.LayoutParams(0,-2,1);dpDates.setMarginStart(dp(16));analogRow.addView(dates,dpDates);
+            clock.addView(analogRow,0,new LinearLayout.LayoutParams(-1,-2));this.analogClock.active(resumed);
+            SweepAnalogClock dial=this.analogClock;
+            analogRow.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{
+                if(r-l<=0)return;
+                int available=Math.max(1,r-l-analogRow.getPaddingLeft());
+                int diameter=Math.min(preferred,Math.max(dp(144),available-dp(132)));
+                diameter=Math.min(diameter,available);
+                LinearLayout.LayoutParams lp=(LinearLayout.LayoutParams)dial.getLayoutParams();
+                if(lp.width!=diameter){lp.width=diameter;lp.height=diameter;dial.setLayoutParams(lp);}
+                int[] pos=new int[2],origin=new int[2];dial.getLocationInWindow(pos);root.getLocationInWindow(origin);sky.clockX=pos[0]-origin[0]+dial.getWidth()/2f;sky.clockY=pos[1]-origin[1]+dial.getHeight()/2f;sky.invalidate();
+            });
+        }
         timeRow.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{if(r-l!=or-ol&&time.getText().length()>0)fitClockText(time.getText());});
         if(glassOs()&&!analogClock) {
             focusedSpotlight=text("",13,0xffffffff);focusedSpotlight.setSingleLine();focusedSpotlight.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -689,13 +703,13 @@ public final class PersonalHomeActivity extends Activity {
         grid.setUpFromApps(() -> { if(weatherWidget!=null&&weatherWidget.isShown())weatherWidget.requestFocus();else if (searchButton != null) searchButton.requestFocus(); });
         grid.setClipChildren(false);
         if(glassOs()) {
-            grid.setId(R.id.grid);grid.setPadding(0,dp(12),0,dp(118));
+            grid.setId(R.id.grid);grid.setPadding(0,dp(16),0,dp(18));
             grid.addItemDecoration(new DockDecoration.Reflections());
         }
         grid.setClipToPadding(false);
         appBody = new LinearLayout(this);
         appBody.setOrientation(LinearLayout.VERTICAL);
-        if(glassOs()){appBody.setClipChildren(false);page.setClipChildren(false);}
+        if(glassOs()){appBody.setClipChildren(true);appBody.setClipToPadding(true);}
         // App cards float directly on wallpaper in every visual style.
         boolean liquidGlass=TvGlassStyle.enabled(prefs);
         appBody.setBackground(null); appBody.setPadding(0,0,0,0); appBody.setClipToOutline(false);
@@ -1046,7 +1060,7 @@ public final class PersonalHomeActivity extends Activity {
         if(glassOs()) {
             String transport=caps!=null&&caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)?"Ethernet":wifi||caps==null?"Wi-Fi":"Internet";
             networkStatus.setText("● "+transport+" • "+(online?"Online":"No Internet"));networkStatus.setTextSize(11);
-            networkStatus.setCompoundDrawables(null,null,null,null);
+            icon.setBounds(0,0,dp(18),dp(18));networkStatus.setCompoundDrawables(icon,null,null,null);
             networkStatus.setTextColor(online?0xffdcfce7:0xfffee2e2);
             GradientDrawable state=new GradientDrawable();state.setColor(online?0x8014532d:0x947f1d1d);state.setCornerRadius(dp(999));state.setStroke(dp(networkStatus.isFocused()?2:1),online?0xb322c55e:0xccef4444);networkStatus.setBackground(state);
             if(avatar instanceof AppAccentAvatar)((AppAccentAvatar)avatar).online(online);
@@ -1205,7 +1219,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void renderApps(List<App> apps) {
-        boolean restoreFocus = grid.hasFocus() || (focusedPkg != null && !hasWindowFocus());
+        boolean restoreFocus = !grid.footerFocusedOrPending()&&(grid.hasFocus() || (focusedPkg != null && !hasWindowFocus()));
         cachedApps = apps;
         appHeading.setText(R.string.h_your_apps);
         HomeLibraryStore library = new HomeLibraryStore(this);
@@ -1361,7 +1375,10 @@ public final class PersonalHomeActivity extends Activity {
     private int referenceDockHeight(){
         int available=pageWidth>0?gridWidth():dp(Math.max(160,getResources().getConfiguration().screenWidthDp-(tv?64:32)));
         int cols=PersonalHomeModel.columns(Math.round(available/getResources().getDisplayMetrics().density),prefs.getInt(tv?"tv_columns":"phone_columns",0),prefs.getBoolean("large_tiles",false));
-        return referenceCardHeight(available/cols)*2+dp(48);
+        int card=referenceCardHeight(available/cols);
+        int spacing=Math.max(0,Math.min(2,prefs.getInt("tile_spacing",1)));
+        int margin=new int[]{8,12,18}[spacing];
+        return card+dp(GlassDockLayout.reflectionHeight(Math.round(card/getResources().getDisplayMetrics().density))+margin*2+44);
     }
     private View createAppTile(App app, int width, boolean moving) {
         requestAppIcon(app);
@@ -1408,11 +1425,11 @@ public final class PersonalHomeActivity extends Activity {
             }
             caption.setMarginStart(logoWidth+dp(24)); caption.setMarginEnd(dp(10)); tile.addView(title,caption);
         } else if(glassOs()) {
-            icon.setScaleType(ImageView.ScaleType.FIT_CENTER);icon.setPadding(dp(5),dp(5),dp(5),dp(5));
+            icon.setTag("reference_app_logo");icon.setScaleType(ImageView.ScaleType.FIT_CENTER);icon.setPadding(dp(5),dp(5),dp(5),dp(5));
             GradientDrawable logoBg=new GradientDrawable();logoBg.setColor(0x57000000);logoBg.setCornerRadius(dp(12));logoBg.setStroke(dp(1),0x38ffffff);icon.setBackground(logoBg);
             int logoSize=compactReference?32:40;
             android.widget.FrameLayout.LayoutParams logo=new android.widget.FrameLayout.LayoutParams(dp(logoSize),dp(logoSize),Gravity.TOP|Gravity.START);logo.setMargins(dp(compactReference?8:12),dp(compactReference?8:12),0,0);tile.addView(icon,logo);
-            LinearLayout copy=new LinearLayout(this);copy.setOrientation(LinearLayout.VERTICAL);copy.setPadding(dp(compactReference?8:12),0,dp(compactReference?8:12),dp(compactReference?8:10));
+            LinearLayout copy=new LinearLayout(this);copy.setTag("reference_app_copy");copy.setOrientation(LinearLayout.VERTICAL);copy.setPadding(dp(compactReference?8:12),0,dp(compactReference?8:12),dp(compactReference?8:10));
             TextView title=text(app.name,compactReference?12:14,0xffffffff);title.setTag("reference_app_title");title.setTypeface(title.getTypeface(),android.graphics.Typeface.BOLD);title.setSingleLine();title.setEllipsize(android.text.TextUtils.TruncateAt.END);
             TextView subtitle=text(appCategory(app),10,0xd6ffffff);subtitle.setTag("reference_app_subtitle");subtitle.setVisibility(compactReference?View.GONE:View.VISIBLE);subtitle.setSingleLine();subtitle.setEllipsize(android.text.TextUtils.TruncateAt.END);copy.addView(title);copy.addView(subtitle);
             tile.addView(copy,new android.widget.FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM));
@@ -1428,7 +1445,21 @@ public final class PersonalHomeActivity extends Activity {
             if (!moving) tile.setForeground(tileBorder(app.accent, focus));
             if (focus) focusedPkg = app.info.activityInfo.packageName;
             if(glassOs()&&!moving)grid.expandKey(focus?app.info.activityInfo.packageName:null);
-            View title=tile.findViewWithTag("reference_app_title");if(title instanceof TextView)((TextView)title).setTextSize(compactReference?(focus?14:12):(focus?17:14));
+            View title=tile.findViewWithTag("reference_app_title");if(title instanceof TextView){
+                TextView caption=(TextView)title;caption.setTextSize(compactReference?(focus?14:12):(focus?17:14));caption.setSingleLine(!focus);caption.setMaxLines(focus?2:1);
+            }
+            if(glassOs()){
+                View logo=tile.findViewWithTag("reference_app_logo"),copy=tile.findViewWithTag("reference_app_copy");
+                if(logo!=null&&copy instanceof LinearLayout){
+                    int side=focus?(compactReference?40:48):(compactReference?32:40),inset=compactReference?8:12;
+                    android.widget.FrameLayout.LayoutParams lp=new android.widget.FrameLayout.LayoutParams(dp(side),dp(side),(focus?Gravity.CENTER_VERTICAL:Gravity.TOP)|Gravity.START);
+                    lp.setMarginStart(dp(inset));if(!focus)lp.topMargin=dp(inset);logo.setLayoutParams(lp);
+                    android.widget.FrameLayout.LayoutParams cp=new android.widget.FrameLayout.LayoutParams(-1,focus?-1:-2,focus?Gravity.CENTER_VERTICAL:Gravity.BOTTOM);
+                    if(focus)cp.setMarginStart(dp(side+inset+10));
+                    ((LinearLayout)copy).setGravity(focus?Gravity.CENTER_VERTICAL:Gravity.BOTTOM);
+                    copy.setPadding(focus?0:dp(inset),focus?dp(18):0,dp(inset),focus?dp(4):dp(compactReference?8:10));copy.setLayoutParams(cp);
+                }
+            }
             View subtitle=tile.findViewWithTag("reference_app_subtitle");if(subtitle!=null)subtitle.setVisibility(compactReference?View.GONE:View.VISIBLE);
             if (!moving) {
                 // Focus zoom: gentle scale animation.
@@ -2692,7 +2723,7 @@ public final class PersonalHomeActivity extends Activity {
         handler.removeCallbacks(secondTick);
         if (prefs.getBoolean("clock_seconds", false)) secondTick.run();
         if (pageWidth > 0 && cachedApps == null) loadApps();
-        else if (grid != null && focusedPkg != null && (panel == null || !panel.isShowing())) grid.post(() -> grid.focusKey(focusedPkg));
+        else if (grid != null && !grid.footerFocusedOrPending() && focusedPkg != null && (panel == null || !panel.isShowing())) grid.post(() -> grid.focusKey(focusedPkg));
         if (connectivity != null && !networkRegistered) {
             try { connectivity.registerDefaultNetworkCallback(networkCallback); networkRegistered = true; }
             catch (RuntimeException unavailable) { /* Snapshot above remains available. */ }

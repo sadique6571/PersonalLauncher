@@ -13,6 +13,12 @@ final class AppGridNavigation {
         int next=vertical(position,count,columns,down);
         return down&&footerEnabled&&next==position&&position>=0&&position<count?count:next;
     }
+    /** Stable identity wins over list order; a removed app falls back to its nearest old position. */
+    static int footerReturn(java.util.List<String> keys,String enteredFrom,int oldPosition){
+        if(keys.isEmpty())return -1;
+        int found=enteredFrom==null?-1:keys.indexOf(enteredFrom);
+        return found>=0?found:Math.max(0,Math.min(keys.size()-1,oldPosition));
+    }
     static int horizontal(int position, int count, boolean right) {
         if (count <= 0 || position < 0 || position >= count) return -1;
         return Math.max(0, Math.min(count - 1, position + (right ? 1 : -1)));

@@ -23,6 +23,8 @@ final class HomeAppGrid<T> extends RecyclerView {
     private View footer;
     private boolean pendingFooter;
     private String pendingFocus;
+    private String lastAppKey,footerReturnKey,returnVisibleKey;
+    private int lastAppPosition,footerReturnPosition,returnVisibleOffset;
     private int cellWidth,columns=4;
     private boolean referenceExpansion;
     private String expandedKey,pendingExpansion;
@@ -76,10 +78,18 @@ final class HomeAppGrid<T> extends RecyclerView {
         adapter.notifyDataSetChanged();
     }
 
+    boolean footerFocusedOrPending(){return pendingFooter||(footer!=null&&footer.hasFocus());}
+    @Override public void requestChildFocus(View child,View focused){
+        View cell=focused==null?null:findContainingItemView(focused);
+        int position=cell==null?NO_POSITION:getChildAdapterPosition(cell);
+        if(position>=0&&position<items.size()){lastAppKey=key.apply(items.get(position));lastAppPosition=position;}
+        super.requestChildFocus(child,focused);
+    }
     int getColumnCount() { return columns; }
     int appCount() { return items.size(); }
 
     void submit(List<T> next, int columns, int width) {
+        boolean preserveFooter=footerFocusedOrPending();
         List<T> before = items;
         boolean resized = this.columns != columns || cellWidth != width;
         cellWidth = width;
@@ -100,6 +110,7 @@ final class HomeAppGrid<T> extends RecyclerView {
                 return a == before.size() || before.get(a) == after.get(b);
             }
         }).dispatchUpdatesTo(adapter);
+        if(preserveFooter){pendingFocus=null;pendingFooter=true;post(this::restoreFooterFocus);}
     }
 
     /** Deterministic row/column navigation before framework geometric focus search. */
@@ -108,6 +119,11 @@ final class HomeAppGrid<T> extends RecyclerView {
         boolean horizontal = code == android.view.KeyEvent.KEYCODE_DPAD_LEFT || code == android.view.KeyEvent.KEYCODE_DPAD_RIGHT;
         boolean vertical = code == android.view.KeyEvent.KEYCODE_DPAD_UP || code == android.view.KeyEvent.KEYCODE_DPAD_DOWN;
         if (!horizontal && !vertical) return false;
+        if(pendingFooter){
+            if(vertical&&code==android.view.KeyEvent.KEYCODE_DPAD_UP&&event.getAction()==android.view.KeyEvent.ACTION_DOWN&&!event.isCanceled())returnFromFooter();
+            return true;
+        }
+        if(!hasFocus()&&pendingFocus==null)return false;
         int position = -1;
         if (pendingFocus != null) for (int i = 0; i < items.size(); i++)
             if (pendingFocus.equals(key.apply(items.get(i)))) { position = i; break; }
@@ -117,8 +133,8 @@ final class HomeAppGrid<T> extends RecyclerView {
             if (cell != null) position = getChildAdapterPosition(cell);
         }
         if (position == items.size() && footer != null && vertical) {
-            if (event.getAction() == android.view.KeyEvent.ACTION_DOWN && code == android.view.KeyEvent.KEYCODE_DPAD_UP && !items.isEmpty())
-                focusKey(key.apply(items.get(items.size() - 1)));
+            if (event.getAction() == android.view.KeyEvent.ACTION_DOWN && code == android.view.KeyEvent.KEYCODE_DPAD_UP)
+                returnFromFooter();
             return true;
         }
         if (position < 0 || position >= items.size()) return false;
@@ -128,7 +144,7 @@ final class HomeAppGrid<T> extends RecyclerView {
         if (next < 0) {
             pendingFocus = null;
             if (upFromApps != null) upFromApps.run();
-        } else if(next==items.size()&&footer!=null)focusFooter();
+        } else if(next==items.size()&&footer!=null)enterFooter(position);
         else if (next != position) focusKey(key.apply(items.get(next)));
         return true;
     }
@@ -136,9 +152,26 @@ final class HomeAppGrid<T> extends RecyclerView {
     void rebind() { adapter.notifyItemRangeChanged(0, items.size()); }
     /** Focus can change during RecyclerView layout; redraw safely without invalidating its offsets then. */
     void refreshReflections() { if(isComputingLayout())postInvalidateOnAnimation();else invalidateItemDecorations(); }
+    private void enterFooter(int position){
+        footerReturnPosition=position;footerReturnKey=key.apply(items.get(position));
+        int first=manager.findFirstVisibleItemPosition();View anchor=manager.findViewByPosition(first);
+        returnVisibleKey=first>=0&&first<items.size()?key.apply(items.get(first)):footerReturnKey;
+        returnVisibleOffset=anchor==null?0:manager.getDecoratedTop(anchor)-getPaddingTop();
+        focusFooter();
+    }
     private void focusFooter(){
         if(footer==null||footer.getVisibility()==GONE)return;
-        pendingFocus=null;pendingFooter=true;scrollToPosition(items.size());restoreFooterFocus();post(this::restoreFooterFocus);
+        stopScroll();pendingFocus=null;pendingFooter=true;scrollToPosition(items.size());restoreFooterFocus();post(this::restoreFooterFocus);
+    }
+    private void returnFromFooter(){
+        stopScroll();pendingFooter=false;
+        if(items.isEmpty()){pendingFocus=null;if(upFromApps!=null)upFromApps.run();return;}
+        List<String> keys=new ArrayList<>();for(T item:items)keys.add(key.apply(item));
+        int position=AppGridNavigation.footerReturn(keys,footerReturnKey==null?lastAppKey:footerReturnKey,footerReturnKey==null?lastAppPosition:footerReturnPosition);
+        pendingFocus=keys.get(position);
+        int anchor=index(returnVisibleKey);
+        manager.scrollToPositionWithOffset(anchor>=0?anchor:position,anchor>=0?returnVisibleOffset:0);
+        post(this::restorePendingFocus);
     }
     private void restoreFooterFocus(){
         if(!pendingFooter||footer==null||footer.getParent()==null||!footer.isShown())return;
@@ -163,7 +196,7 @@ final class HomeAppGrid<T> extends RecyclerView {
             View child = getChildAt(i);
             if (pendingFocus.equals(child.getTag()) && child instanceof FrameLayout) {
                 if (((FrameLayout) child).getChildCount() > 0) {
-                    ((FrameLayout) child).getChildAt(0).requestFocus(); pendingFocus = null; return;
+                    if(((FrameLayout) child).getChildAt(0).requestFocus())pendingFocus=null; return;
                 }
             }
         }

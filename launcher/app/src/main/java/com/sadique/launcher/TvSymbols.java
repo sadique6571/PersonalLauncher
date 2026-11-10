@@ -35,6 +35,10 @@ final class TvSymbols extends Drawable {
         return resource;
     }
     static Drawable icon(Context context, int resource) {
+        if(ThemeStyle.id(ThemePreferences.get(context))==ThemeStyle.GLASS){
+            int reference=resource==R.drawable.ic_settings?R.drawable.ic_glass_settings:resource==R.drawable.ic_search?R.drawable.ic_glass_search:resource==R.drawable.ic_wifi?R.drawable.ic_glass_wifi:resource==R.drawable.ic_volume_bluetooth||resource==android.R.drawable.stat_sys_data_bluetooth?R.drawable.ic_glass_bluetooth:0;
+            if(reference!=0){Drawable d=context.getDrawable(reference);if(d!=null){d=d.mutate();d.setTint(ThemeStyle.foreground(ThemePreferences.get(context)));}return d;}
+        }
         if(ThemeStyle.id(ThemePreferences.get(context))==ThemeStyle.SAGE && resource==R.drawable.ic_settings) {
             Drawable gear=context.getDrawable(resource); if(gear!=null) { gear=gear.mutate(); gear.setTint(ThemeStyle.foreground(ThemePreferences.get(context))); } return gear;
         }
