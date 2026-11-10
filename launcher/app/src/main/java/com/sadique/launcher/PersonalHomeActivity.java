@@ -1383,7 +1383,7 @@ public final class PersonalHomeActivity extends Activity {
             };
             if (carriedApp != null) { open.run(); return; }
             v.animate().scaleX(1.08f).scaleY(1.08f).alpha(.7f).setDuration(120).withEndAction(() -> {
-                v.setScaleX(1.05f); v.setScaleY(1.05f); v.setAlpha(1f);
+                v.setScaleX(glassOs()?1.28f:1.05f); v.setScaleY(glassOs()?1.02f:1.05f); v.setAlpha(1f);
                 open.run();
             }).start();
         });
@@ -1957,8 +1957,9 @@ public final class PersonalHomeActivity extends Activity {
         int[] icons = {R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_brightness, R.drawable.ic_brightness};
         Runnable[] choices = {
             this::wallpaperSettings,
-            () -> chooseSetting("Wallpaper source", new String[]{"Built-in", "Online", "Favorite"}, which -> {
-                prefs.edit().putInt("wallpaper_source", which).apply();
+            () -> chooseSetting("Wallpaper source", glassOs()?new String[]{"Built-in", "Online", "Favorite", "Gradient only"}:new String[]{"Built-in", "Online", "Favorite"}, which -> {
+                SharedPreferences.Editor wallpaper=prefs.edit().putInt("wallpaper_source",which==3?0:which);
+                if(glassOs())wallpaper.putString("wallpaper_mode",which==3?"solid":"mountains");wallpaper.apply();
                 updateOnlineWallpaper();
                 armSlideshow();
                 sky.invalidate();
@@ -2153,7 +2154,7 @@ public final class PersonalHomeActivity extends Activity {
             case "Theme": return prefs.getInt("theme_name", 0);
             case "Launcher font": return prefs.getInt("app_font", 0);
             case "Glass intensity": return indexOf(new int[]{30, 70, 100}, prefs.getInt("glass_alpha", 70));
-            case "Wallpaper source": return prefs.getInt("wallpaper_source", 0);
+            case "Wallpaper source": return glassOs()&&"solid".equals(prefs.getString("wallpaper_mode","solid"))?3:prefs.getInt("wallpaper_source", 0);
             case "Wallpaper slideshow": return indexOf(new int[]{0, 15, 30, 60}, prefs.getInt("wallpaper_slideshow", 0));
             case "Bottom shade": return prefs.getBoolean("bottom_shade", true) ? 1 : 0;
             case "Continue watching": return prefs.getBoolean("continue_watching", true) ? 0 : 1;

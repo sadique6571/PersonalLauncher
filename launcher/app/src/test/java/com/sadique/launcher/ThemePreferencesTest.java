@@ -175,12 +175,14 @@ public class ThemePreferencesTest {
             }
         }
     }
-    @Test public void allThemesRestoreTheirOwnAppearanceWithoutSplittingIdentityOrWallpaper() {
+    @Test public void allThemesRestoreTheirOwnAppearanceAndWallpaperWithoutSplittingIdentity() {
         ThemePreferences prefs=new ThemePreferences(new Memory());
         prefs.edit().putString("name","Profile").putInt("wallpaper_source",1).apply();
         for(int style=0;style<ThemeStyle.COUNT;style++) {
             prefs.edit().putInt("visual_style",style).putInt("glass_alpha",20+style*10)
-                    .putInt("avatar_shape",style%2).putBoolean("panel_transparency",style%2==0).apply();
+                    .putInt("avatar_shape",style%2).putBoolean("panel_transparency",style%2==0)
+                    .putInt("wallpaper_source",style%3).putString("wallpaper_mode",style==0?"solid":"mountains")
+                    .putInt("ambient_strength",style*10).putBoolean("glass_os_defaults_v1",style==0).apply();
         }
         for(int style=ThemeStyle.COUNT-1;style>=0;style--) {
             prefs.edit().putInt("visual_style",style).apply();
@@ -188,7 +190,11 @@ public class ThemePreferencesTest {
             assertEquals(20+style*10,prefs.getInt("glass_alpha",0));
             assertEquals(style%2,prefs.getInt("avatar_shape",0));
             assertEquals(style%2==0,PanelTransparency.enabled(prefs));
-            assertEquals("Profile",prefs.getString("name","")); assertEquals(1,prefs.getInt("wallpaper_source",0));
+            assertEquals("Profile",prefs.getString("name",""));
+            assertEquals(style%3,prefs.getInt("wallpaper_source",-1));
+            assertEquals(style==0?"solid":"mountains",prefs.getString("wallpaper_mode",""));
+            assertEquals(style*10,prefs.getInt("ambient_strength",-1));
+            assertEquals(style==0,prefs.getBoolean("glass_os_defaults_v1",false));
         }
     }
     @Test public void newStyleBackupRestoresSelectedNamespaceRegardlessOfLegacyBoolean() {

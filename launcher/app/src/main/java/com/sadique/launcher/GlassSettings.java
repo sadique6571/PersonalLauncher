@@ -349,6 +349,7 @@ final class GlassSettings {
         page.setElevation(dp(host, glass ? 6 : 0));
     }
     private static GradientDrawable shellBackground(Activity host) {
+        if(ThemeStyle.id(ThemePreferences.get(host))==ThemeStyle.GLASS)return GlassOsUi.controls(host);
         boolean glass = TvGlassStyle.enabled(ThemePreferences.get(host));
         GradientDrawable shell = glass ? TvGlassStyle.surface(dp(host, 28), dp(host, 1), false, prefsFor(host))
                 : new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xff122338, 0xff09182a});

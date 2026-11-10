@@ -65,7 +65,7 @@ final class GlassBluetooth {
         GlassSettings.panel(host,"Bluetooth",rows).show();
     }
     private int symbol(BluetoothDevice d){BluetoothClass c=d.getBluetoothClass();if(c==null)return android.R.drawable.stat_sys_data_bluetooth;
-        if(c.getMajorDeviceClass()==BluetoothClass.Device.Major.AUDIO_VIDEO)return R.drawable.ic_volume;
+        if(c.getMajorDeviceClass()==BluetoothClass.Device.Major.AUDIO_VIDEO)return c.getDeviceClass()==BluetoothClass.Device.AUDIO_VIDEO_HEADPHONES||c.getDeviceClass()==BluetoothClass.Device.AUDIO_VIDEO_WEARABLE_HEADSET?R.drawable.ic_volume_headphones:R.drawable.ic_volume_speaker;
         if(c.getMajorDeviceClass()==BluetoothClass.Device.Major.PERIPHERAL)return R.drawable.ic_input;
         return android.R.drawable.stat_sys_data_bluetooth;
     }

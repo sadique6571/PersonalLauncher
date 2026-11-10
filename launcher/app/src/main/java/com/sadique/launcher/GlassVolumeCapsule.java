@@ -51,6 +51,7 @@ final class GlassVolumeCapsule extends LinearLayout {
         boolean mute=audio.isStreamMute(AudioManager.STREAM_MUSIC)||value==0;
         float target=mute||max<=0?0:value/(float)max;
         percent.setText(mute?"MUTE":Math.round(target*100)+"%");
+        icon.setImageDrawable(TvSymbols.icon(host,mute?R.drawable.ic_volume_muted:R.drawable.ic_volume_speaker));
         icon.setAlpha(mute?.45f:1);setContentDescription("Media volume "+percent.getText());
         if(animator!=null)animator.cancel();
         if(animate&&isShown()) {
