@@ -29,7 +29,7 @@ final class WeatherWidgetView extends FrameLayout {
         orb=new WeatherOrbView(host);current.addView(orb,new LinearLayout.LayoutParams(dp(58),dp(54)));copy.addView(current,new LinearLayout.LayoutParams(-1,dp(54)));
         condition=label("Unavailable",13);condition.setSingleLine();condition.setEllipsize(android.text.TextUtils.TruncateAt.END);copy.addView(condition);
         details=label("",10);details.setMaxLines(2);LinearLayout.LayoutParams detailParams=new LinearLayout.LayoutParams(-1,-2);detailParams.topMargin=dp(7);copy.addView(details,detailParams);
-        TextView hint=label("OK · Hourly / daily forecast",9);hint.setTextColor(0xffc8d9e6);hint.setPadding(0,dp(8),0,0);copy.addView(hint);
+        setTooltipText("Hourly / daily forecast");
         addView(copy,new LayoutParams(-1,-2,Gravity.TOP));
         setFocusable(true);setClickable(true);setForeground(edge(false));setOnFocusChangeListener((v,f)->setForeground(edge(f)));setOnClickListener(v->open.run());
         bind(null,prefs.getString("weather_city",LandscapeModel.CITY),prefs.getBoolean("weather_fahrenheit",false));
