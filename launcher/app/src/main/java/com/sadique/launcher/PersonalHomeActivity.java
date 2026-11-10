@@ -82,10 +82,10 @@ public final class PersonalHomeActivity extends Activity {
     private int profileEpoch;
     private TextView userName, time, date, ampm, networkStatus, appHeading, greeting, homeWeather;
     private ImageView avatar;
-    private TextView bluetoothStatus, solarDate, islamicDate;
+    private TextView bluetoothStatus, solarDate, islamicDate, focusedSpotlight;
+    private String spotlightName="",spotlightCategory="";
     private GlassBluetooth bluetooth;
     private GlassTelemetry telemetry;
-    private GlassVolumeCapsule homeVolume;
     private AppLibraryDialog appLibrary;
     private int glassAccent=0xffe50914;
     private boolean glassOs() { return ThemeStyle.id(prefs)==ThemeStyle.GLASS; }
@@ -94,6 +94,8 @@ public final class PersonalHomeActivity extends Activity {
             prefs.edit().putBoolean("glass_os_defaults_v1",true).putString("wallpaper_mode","solid")
                 .putInt("wallpaper_source",0).putInt("header_bg_mode",0).putBoolean("header_glass_v2",true).putInt("clock_size",82)
                 .putBoolean("focus_glow",true).putInt("ambient_strength",100).apply();
+        if(glassOs()&&!prefs.getBoolean("glass_reference_v2",false))
+            prefs.edit().putBoolean("glass_reference_v2",true).putInt("header_bg_mode",1).putBoolean("header_glass_v2",true).apply();
     }
     private Bitmap avatarBitmap;
     private Bitmap customWallpaper;
@@ -165,9 +167,9 @@ public final class PersonalHomeActivity extends Activity {
         for (java.util.Map.Entry<String, View> entry : tileViews.entrySet()) {
             View tile = entry.getValue();
             boolean focused = tile.isFocused();
-            tile.setBackground(appSurface(focused));
             Object tag = tile.getTag();
             int accent = tag instanceof Integer ? (Integer) tag : CYAN;
+            tile.setBackground(appSurface(accent,focused));
             tile.setForeground(tileBorder(accent, focused));
         }
         if (sky != null) sky.invalidate();
@@ -273,6 +275,7 @@ public final class PersonalHomeActivity extends Activity {
 
     private GradientDrawable surface(boolean focused) { return surface(focused,false); }
     private GradientDrawable appSurface(boolean focused) { return surface(focused,true); }
+    private GradientDrawable appSurface(int accent,boolean focused){return glassOs()?GlassAppCard.surface(this,accent,focused,tileRadius()):appSurface(focused);}
     private GradientDrawable surface(boolean focused,boolean drawer) {
         if (TvGlassStyle.enabled(prefs)) return drawer
                 ? TvGlassStyle.drawerCard(tileRadius(),dp(1),focused,prefs)
@@ -409,8 +412,7 @@ public final class PersonalHomeActivity extends Activity {
     private void buildHome() {
         glassDefaults();
         if(telemetry!=null){telemetry.stop();telemetry=null;}
-        if(homeVolume!=null){homeVolume.stop();homeVolume=null;}
-        solarDate=null;islamicDate=null;bluetoothStatus=null;
+        solarDate=null;islamicDate=null;bluetoothStatus=null;focusedSpotlight=null;
         HeaderAppearance.clockDefaults(prefs);
         if (liquidBackdrop != null) { liquidBackdrop.close(); liquidBackdrop=null; }
         if (headerBackdrop != null) { headerBackdrop.close(); headerBackdrop=null; }
@@ -435,7 +437,7 @@ public final class PersonalHomeActivity extends Activity {
         sky.setScaleY(1.06f);
         root.addView(sky, new ViewGroup.LayoutParams(-1, -1));
         ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(false);
+        scroll.setFillViewport(glassOs());
         scroll.setClipToPadding(false);
         page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
@@ -480,7 +482,7 @@ public final class PersonalHomeActivity extends Activity {
         if (tvGlass()) identityCard.setPadding(dp(6), dp(5), dp(14), dp(5));
         identityCard.setOnClickListener(v -> LauncherPin.require(this, this::editProfile));
         if(glassOs()) {
-            identityCard.setId(R.id.leftBlock);identityCard.setBackground(GlassOsUi.panel(this,999));
+            identityCard.setId(R.id.leftBlock);identityCard.setBackground(null);
             identityCard.setFocusable(true);identityCard.setOnKeyListener((v,c,e)-> {
                 if(c==KeyEvent.KEYCODE_DPAD_RIGHT && e.getAction()==KeyEvent.ACTION_DOWN){networkStatus.requestFocus();return true;}
                 if(c==KeyEvent.KEYCODE_DPAD_DOWN && e.getAction()==KeyEvent.ACTION_DOWN){grid.focusKey(focusedPkg);return true;}
@@ -507,10 +509,10 @@ public final class PersonalHomeActivity extends Activity {
         if (prefs.getBoolean("hide_greeting", false)) greeting.setVisibility(View.GONE);
         identity.addView(greeting);
         if(glassOs()) {
-            userName.setId(R.id.profileName);userName.setTextSize(16);userName.setTypeface(userName.getTypeface(),android.graphics.Typeface.BOLD);
-            greeting.setId(R.id.greeting);greeting.setTextSize(10);greeting.setAllCaps(true);
+            userName.setId(R.id.profileName);userName.setTextSize(19);userName.setTypeface(userName.getTypeface(),android.graphics.Typeface.BOLD);
+            greeting.setId(R.id.greeting);greeting.setTextSize(12);greeting.setAllCaps(false);
             greeting.setTypeface(greeting.getTypeface(),android.graphics.Typeface.BOLD);
-            identity.removeView(greeting);identity.addView(greeting,0);
+            identity.removeView(greeting);identity.addView(greeting);
         }
         identityCard.addView(identity, new LinearLayout.LayoutParams(0, -2, 1));
         LinearLayout.LayoutParams identityParams = new LinearLayout.LayoutParams(0, -2, 1);
@@ -622,19 +624,26 @@ public final class PersonalHomeActivity extends Activity {
         clock.addView(timeRow, new LinearLayout.LayoutParams(-1, dp(clockSize + (compact ? 10 : 36))));
         clock.addView(date);
         if(glassOs()) {
-            time.setTypeface(android.graphics.Typeface.create("sans-serif-thin",android.graphics.Typeface.NORMAL));
+            time.setTypeface(android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD));
+            ampm.setTypeface(android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD));
+            ampm.setTextColor(accentColor());ampm.setBackground(GlassOsUi.panel(this,10));ampm.setPadding(dp(8),dp(4),dp(8),dp(4));
             clock.setPadding(0,0,0,0);
-            solarDate=text("",11,MUTED);solarDate.setId(R.id.shamsiDate);
-            islamicDate=text("",11,MUTED);islamicDate.setId(R.id.lunarDate);
+            solarDate=text("",13,MUTED);solarDate.setId(R.id.shamsiDate);
+            islamicDate=text("",13,MUTED);islamicDate.setId(R.id.lunarDate);
             clock.addView(solarDate);clock.addView(islamicDate);
             if(getResources().getConfiguration().screenWidthDp>=700) {
                 clock.removeView(date);clock.removeView(solarDate);clock.removeView(islamicDate);
                 View divider=new View(this);divider.setId(R.id.clockDivider);divider.setBackgroundColor(0x38ffffff);
                 LinearLayout.LayoutParams line=new LinearLayout.LayoutParams(dp(1.5f),dp(48));line.setMargins(dp(12),0,dp(12),0);timeRow.addView(divider,line);
                 LinearLayout dates=new LinearLayout(this);dates.setOrientation(LinearLayout.VERTICAL);
-                date.setTextSize(18);date.setGravity(Gravity.START);dates.addView(date);dates.addView(solarDate);dates.addView(islamicDate);
+                date.setTextSize(18);date.setTypeface(date.getTypeface(),android.graphics.Typeface.BOLD);date.setGravity(Gravity.START);dates.addView(date);dates.addView(solarDate);dates.addView(islamicDate);
                 timeRow.addView(dates,new LinearLayout.LayoutParams(0,-2,1));
             }
+        }
+        if(glassOs()) {
+            focusedSpotlight=text("",13,0xffffffff);focusedSpotlight.setSingleLine();focusedSpotlight.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            focusedSpotlight.setPadding(dp(13),dp(7),dp(13),dp(7));focusedSpotlight.setBackground(GlassOsUi.panel(this,999));
+            LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-2,-2);sp.topMargin=dp(8);clock.addView(focusedSpotlight,sp);updateSpotlight();
         }
         time.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             int[] position = new int[2], origin = new int[2];
@@ -651,6 +660,7 @@ public final class PersonalHomeActivity extends Activity {
         appHeading.setPadding(dp(4), dp(8), 0, dp(12));
         grid = new HomeAppGrid<>(this, app -> app.info.activityInfo.packageName,
                 (app, width) -> createAppTile(app, width, carriedApp != null && app.info.activityInfo.packageName.equals(carriedApp.info.activityInfo.packageName)));
+        grid.setReferenceExpansion(glassOs());
         grid.setUpFromApps(() -> { if (searchButton != null) searchButton.requestFocus(); });
         grid.setClipChildren(false);
         if(glassOs()) {
@@ -673,6 +683,7 @@ public final class PersonalHomeActivity extends Activity {
         // drawer panel stay fixed below; tiles scroll inside the panel.
         LinearLayout scrollContent = new LinearLayout(this);
         scrollContent.setOrientation(LinearLayout.VERTICAL);
+        if(glassOs())scrollContent.setGravity(Gravity.CENTER_VERTICAL);
         if (prefs.getBoolean("hide_clock", false) || prefs.getBoolean("apps_only", false)) clock.setVisibility(View.GONE);
         int align = ThemeStyle.clockAlignment(prefs);
         LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(-1, -2);
@@ -683,19 +694,18 @@ public final class PersonalHomeActivity extends Activity {
             stage.setOrientation(wide?LinearLayout.HORIZONTAL:LinearLayout.VERTICAL);
             if(wide) stage.addView(clock,new LinearLayout.LayoutParams(0,-2,1));else stage.addView(clock,clockParams);
             LinearLayout instruments=new LinearLayout(this);instruments.setGravity(Gravity.CENTER_VERTICAL);
-            telemetry=new GlassTelemetry(this);homeVolume=new GlassVolumeCapsule(this);homeVolume.accent(glassAccent);
+            telemetry=new GlassTelemetry(this);
             int cardWidth=wide?Math.min(315,getResources().getConfiguration().screenWidthDp/3):Math.min(280,getResources().getConfiguration().screenWidthDp-125);
-            int stageHeight=getResources().getConfiguration().screenHeightDp<650?180:212;
             instruments.addView(telemetry,new LinearLayout.LayoutParams(dp(cardWidth),-2));
-            LinearLayout.LayoutParams vp=new LinearLayout.LayoutParams(dp(64),dp(stageHeight));vp.setMarginStart(dp(12));instruments.addView(homeVolume,vp);
-            stage.addView(instruments);scrollContent.addView(stage,new LinearLayout.LayoutParams(-1,-2));
-            if(resumed){telemetry.start();homeVolume.start();}
+            stage.addView(instruments);if(prefs.getBoolean("apps_only",false))stage.setVisibility(View.GONE);scrollContent.addView(stage,new LinearLayout.LayoutParams(-1,-2));
+            if(resumed)telemetry.start();
         }else scrollContent.addView(clock, clockParams);
         scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
-        page.addView(scroll, new LinearLayout.LayoutParams(-1, -2));
+        boolean referenceStage=glassOs()&&!prefs.getBoolean("apps_only",false);
+        page.addView(scroll, referenceStage?new LinearLayout.LayoutParams(-1,0,1):new LinearLayout.LayoutParams(-1,-2));
         if(ThemeStyle.custom(prefs)||glassOs()) appHeading.setVisibility(View.GONE);
         page.addView(appHeading);
-        page.addView(appBody, new LinearLayout.LayoutParams(-1, 0, 1));
+        page.addView(appBody,referenceStage?new LinearLayout.LayoutParams(-1,dp(GlassDockLayout.dockHeight(getResources().getConfiguration().screenHeightDp))):new LinearLayout.LayoutParams(-1,0,1));
         // Focus-glow tracker: keep the wallpaper glow on the focused tile no matter
         // which scroller moved.
         View.OnScrollChangeListener glowTracker = (v, x, y, oldX, oldY) -> {
@@ -764,7 +774,7 @@ public final class PersonalHomeActivity extends Activity {
     /** Time-based greeting, e.g. "Subah Bakhair". */
     private String greetingText() {
         int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
-        if(glassOs()) return hour>=5&&hour<12?"GOOD MORNING":hour<17&&hour>=12?"GOOD AFTERNOON":hour>=17&&hour<22?"GOOD EVENING":"GOOD NIGHT";
+        if(glassOs()) return hour>=5&&hour<12?"Good morning":hour<17&&hour>=12?"Good afternoon":hour>=17&&hour<22?"Good evening":"Good night";
         if (hour >= 5 && hour < 12) return "Subah Bakhair";
         if (hour >= 12 && hour < 17) return "Dopahar Bakhair";
         if (hour >= 17 && hour < 22) return "Shaam Bakhair";
@@ -1106,6 +1116,7 @@ public final class PersonalHomeActivity extends Activity {
             if (iconView instanceof ImageView) ((ImageView) iconView).setImageDrawable(icon);
             tile.setForeground(tileBorder(accent, tile.isFocused()));
             tile.setTag(accent);
+            if(glassOs())tile.setBackground(appSurface(accent,tile.isFocused()));
             if(glassOs()&&tile.isFocused())updateGlassAccent(accent);
         }
     }
@@ -1283,7 +1294,7 @@ public final class PersonalHomeActivity extends Activity {
     private View createAppTile(App app, int width, boolean moving) {
         requestAppIcon(app);
         android.widget.FrameLayout tile = ThemeStyle.custom(prefs)?new DemoTile(this,ThemeStyle.id(prefs),tileRadius()):new android.widget.FrameLayout(this);
-        tile.setBackground(appSurface(false));
+        tile.setBackground(appSurface(app.accent,false));
         tile.setOutlineProvider(new ViewOutlineProvider() {
             @Override public void getOutline(View view,Outline outline) {
                 outline.setRoundRect(0,0,view.getWidth(),view.getHeight(),tileRadius());
@@ -1324,10 +1335,13 @@ public final class PersonalHomeActivity extends Activity {
             }
             caption.setMarginStart(logoWidth+dp(24)); caption.setMarginEnd(dp(10)); tile.addView(title,caption);
         } else if(glassOs()) {
-            icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            android.widget.FrameLayout.LayoutParams logo=new android.widget.FrameLayout.LayoutParams(-1,-1);logo.bottomMargin=dp(34);logo.topMargin=dp(8);logo.leftMargin=dp(8);logo.rightMargin=dp(8);tile.addView(icon,logo);
-            TextView title=text(app.name,12,0xffffffff);title.setGravity(Gravity.CENTER);title.setSingleLine();title.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            android.widget.FrameLayout.LayoutParams caption=new android.widget.FrameLayout.LayoutParams(-1,dp(32),Gravity.BOTTOM);tile.addView(title,caption);
+            icon.setScaleType(ImageView.ScaleType.FIT_CENTER);icon.setPadding(dp(5),dp(5),dp(5),dp(5));
+            GradientDrawable logoBg=new GradientDrawable();logoBg.setColor(0x57000000);logoBg.setCornerRadius(dp(12));logoBg.setStroke(dp(1),0x38ffffff);icon.setBackground(logoBg);
+            android.widget.FrameLayout.LayoutParams logo=new android.widget.FrameLayout.LayoutParams(dp(42),dp(42),Gravity.TOP|Gravity.START);logo.setMargins(dp(12),dp(12),0,0);tile.addView(icon,logo);
+            LinearLayout copy=new LinearLayout(this);copy.setOrientation(LinearLayout.VERTICAL);copy.setPadding(dp(12),0,dp(12),dp(10));
+            TextView title=text(app.name,15,0xffffffff);title.setTag("reference_app_title");title.setTypeface(title.getTypeface(),android.graphics.Typeface.BOLD);title.setSingleLine();title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            TextView subtitle=text(appCategory(app),10,0xd6ffffff);subtitle.setSingleLine();subtitle.setEllipsize(android.text.TextUtils.TruncateAt.END);copy.addView(title);copy.addView(subtitle);
+            tile.addView(copy,new android.widget.FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM));
         }else tile.addView(icon, new android.widget.FrameLayout.LayoutParams(-1, -1));
         if(glassOs()) {
             TextView badge=text("OPEN",9,0xffdbeafe);badge.setTag("glass_open_badge");badge.setVisibility(View.GONE);
@@ -1336,13 +1350,15 @@ public final class PersonalHomeActivity extends Activity {
         }
         tile.setOnFocusChangeListener((v, focus) -> {
             View badge=tile.findViewWithTag("glass_open_badge");if(badge!=null)badge.setVisibility(focus?View.VISIBLE:View.GONE);
-            tile.setBackground(appSurface(focus));
+            tile.setBackground(appSurface(app.accent,focus));
             if (!moving) tile.setForeground(tileBorder(app.accent, focus));
             if (focus) focusedPkg = app.info.activityInfo.packageName;
+            if(glassOs()&&!moving)grid.expandKey(focus?app.info.activityInfo.packageName:null);
+            View title=tile.findViewWithTag("reference_app_title");if(title instanceof TextView)((TextView)title).setTextSize(focus?18:15);
             if (!moving) {
                 // Focus zoom: gentle scale animation.
-                float scale = focus ? (glassOs()?1.28f:tvGlass() ? 1.06f : 1.05f) : 1f;
-                float sy=glassOs()?(focus?1.02f:1):scale;
+                float scale = focus ? (glassOs()?1f:tvGlass() ? 1.06f : 1.05f) : 1f;
+                float sy=glassOs()?1:scale;
                 float lift=glassOs()&&focus?-dp(8):0;
                 v.animate().cancel();
                 if (MemoryProfile.effectiveTier(this, prefs) == MemoryProfile.TIER_LIGHT) {
@@ -1357,7 +1373,7 @@ public final class PersonalHomeActivity extends Activity {
                 tile.setOutlineSpotShadowColor(app.accent);
             }
             if (focus) {
-                if(glassOs())updateGlassAccent(app.accent);
+                if(glassOs()){spotlightName=app.name;spotlightCategory=appCategory(app);updateGlassAccent(app.accent);}
                 if (!TvGlassStyle.enabled(prefs)) appHeading.setText(app.name);
                 appHeading.setTextColor(ThemeStyle.foreground(prefs));
                 int[] position = new int[2], origin = new int[2];
@@ -1384,7 +1400,7 @@ public final class PersonalHomeActivity extends Activity {
             };
             if (carriedApp != null) { open.run(); return; }
             v.animate().scaleX(1.08f).scaleY(1.08f).alpha(.7f).setDuration(120).withEndAction(() -> {
-                v.setScaleX(glassOs()?1.28f:1.05f); v.setScaleY(glassOs()?1.02f:1.05f); v.setAlpha(1f);
+                v.setScaleX(glassOs()?1f:1.05f); v.setScaleY(glassOs()?1:1.05f); v.setAlpha(1f);
                 open.run();
             }).start();
         });
@@ -1408,7 +1424,7 @@ public final class PersonalHomeActivity extends Activity {
         int vm = (tvGlass() ? new int[]{dp(8), dp(12), dp(18)} : new int[]{dp(5), dp(10), dp(16)})[spacing];
         position.width = width - hm * 2;
         position.height = ThemeStyle.custom(prefs)?Math.max(dp(54),Math.round(position.width/DemoGeometry.ratio()))+Math.round(DemoGeometry.footer(ThemeStyle.id(prefs),dp(1))):Math.round(position.width*9f/16f);
-        if(glassOs()) position.height=Math.max(dp(100),Math.min(dp(160),Math.round(position.width*.85f)));
+        if(glassOs()){position.height=Math.min(dp(GlassDockLayout.cardHeight(getResources().getConfiguration().screenHeightDp)),Math.max(dp(100),Math.round(position.width*.85f)));position.width=-1;}
         position.setMargins(hm, vm, hm, vm);
         tile.setLayoutParams(position);
         tile.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
@@ -1619,8 +1635,20 @@ public final class PersonalHomeActivity extends Activity {
     private void updateGlassAccent(int color) {
         glassAccent=color;
         if(avatar instanceof AppAccentAvatar)((AppAccentAvatar)avatar).accent(color);
-        if(homeVolume!=null)homeVolume.accent(color);
-        if(sky!=null)sky.invalidate();
+        if(sky!=null)sky.invalidate();updateSpotlight();
+    }
+    private String appCategory(App app){
+        CharSequence value=android.content.pm.ApplicationInfo.getCategoryTitle(this,app.info.activityInfo.applicationInfo.category);
+        return value==null?"App":value.toString();
+    }
+    private void updateSpotlight(){
+        if(focusedSpotlight==null)return;
+        String name=spotlightName.isEmpty()?getString(R.string.h_your_apps):spotlightName;
+        String caption="●  "+name+(spotlightCategory.isEmpty()?"":"  • "+spotlightCategory);
+        android.text.SpannableString text=new android.text.SpannableString(caption);
+        text.setSpan(new android.text.style.ForegroundColorSpan(glassAccent),0,1,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        int secondary=caption.indexOf("  • ");if(secondary>=0)text.setSpan(new android.text.style.ForegroundColorSpan(MUTED),secondary,caption.length(),android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        focusedSpotlight.setText(text);
     }
     private void updateBluetooth(){if(bluetoothStatus!=null&&bluetooth!=null)bluetoothStatus.setText(bluetooth.connectedName());}
     boolean libraryVisibility(String pkg,boolean visible){
@@ -1746,7 +1774,7 @@ public final class PersonalHomeActivity extends Activity {
     }
     private void styleStatusBar(View bar) {
         int mode=headerBgMode();
-        GradientDrawable background=mode==0 ? null : TvGlassStyle.header(dp(tvGlass()?28:18),dp(1),prefs,mode==2);
+        GradientDrawable background=mode==0 ? null : glassOs()?GlassOsUi.panel(this,26):TvGlassStyle.header(dp(tvGlass()?28:18),dp(1),prefs,mode==2);
         bar.setBackground(background); bar.setClipToOutline(background!=null&&!ThemeStyle.custom(prefs));
         if (bar==header) bar.setPadding(background==null?0:dp(12),background==null?0:dp(8),
                 background==null?0:dp(12),background==null?0:dp(8));
@@ -1860,11 +1888,11 @@ public final class PersonalHomeActivity extends Activity {
 
     private void switchVisualStyle(int style) {
         if (ThemeStyle.id(prefs)==style) return;
-        int priorLogo=prefs.getInt("logo_size",1); boolean priorMark=ThemeStyle.custom(prefs);
+        int priorLogo=prefs.getInt("logo_size",1); boolean priorMark=ThemeStyle.id(prefs)!=ThemeStyle.CLASSIC;
         appGeneration++; // Reject artwork started for the previous style, even if its palette was similar.
         prefs.edit().putInt("visual_style",style).apply();
         ThemeStyle.demoDefaults(prefs,tv);
-        boolean reload=priorLogo!=prefs.getInt("logo_size",1) || priorMark!=ThemeStyle.custom(prefs);
+        boolean reload=priorLogo!=prefs.getInt("logo_size",1) || priorMark!=(ThemeStyle.id(prefs)!=ThemeStyle.CLASSIC);
         if(cachedApps!=null) for(App app:cachedApps) {
             if(reload) { app.iconReady=false; app.icon=null; }
         }
@@ -2059,11 +2087,13 @@ public final class PersonalHomeActivity extends Activity {
     private void applyLabelScheme(android.widget.TextView label, boolean dark, boolean muted) {
         if (label == null) return;
         if(glassOs()&&label==networkStatus)return;
+        if(glassOs()&&label==ampm){label.setTextColor(accentColor());return;}
         label.setTextColor(ThemeStyle.custom(prefs)?(muted?ThemeStyle.muted(prefs):ThemeStyle.foreground(prefs)):(muted ? 0xE6FFFFFF : 0xFFFFFFFF));
         boolean clockLabel=label==time || label==ampm || label==date;
         boolean headerLabel=label==userName || label==greeting || label==homeWeather || label==networkStatus;
         if(headerLabel) label.setTextColor(HeaderAppearance.foreground(prefs));
         if(glassOs()&&label==networkStatus)return;
+        if(glassOs()&&label==ampm){label.setTextColor(accentColor());return;}
         if(clockLabel) label.setTextColor(wallpaperClockInk);
         if(clockLabel && !prefs.getBoolean("clock_shadow",true)) label.setShadowLayer(0,0,0,Color.TRANSPARENT);
         else {
@@ -2548,7 +2578,7 @@ public final class PersonalHomeActivity extends Activity {
         super.onResume();
         resumed = true;
         if(bluetooth!=null){bluetooth.start();updateBluetooth();}
-        if(telemetry!=null)telemetry.start();if(homeVolume!=null)homeVolume.start();
+        if(telemetry!=null)telemetry.start();
         GitHubUpdates.resume(this);
         VolumeAutoStart.request(this);
         HomeAutomation.onResume(this);
@@ -2582,7 +2612,7 @@ public final class PersonalHomeActivity extends Activity {
         VolumeKeys.stop();
         VolumeSlider.hide(this);
         resumed = false;
-        if(bluetooth!=null)bluetooth.stop();if(telemetry!=null)telemetry.stop();if(homeVolume!=null)homeVolume.stop();
+        if(bluetooth!=null)bluetooth.stop();if(telemetry!=null)telemetry.stop();
         if (grid != null && grid.getLayoutManager() != null) gridState = grid.getLayoutManager().onSaveInstanceState();
         if (focusedPkg != null) prefs.edit().putString("home_focus_pkg", focusedPkg).apply();
         if (continueWatching != null) continueWatching.stop();
@@ -2638,7 +2668,7 @@ public final class PersonalHomeActivity extends Activity {
         if (liquidBackdrop != null) { liquidBackdrop.close(); liquidBackdrop=null; }
         if (headerBackdrop != null) { headerBackdrop.close(); headerBackdrop=null; }
         unregisterReceiver(appChanges);
-        if(bluetooth!=null)bluetooth.stop();if(telemetry!=null)telemetry.stop();if(homeVolume!=null)homeVolume.stop();
+        if(bluetooth!=null)bluetooth.stop();if(telemetry!=null)telemetry.stop();
         if(appLibrary!=null)appLibrary.close();
         if (panel != null) panel.dismiss();
         if (profile != null) profile.dismiss();

@@ -31,7 +31,7 @@ final class IconCache {
         this.dir = new File(app.getCacheDir(), "icon_cards");
         this.dir.mkdirs();
         this.prefs = ThemePreferences.get(app);
-        mark=ThemeStyle.custom(prefs);
+        mark=ThemeStyle.custom(prefs)||ThemeStyle.id(prefs)==ThemeStyle.GLASS;
         logoSize=Math.max(0,Math.min(2,prefs.getInt("logo_size",1)));
     }
 

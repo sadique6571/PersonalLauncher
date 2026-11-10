@@ -167,22 +167,23 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
                 float sx=card.getScaleX(),sy=card.getScaleY();
                 float left=child.getLeft()+child.getTranslationX()+card.getLeft()+card.getTranslationX()+card.getPivotX()*(1-sx);
                 float top=child.getTop()+child.getTranslationY()+card.getTop()+card.getTranslationY()+card.getPivotY()*(1-sy);
-                float height=card.getHeight()*sy*.65f,start=top+card.getHeight()*sy+6*density;
+                float height=card.getHeight()*sy,start=top+card.getHeight()*sy+6*density;
                 if(start>=parent.getHeight()||start+height<=0)continue;
                 area.set(left,start,left+card.getWidth()*sx,start+height);
                 int layer=c.saveLayer(area,null);
-                int flipped=c.save();c.translate(left,start+height);c.scale(sx,-sy*.65f);card.draw(c);c.restoreToCount(flipped);
+                int flipped=c.save();c.translate(left,start+height);c.scale(sx,-sy);card.draw(c);c.restoreToCount(flipped);
                 if(height!=lastHeight) {
                     lastHeight=height;fade=new LinearGradient(0,0,0,height,new int[]{0xbf000000,0x40000000,0x00000000},new float[]{0,.5f,1},Shader.TileMode.CLAMP);
                 }
-                c.translate(0,start);mask.setShader(fade);mask.setXfermode(dstIn);
+                c.translate(0,start);mask.setShader(fade);mask.setAlpha(Math.round(255*card.getAlpha()*child.getAlpha()));mask.setXfermode(dstIn);
                 c.drawRect(area.left,0,area.right,height,mask);mask.setXfermode(null);mask.setShader(null);
                 c.restoreToCount(layer);
             }
         }
         @Override public void getItemOffsets(@NonNull Rect out,@NonNull View view,@NonNull RecyclerView parent,@NonNull RecyclerView.State state) {
             // Leave room between app rows; reflections never cover the next row's title.
-            if(view.getTag()!=null)out.bottom=Math.round(100*parent.getResources().getDisplayMetrics().density);
+            if(view.getTag()!=null&&view instanceof android.view.ViewGroup&&((android.view.ViewGroup)view).getChildCount()>0)
+                out.bottom=((android.view.ViewGroup)view).getChildAt(0).getLayoutParams().height+Math.round(10*parent.getResources().getDisplayMetrics().density);
         }
     }
 

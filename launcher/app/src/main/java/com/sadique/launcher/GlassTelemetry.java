@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.ActivityManager;
 import android.os.*;
 import android.widget.*;
+import android.view.View;
 import java.io.*;
 import java.util.Locale;
 
@@ -20,7 +21,10 @@ final class GlassTelemetry extends LinearLayout {
         super(host);setOrientation(VERTICAL);setId(R.id.statsCard);
         int pad=GlassSettings.dp(host,14);setPadding(pad,pad,pad,pad);
         setBackground(GlassOsUi.panel(host,22));
-        TextView heading=GlassSettings.label(host,"● SYSTEM TELEMETRY          Live",10,0xffa5b4cf);addView(heading);
+        LinearLayout heading=new LinearLayout(host);heading.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        heading.addView(GlassSettings.label(host,"SYSTEM TELEMETRY",10,0xffa5b4cf),new LayoutParams(0,-2,1));
+        heading.addView(GlassSettings.label(host,"● Live",10,0xff59e493));addView(heading);
+        View rule=new View(host);rule.setBackgroundColor(0x18ffffff);LayoutParams rp=new LayoutParams(-1,GlassSettings.dp(host,1));rp.topMargin=GlassSettings.dp(host,8);addView(rule,rp);
         int[] ids={R.id.cpuVal,R.id.ramVal,R.id.memVal},progress={R.id.cpuProgress,R.id.ramProgress,R.id.memProgress};
         int[] colors={0xff38bdf8,0xff34d399,0xfff59e0b};String[] names={"CPU","RAM","MEMORY"};
         for(int i=0;i<3;i++) {
@@ -28,9 +32,12 @@ final class GlassTelemetry extends LinearLayout {
             row.addView(GlassSettings.label(host,names[i],10,0xffc5cede),new LayoutParams(0,-2,1));
             values[i]=GlassSettings.label(host,"—",10,0xfff0f7ff);values[i].setId(ids[i]);row.addView(values[i]);addView(row);
             bars[i]=new ProgressBar(host,null,android.R.attr.progressBarStyleHorizontal);bars[i].setId(progress[i]);bars[i].setMax(100);
-            bars[i].setProgressTintList(android.content.res.ColorStateList.valueOf(colors[i]));
-            bars[i].setProgressBackgroundTintList(android.content.res.ColorStateList.valueOf(0x18ffffff));
-            addView(bars[i],new LayoutParams(-1,GlassSettings.dp(host,5)));
+            android.graphics.drawable.GradientDrawable background=new android.graphics.drawable.GradientDrawable();background.setColor(0x18ffffff);background.setCornerRadius(GlassSettings.dp(host,999));
+            int[] ends={0xff818cf8,0xff10b981,0xffec4899};
+            android.graphics.drawable.GradientDrawable gradient=new android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,new int[]{colors[i],ends[i]});gradient.setCornerRadius(GlassSettings.dp(host,999));
+            android.graphics.drawable.ClipDrawable fill=new android.graphics.drawable.ClipDrawable(gradient,android.view.Gravity.START,android.graphics.drawable.ClipDrawable.HORIZONTAL);
+            android.graphics.drawable.LayerDrawable progressLayers=new android.graphics.drawable.LayerDrawable(new android.graphics.drawable.Drawable[]{background,fill});progressLayers.setId(0,android.R.id.background);progressLayers.setId(1,android.R.id.progress);bars[i].setProgressDrawable(progressLayers);
+            addView(bars[i],new LayoutParams(-1,GlassSettings.dp(host,7)));
         }
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO); // Measurements never steal remote focus.
     }

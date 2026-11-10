@@ -6,7 +6,6 @@ import android.content.Context;
 import android.content.BroadcastReceiver;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.media.AudioManager;
 import android.os.Handler;
@@ -17,9 +16,7 @@ import android.view.View;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.WindowManager;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.TextView;
 
 /** Small TV volume OSD; accessibility overlays need no new overlay permission. */
 final class VolumeSlider {
@@ -27,15 +24,12 @@ final class VolumeSlider {
     private static Context owner;
     private static WindowManager window;
     private static LinearLayout panel;
-    private static VolumeBar slider;
-    private static ImageView outputIcon;
+    private static GlassVolumeCapsule capsule;
     private static android.media.AudioDeviceCallback deviceCallback;
     private static AudioManager observedAudio;
     private static boolean observedMute;
     private static long routeChecked;
     private static int routeIcon = R.drawable.ic_volume;
-    private static int drawnIcon, drawnAccent, drawnPercent = -1;
-    private static TextView level;
     private static final Runnable HIDE = VolumeSlider::hide;
     private static final java.util.Set<AccessibilityService> SERVICES = new java.util.LinkedHashSet<>();
     private static AccessibilityService observerOwner;
@@ -126,7 +120,6 @@ final class VolumeSlider {
         if (!(context instanceof AccessibilityService) && !(context instanceof Activity)) return false;
         try {
             android.content.SharedPreferences prefs = ThemePreferences.get(context);
-            boolean glass = TvGlassStyle.enabled(prefs);
             int style = ThemeStyle.id(prefs);
             style = style * 31 + prefs.getInt("app_font", 0);
             style = style * 31 + prefs.getInt("glass_finish", 0);
@@ -139,30 +132,9 @@ final class VolumeSlider {
             if (panel == null) {
                 owner = context; drawnStyle = style;
                 window = context.getSystemService(WindowManager.class);
-                panel = new LinearLayout(context); panel.setOrientation(LinearLayout.VERTICAL);
-                panel.setGravity(Gravity.CENTER_HORIZONTAL);
-                panel.setPadding(dp(context, 5), dp(context, 5), dp(context, 5), dp(context, 5));
-                if (glass) {
-                    panel.setPadding(0, 0, 0, 0);
-                }
-                // Glass uses a white fill in a rounded capsule; Classic retains the accent track.
-                slider = new VolumeBar(context);
-                slider.setContentDescription(context.getString(R.string.h_sound));
-                panel.addView(slider, new LinearLayout.LayoutParams(dp(context, glass ? 60 : 44), dp(context, glass ? 186 : 210)));
-                outputIcon = new ImageView(context);
-                outputIcon.setPadding(0, dp(context, 8), 0, 0);
-                panel.addView(outputIcon, new LinearLayout.LayoutParams(dp(context, 28), dp(context, 36)));
-                if (glass) outputIcon.setVisibility(View.GONE);
-                level = new TextView(context); level.setTextColor(ThemeStyle.foreground(prefs)); level.setTextSize(14);
-                level.setShadowLayer(dp(context, 2), 0, dp(context, 1), Color.BLACK);
-                if(ThemeStyle.light(prefs)) {
-                    level.setShadowLayer(0,0,0,Color.TRANSPARENT);
-                    level.setBackground(TvGlassStyle.surface(dp(context,8),dp(context,1),false,prefs));
-                }
-                level.setGravity(Gravity.CENTER);
-                level.setTypeface(android.graphics.Typeface.create(ThemeStyle.fontFamily(prefs), android.graphics.Typeface.BOLD));
-                panel.addView(level, new LinearLayout.LayoutParams(-1, dp(context, 24)));
-                WindowManager.LayoutParams position = new WindowManager.LayoutParams(dp(context, 64), -2,
+                capsule = new GlassVolumeCapsule(context);panel=capsule;
+                panel.setVisibility(View.INVISIBLE);
+                WindowManager.LayoutParams position = new WindowManager.LayoutParams(dp(context, 64), dp(context, 218),
                         context instanceof AccessibilityService ? WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
                                 : WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
                         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
@@ -173,33 +145,22 @@ final class VolumeSlider {
             }
             boolean first = panel.getVisibility() != View.VISIBLE;
             if (maximum == 0 || first) maximum = Math.max(1, audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
-            update(audio); panel.setVisibility(View.VISIBLE); scheduleHide(); return true;
+            update(audio, !first); panel.setVisibility(View.VISIBLE); scheduleHide(); return true;
         } catch (RuntimeException unavailable) {
             Log.w("PersonalVolume", "Volume slider window unavailable", unavailable);
             dispose(); return false;
         }
     }
-    private static void update(AudioManager audio) {
-        int value = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
-        boolean muted = audio.isStreamMute(AudioManager.STREAM_MUSIC);
-        observedVolume = value; observedMute = muted;
-        int accent = TvGlassStyle.enabled(ThemePreferences.get(owner)) ? 0xfff4f6fa : GlassSettings.themeAccent(owner);
-        slider.level(VolumeLevel.fraction(value, maximum, muted), accent);
-        long now = SystemClock.uptimeMillis();
-        if (routeChecked == 0 || now - routeChecked >= 500) {
-            routeIcon = AudioOutputIcon.resource(audio); routeChecked = now;
-        }
-        int icon = muted || value == 0 ? R.drawable.ic_volume_muted : routeIcon;
-        if (drawnIcon != icon) {
-            outputIcon.setImageDrawable(TvSymbols.icon(owner, icon)); slider.symbol(icon); drawnIcon = icon;
-        }
-        if (drawnAccent != accent) { outputIcon.setColorFilter(accent); drawnAccent = accent; }
-        int percent = VolumeLevel.percent(value, maximum, muted);
-        if (drawnPercent != percent) {
-            level.setText(percent + "%");
-            panel.setContentDescription(owner.getString(R.string.h_sound) + " " + percent + "%");
-            drawnPercent = percent;
-        }
+    private static void update(AudioManager audio, boolean animate) {
+        int value=audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+        boolean muted=audio.isStreamMute(AudioManager.STREAM_MUSIC);
+        observedVolume=value;observedMute=muted;
+        int accent=GlassSettings.themeAccent(owner);
+        long now=SystemClock.uptimeMillis();
+        if(routeChecked==0||now-routeChecked>=500){routeIcon=AudioOutputIcon.resource(audio);routeChecked=now;}
+        int icon=muted||value==0?R.drawable.ic_volume_muted:routeIcon;
+        int percent=VolumeLevel.percent(value,maximum,muted);
+        capsule.state(VolumeLevel.fraction(value,maximum,muted),percent,muted,icon,accent,animate);
     }
     /** Show immediately, then read the result after the firmware handles the native mute key. */
     static void nativeMute(Context context) {
@@ -212,13 +173,15 @@ final class VolumeSlider {
     static void hide(Context context) { if (owner == context) dispose(); }
     private static void hide() {
         HANDLER.removeCallbacks(HIDE);
+        if (capsule != null) capsule.stopAnimation();
         if (panel != null) panel.setVisibility(View.INVISIBLE);
     }
     private static void dispose() {
         HANDLER.removeCallbacks(HIDE);
+        if (capsule != null) capsule.stopAnimation();
         if (panel != null && window != null) try { window.removeViewImmediate(panel); }
         catch (RuntimeException detached) { /* Window already removed by Android. */ }
-        owner = null; panel = null; window = null; slider = null; level = null; outputIcon = null; maximum = 0; routeChecked = 0; drawnIcon = 0; drawnAccent = 0; drawnPercent = -1;
+        owner = null; panel = null; window = null; capsule = null; maximum = 0; routeChecked = 0;
     }
     private static int dp(Context context, int value) {
         return Math.round(value * context.getResources().getDisplayMetrics().density);
