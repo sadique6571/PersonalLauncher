@@ -11,7 +11,7 @@ public class GlassDockLayoutTest {
             if(screen==540)assertTrue(GlassDockLayout.dockHeight(width,screen)<=244);
         }
     }
-    @Test public void fixedWideIconsFitTheirViewportAndKeepExternalCaptions(){
+    @Test public void wideIconsFitTheirViewportAndKeepExternalCaptions(){
         for(int screen:new int[]{480,540,600,720,1080})for(int width:new int[]{96,128,160,192,256,400}){
             int side=GlassDockLayout.iconSide(width,screen),caption=GlassDockLayout.captionHeight(16,1);
             assertTrue(side>=48&&side<=128);assertTrue(side<=width);
@@ -22,6 +22,12 @@ public class GlassDockLayoutTest {
         }
         assertTrue(GlassDockLayout.captionHeight(20,1.5f)>GlassDockLayout.captionHeight(16,1));
         assertTrue(GlassDockLayout.iconSide(160,540)>GlassDockLayout.iconSide(160,480));
+    }
+    @Test public void compactWidthFitsEvenTheSmallestNeighbourDuringExpansion(){
+        for(int columns=2;columns<=6;columns++)for(int rowWidth:new int[]{640,897,1216,1856})for(int selected=0;selected<columns;selected++){
+            int safe=GlassDockLayout.compactCellWidth(rowWidth,columns);
+            for(int column=0;column<columns;column++)if(column!=selected){int actual=rowWidth*GlassDockLayout.span(column,columns,-1,selected,1)/GlassDockLayout.SPANS;assertTrue(safe<=actual);}
+        }
     }
     @Test public void expandingAcrossRowsNeverChangesRowMembershipOrOverflows(){
         for(int columns=2;columns<=6;columns++)for(int from=-1;from<columns*3;from++)for(int to=-1;to<columns*3;to++)for(int tick=0;tick<=10;tick++)for(int row=0;row<3;row++){

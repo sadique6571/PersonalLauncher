@@ -699,7 +699,7 @@ public final class PersonalHomeActivity extends Activity {
         appHeading.setPadding(dp(4), dp(8), 0, dp(12));
         grid = new HomeAppGrid<>(this, app -> app.info.activityInfo.packageName,
                 (app, width) -> createAppTile(app, width, carriedApp != null && app.info.activityInfo.packageName.equals(carriedApp.info.activityInfo.packageName)));
-        grid.setReferenceExpansion(false);
+        grid.setReferenceExpansion(glassOs());
         grid.setUpFromApps(() -> { if(weatherWidget!=null&&weatherWidget.isShown())weatherWidget.requestFocus();else if (searchButton != null) searchButton.requestFocus(); });
         grid.setClipChildren(false);
         if(glassOs()) {
@@ -1368,17 +1368,18 @@ public final class PersonalHomeActivity extends Activity {
         if(grid.getPaddingTop()!=top) grid.setPadding(0,top,0,dp(14));
     }
 
-    private int referenceCardHeight(int cellWidth){
+    private int referenceCardHeight(int cellWidth){return referenceCardHeight(cellWidth,grid==null?4:grid.getColumnCount());}
+    private int referenceCardHeight(int cellWidth,int columns){
         int spacing=Math.max(0,Math.min(2,prefs.getInt("tile_spacing",1)));
         int margin=(tvGlass()?new int[]{dp(6),dp(10),dp(16)}:new int[]{dp(4),dp(8),dp(14)})[spacing];
-        int widthDp=Math.round((cellWidth-margin*2)/getResources().getDisplayMetrics().density);
+        int widthDp=Math.round((GlassDockLayout.compactCellWidth(cellWidth*columns,columns)-margin*2)/getResources().getDisplayMetrics().density);
         return dp(GlassDockLayout.iconTileHeight(widthDp,getResources().getConfiguration().screenHeightDp,referenceCaptionHeight()));
     }
     private int referenceCaptionHeight(){return GlassDockLayout.captionHeight(prefs.getInt("app_label_size",16),getResources().getConfiguration().fontScale);}
     private int referenceDockHeight(){
         int available=pageWidth>0?gridWidth():dp(Math.max(160,getResources().getConfiguration().screenWidthDp-(tv?64:32)));
         int cols=PersonalHomeModel.columns(Math.round(available/getResources().getDisplayMetrics().density),prefs.getInt(tv?"tv_columns":"phone_columns",0),prefs.getBoolean("large_tiles",false));
-        int card=referenceCardHeight(available/cols);
+        int card=referenceCardHeight(available/cols,cols);
         int spacing=Math.max(0,Math.min(2,prefs.getInt("tile_spacing",1)));
         int margin=new int[]{6,8,12}[spacing];
         return card+dp(GlassDockLayout.reflectionHeight(Math.round(card/getResources().getDisplayMetrics().density))+margin*2+44);
@@ -1433,6 +1434,7 @@ public final class PersonalHomeActivity extends Activity {
             if(tile instanceof GlassIconTile)((GlassIconTile)tile).appearance(app.accent,focus||moving);
             else {tile.setBackground(appSurface(app.accent,focus));if(!moving)tile.setForeground(tileBorder(app.accent,focus));}
             if(focus)focusedPkg=app.info.activityInfo.packageName;
+            if(glassOs()&&!moving)grid.expandKey(focus?app.info.activityInfo.packageName:null);
             if (!moving) {
                 // Focus zoom: gentle scale animation.
                 float scale = focus ? (glassOs()?1f:tvGlass() ? 1.06f : 1.05f) : 1f;
