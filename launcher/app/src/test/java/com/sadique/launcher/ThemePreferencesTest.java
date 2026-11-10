@@ -328,6 +328,19 @@ public class ThemePreferencesTest {
             prefs.edit().putInt("custom_accent",0xff0000ff).apply(); assertNotEquals(red,ThemeStyle.materialColor(prefs,base,false));
         }
     }
+    @Test public void weatherWidgetAndAnimationRemainIndependentInAllThemes() {
+        ThemePreferences prefs=new ThemePreferences(new Memory());
+        prefs.edit().putString("weather_city","Test city").apply();
+        for(int style=0;style<ThemeStyle.COUNT;style++)
+            prefs.edit().putInt("visual_style",style).putBoolean("weather_widget",style%2==0).putBoolean("weather_widget_animation",style%3==0).putInt("clock_align",2).apply();
+        for(int style=0;style<ThemeStyle.COUNT;style++) {
+            prefs.edit().putInt("visual_style",style).apply();
+            assertEquals(style%2==0,prefs.getBoolean("weather_widget",false));
+            assertEquals(style%3==0,prefs.getBoolean("weather_widget_animation",false));
+            assertEquals(2,prefs.getInt("clock_align",0));
+            assertEquals("Test city",prefs.getString("weather_city",""));
+        }
+    }
     private static final class Memory implements SharedPreferences {
         final Map<String,Object> data=new HashMap<>(); final Set<OnSharedPreferenceChangeListener> listeners=new HashSet<>();
         public Map<String,?> getAll(){return new HashMap<>(data);}
