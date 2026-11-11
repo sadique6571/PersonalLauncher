@@ -8,7 +8,7 @@ import static org.junit.Assert.*;
 public class ControlCenterLayoutTest {
     @Test public void everyThemeHasDistinctLayoutAndEveryQuickActionExactlyOnce() {
         HashSet<String> arrangements=new HashSet<>();
-        for(int style=0;style<8;style++) {
+        for(int style=0;style<ThemeStyle.COUNT;style++) {
             int[][] rows=ControlCenterLayout.rows(style);
             assertTrue("Theme repeats another layout: "+style,arrangements.add(Arrays.deepToString(rows)));
             boolean[] seen=new boolean[6];
@@ -21,6 +21,14 @@ public class ControlCenterLayoutTest {
             }
             for(boolean present:seen) assertTrue("Missing quick action",present);
         }
+    }
+    @Test public void harmonyVisionHasItsOwnRemoteFriendlyControls() {
+        assertArrayEquals(new int[]{0,1},ControlCenterLayout.rows(ThemeStyle.HARMONY)[0]);
+        assertArrayEquals(new int[]{2},ControlCenterLayout.rows(ThemeStyle.HARMONY)[1]);
+        assertArrayEquals(new int[]{3,4,5},ControlCenterLayout.rows(ThemeStyle.HARMONY)[2]);
+        assertEquals(28,ControlCenterLayout.radius(ThemeStyle.HARMONY));
+        assertEquals("appearance.harmony.",ThemeStyle.prefix(ThemeStyle.HARMONY));
+        assertEquals(ThemeStyle.HARMONY,ThemeStyle.clamp(ThemeStyle.HARMONY));
     }
     @Test public void verticalNavigationStaysInAdjacentRowAndMaintainsLeftToRightOrder() {
         for(int count=1;count<=3;count++) for(int target=1;target<=3;target++) {

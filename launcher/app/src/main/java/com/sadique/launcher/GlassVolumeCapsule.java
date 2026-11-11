@@ -29,6 +29,11 @@ final class GlassVolumeCapsule extends LinearLayout {
             int alpha=PanelTransparency.alpha(Math.min(245,Math.round(194*TvGlassStyle.intensity(prefs)/70f*finish)),prefs,false);
             shell=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{(alpha<<24)|0x132539,(Math.min(255,alpha+26)<<24)|0x09182a});
             shell.setStroke(dp(1),TvGlassStyle.edge(prefs));
+        }else if(ThemeStyle.harmony(prefs)){
+            int alpha=PanelTransparency.alpha(Math.min(238,132+TvGlassStyle.intensity(prefs)),prefs,false);
+            shell=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                    new int[]{(alpha<<24)|0x355d7b,(Math.min(255,alpha+15)<<24)|0x122b49});
+            shell.setStroke(dp(1),0x99c5e9ff);
         }else if(ThemeStyle.id(prefs)==ThemeStyle.CLASSIC){
             shell=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{TvGlassStyle.tinted(0xff132539,prefs),TvGlassStyle.tinted(0xff09182a,prefs)});
             shell.setStroke(dp(1),0x55415a72);shell.setAlpha(PanelTransparency.alpha(ClassicGlassAlpha.card(TvGlassStyle.intensity(prefs),false),prefs,false));
@@ -69,7 +74,7 @@ final class GlassVolumeCapsule extends LinearLayout {
         private Drawable symbol;
         Track(Context context,SharedPreferences prefs){super(context);light=ThemeStyle.light(prefs);setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);}
         void level(float value){fraction=value;invalidate();}
-        void accent(int value){if(gradient==null||accent!=value){accent=value;gradient=new LinearGradient(0,0,0,1,new int[]{0xffffffff,0xfff4f6fa,ThemeStyle.id(ThemePreferences.get(getContext()))==ThemeStyle.GLASS?0xffe9edf5:(value|0xff000000)},new float[]{0,.45f,1},Shader.TileMode.CLAMP);}invalidate();}
+        void accent(int value){if(gradient==null||accent!=value){accent=value;gradient=new LinearGradient(0,0,0,1,new int[]{0xffffffff,0xfff4f6fa,(ThemeStyle.id(ThemePreferences.get(getContext()))==ThemeStyle.GLASS||ThemeStyle.harmony(ThemePreferences.get(getContext())))?0xffdceeff:(value|0xff000000)},new float[]{0,.45f,1},Shader.TileMode.CLAMP);}invalidate();}
         void symbol(int value){if(value!=resource){resource=value;symbol=TvSymbols.icon(getContext(),value);place();}invalidate();}
         private void place(){if(symbol!=null){int side=dp(22),left=(getWidth()-side)/2,bottom=getHeight()-dp(14);symbol.setBounds(left,bottom-side,left+side,bottom);}}
         @Override protected void onSizeChanged(int w,int h,int ow,int oh){super.onSizeChanged(w,h,ow,oh);bounds.set(dp(1),dp(1),w-dp(1),h-dp(1));outline.reset();outline.addRoundRect(bounds,w/2f,w/2f,Path.Direction.CW);place();}

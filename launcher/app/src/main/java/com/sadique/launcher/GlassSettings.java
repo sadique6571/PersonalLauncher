@@ -32,7 +32,7 @@ final class GlassSettings {
     /** Theme accent color, mirrored from the launcher's theme picker. */
     static int themeAccent(android.content.Context ctx) {
         android.content.SharedPreferences prefs = ThemePreferences.get(ctx);
-        if(ThemeStyle.custom(prefs)) return ThemeStyle.focusAccent(prefs);
+        if(ThemeStyle.custom(prefs)||ThemeStyle.harmony(prefs)) return ThemeStyle.focusAccent(prefs);
         switch (prefs.getInt("theme_name", 0)) {
             case 1: return 0xffff9a5c; // Sunset Orange
             case 2: return 0xffb388ff; // Deep Purple

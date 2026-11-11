@@ -2,7 +2,7 @@
 
 **Personal Launcher by Sadique Sadiq** — a customizable Home launcher for Android TV / Google TV.
 
-- **Version:** 7.0 · **Android version code:** 58 · Release build numbers increase independently.
+- **Version:** 7.0 · **Android version code:** 79 · Release build numbers increase independently.
 - **Package:** `com.sadique.launcher` · **Minimum Android:** 8.0 / API 26
 - Plain Java and Android Views, with performance profiles for low-memory TVs.
 - Internet access is used for daily Bing wallpaper, Picsum screensaver photos, weather and city lookup.
@@ -85,7 +85,7 @@ Open **Launcher settings → Theme**:
 
 | Option | Choices | Effect |
 | --- | --- | --- |
-| Visual style | TV Glass / Classic / Dune Loom / Pearl Current / Cobalt Rail / Sage Fold | Switch the Home arrangement and shared panel style |
+| Visual style | TV Glass / Classic / Dune Loom / Pearl Current / Cobalt Rail / Sage Fold / Pine Mist / Amber Night / Harmony Vision | Switch the Home arrangement and shared panel style |
 | Glass finish | Soft / Clear / Frosted | Change TV Glass surface appearance |
 | Glass intensity | Airy / Normal / Solid | Adjust surface opacity |
 | Avatar shape | Round / Rounded square | Shape of the status-bar photo and profile preview, saved per theme |
@@ -295,6 +295,17 @@ so header blur does not change drawer blur. Sharp/Rounded/Round app-card corners
 for the shell, clipped artwork and focus edge; Subtle and Bright outlines retain different strengths.
 Profile photo shape is also available directly in the profile editor.
 
+## Harmony Vision — Android TV
+Select **Launcher settings → Theme → Visual style → Harmony Vision** to use the new English-language
+HarmonyOS-inspired TV appearance. It is a separate ninth preference profile: scenic Bing wallpaper,
+large clock, real weather service card, compact **All apps** and **Scenery** shortcuts, a rounded
+floating app dock with wide focus-expanding tiles, an ocean-blue glass Control Center and a
+matching volume capsule. Focus and settings remain remote-friendly. The visual design does not
+replace HarmonyOS or Android system UI, and it never changes the mobile repository.
+The TV Home alias, volume observer, update system and installed apps are preserved.
+This change adds no third-party packages, AI, extra services or system permissions.
+A real-TV focus, performance and volume test is required before calling the appearance validated.
+
 ## Dune Loom and Pearl Current
 
 Choose **Launcher settings → Theme → Visual style**. Dune Loom uses dark matte surfaces, copper
@@ -340,7 +351,7 @@ folded corner with a warm selected flap; Pine Mist has a deep-green gradient wit
 serif clock; Amber Night has a deep amber-brown gradient with a gold focus and square tiles. Artwork clips to the same path as its surface and focus
 edge, including when corner settings change. The new App label size control changes card captions.
 
-Select them in Theme → Visual style. All eight styles save their own appearance profiles. A one-time
+Select them in Theme → Visual style. All nine styles save their own appearance profiles. A one-time
 reference-layout initialization uses four TV columns, two phone columns and rounded-square profile
 photos; later user changes remain. Header/finish/intensity, colour, typography, clock, corners and
 transparency controls remain available. No theme-wide wallpaper filter is applied. Status icons

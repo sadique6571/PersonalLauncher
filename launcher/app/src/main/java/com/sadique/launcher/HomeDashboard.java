@@ -21,9 +21,9 @@ final class HomeDashboard {
         LinearLayout rows = HomeLibraryUi.rows(host);
         AlertDialog panel = GlassSettings.panel(host, TvGlassStyle.enabled(ThemePreferences.get(host)) ? "Control Center" : host.getString(R.string.h_dashboard), rows, true);
         android.content.SharedPreferences prefs=ThemePreferences.get(host);
-        if(ThemeStyle.id(prefs)==ThemeStyle.GLASS) {
+        if(ThemeStyle.id(prefs)==ThemeStyle.GLASS || ThemeStyle.harmony(prefs)) {
             rows.setId(R.id.controlCenterPanel);
-            rows.addView(GlassSettings.label(host,prefs.getString("name","Sadique Sadiq")+" • Android TV",12,0xffa5b4cf));
+            rows.addView(GlassSettings.label(host,ThemeStyle.harmony(prefs)?"Harmony Vision • Android TV":prefs.getString("name","Profile")+" • Android TV",12,0xffa5b4cf));
             rows.addView(GlassSettings.row(host,"Close",null,android.R.drawable.ic_menu_close_clear_cancel,GlassSettings.themeAccent(host),panel::dismiss));
         }
         rows.addView(GlassSettings.label(host, network, 12, 0xffb5cadd));

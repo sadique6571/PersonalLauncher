@@ -42,14 +42,14 @@ final class ControlCenterGrid extends LinearLayout {
         if(bluetooth!=null){bluetooth.stop();bluetooth=null;}main.removeCallbacksAndMessages(null);super.onDetachedFromWindow();
     }
     void status(){
-        if(style!=ThemeStyle.GLASS||wifiTile==null)return;
+        if((style!=ThemeStyle.GLASS&&style!=ThemeStyle.HARMONY)||wifiTile==null)return;
         android.net.ConnectivityManager cm=host.getSystemService(android.net.ConnectivityManager.class);
         android.net.Network active=cm==null?null:cm.getActiveNetwork();
         android.net.NetworkCapabilities caps=active==null?null:cm.getNetworkCapabilities(active);
         boolean online=caps!=null&&caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)&&caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED);
         boolean ethernet=caps!=null&&caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET);
         wifiLabel.setText((ethernet?"Ethernet":"Wi-Fi")+" • "+(online?"Online":"No Internet"));
-        GradientDrawable d=new GradientDrawable();d.setColor(online?0x8014532d:0x947f1d1d);d.setCornerRadius(GlassSettings.dp(host,22));d.setStroke(GlassSettings.dp(host,wifiTile.isFocused()?2:1),online?0xb322c55e:0xccef4444);wifiTile.setBackground(d);
+        GradientDrawable d=new GradientDrawable();d.setColor(online?0x8014532d:0x947f1d1d);d.setCornerRadius(GlassSettings.dp(host,22));d.setStroke(GlassSettings.dp(host,wifiTile.isFocused()?2:1),online?0xb322c55e:0xccef4444);wifiTile.setBackground(style==ThemeStyle.HARMONY?surface(wifiTile.isFocused()):d);
         if(bluetoothLabel!=null&&bluetooth!=null)bluetoothLabel.setText(bluetooth.connectedName());
     }
 
@@ -98,8 +98,8 @@ final class ControlCenterGrid extends LinearLayout {
     GradientDrawable surface(boolean focused) {
         SharedPreferences prefs=ThemePreferences.get(host);
         int radius=GlassSettings.dp(host,ControlCenterLayout.radius(ThemeStyle.id(prefs)));
-        if(ThemeStyle.id(prefs)==ThemeStyle.GLASS){
-            GradientDrawable card=GlassOsUi.panel(host,22);card.setStroke(GlassSettings.dp(host,focused?2:1),focused?0xccffffff:(Math.round((TvGlassStyle.edge(prefs)>>>24)*.47f)<<24)|0xffffff);return card;
+        if(ThemeStyle.id(prefs)==ThemeStyle.GLASS || ThemeStyle.harmony(prefs)){
+            GradientDrawable card=GlassOsUi.panel(host,ThemeStyle.harmony(prefs)?28:22);card.setStroke(GlassSettings.dp(host,focused?2:1),focused?0xccffffff:(Math.round((TvGlassStyle.edge(prefs)>>>24)*.47f)<<24)|0xffffff);return card;
         }
         if(ThemeStyle.custom(prefs)) return new DemoCardSurface(radius,GlassSettings.dp(host,1),focused,prefs,false);
         GradientDrawable result=GlassSettings.background(host,focused); result.setCornerRadius(radius); return result;
@@ -125,7 +125,7 @@ final class ControlCenterGrid extends LinearLayout {
         title.setGravity(stacked?Gravity.CENTER:Gravity.START|Gravity.CENTER_VERTICAL);
         if(item==0){wifiTile=tile;wifiLabel=title;}if(item==1)bluetoothLabel=title;
         title.setMaxLines(2); title.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        if(style==ThemeStyle.COBALT||style==ThemeStyle.AMBER) title.setTypeface(title.getTypeface(),Typeface.BOLD);
+        if(style==ThemeStyle.COBALT||style==ThemeStyle.AMBER||style==ThemeStyle.HARMONY) title.setTypeface(title.getTypeface(),Typeface.BOLD);
         // Three-column cards stack their contents even in the instrument themes to keep labels readable.
         if(columns==3&&!stacked) {
             tile.setOrientation(VERTICAL); tile.setGravity(Gravity.CENTER); title.setGravity(Gravity.CENTER);
