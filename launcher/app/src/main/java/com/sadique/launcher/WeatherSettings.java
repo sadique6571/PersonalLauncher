@@ -2,6 +2,7 @@ package com.sadique.launcher;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Handler;
@@ -9,12 +10,17 @@ import android.os.Looper;
 import android.text.InputFilter;
 import android.text.InputType;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import java.util.Locale;
 import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 final class WeatherSettings {
+    private static final String LEGACY_PHONE_LABEL = "Phone location";
+    private static final String COORDINATES_PREFIX = "Coordinates ";
+    private static String attemptedLocation;
+
     static void show(Activity activity) {
         EditText city = new EditText(activity);
         city.setSingleLine(true);
@@ -32,10 +38,18 @@ final class WeatherSettings {
                 | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(7)});
         input.setHint("7-character code");
+        EditText name = new EditText(activity);
+        name.setSingleLine(true);
+        name.setHint("Place name (optional)");
+        name.setFilters(new InputFilter[]{new InputFilter.LengthFilter(80)});
+        LinearLayout fields = new LinearLayout(activity);
+        fields.setOrientation(LinearLayout.VERTICAL);
+        fields.addView(input);
+        fields.addView(name);
         AlertDialog dialog = new ThemeDialogBuilder(activity)
                 .setTitle("Weather location from phone")
-                .setMessage("On Personal Launcher Mobile, open Settings and choose Weather code for TV.")
-                .setView(input)
+                .setMessage("On Personal Launcher Mobile, open Settings and choose Weather code for TV. Place names © OpenStreetMap contributors.")
+                .setView(fields)
                 .setPositiveButton("Save", null)
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
@@ -48,9 +62,71 @@ final class WeatherSettings {
             }
             double latitude = (packed / 7201) / 20.0 - 90;
             double longitude = (packed % 7201) / 20.0 - 180;
-            saveLocation(activity, "Phone location", latitude, longitude);
+            String nameOverride = name.getText().toString().trim();
+            saveLocation(activity, nameOverride.isEmpty() ? coordinatesLabel(latitude, longitude) : nameOverride,
+                    latitude, longitude);
+            if (nameOverride.isEmpty()) resolvePhonePlace(activity, true);
             dialog.dismiss();
         });
+    }
+
+    private static String coordinatesLabel(double latitude, double longitude) {
+        return String.format(Locale.ROOT, "%s%.2f°, %.2f°", COORDINATES_PREFIX, latitude, longitude);
+    }
+
+    /** Called on the main thread. Save the weather coordinates independently of the place lookup. */
+    static void resolvePhonePlace(Context context, boolean explicit) {
+        SharedPreferences prefs = ThemePreferences.get(context);
+        String label = prefs.getString("weather_city", "");
+        if (!LEGACY_PHONE_LABEL.equals(label) && !label.startsWith(COORDINATES_PREFIX)) return;
+        String latitude = prefs.getString("weather_lat", "");
+        String longitude = prefs.getString("weather_lon", "");
+        double lat, lon;
+        try {
+            lat = Double.parseDouble(latitude);
+            lon = Double.parseDouble(longitude);
+        } catch (NumberFormatException invalid) {
+            return;
+        }
+        if (!(lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180)) return;
+        String key = latitude + "," + longitude;
+        if (!explicit && key.equals(attemptedLocation)) return;
+        attemptedLocation = key;
+        String fallback = coordinatesLabel(lat, lon);
+        if (!fallback.equals(label)) prefs.edit().putString("weather_city", fallback).apply();
+        new Thread(() -> {
+            String place;
+            try {
+                JSONObject result = new JSONObject(OnlineContent.json(
+                        "https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14"
+                                + "&addressdetails=1&lat=" + lat + "&lon=" + lon));
+                place = phonePlaceName(result);
+            } catch (Exception unavailable) {
+                return;
+            }
+            if (place.isEmpty()) return;
+            new Handler(Looper.getMainLooper()).post(() -> {
+                if (latitude.equals(prefs.getString("weather_lat", ""))
+                        && longitude.equals(prefs.getString("weather_lon", ""))
+                        && fallback.equals(prefs.getString("weather_city", ""))) {
+                    prefs.edit().putString("weather_city", place).apply();
+                }
+            });
+        }, "weather-phone-place").start();
+    }
+
+    private static String phonePlaceName(JSONObject result) {
+        JSONObject address = result.optJSONObject("address");
+        if (address == null) return "";
+        String place = "";
+        for (String field : new String[]{"village", "hamlet", "town", "city", "municipality",
+                "suburb", "county", "state_district"}) {
+            place = address.optString(field, "").trim();
+            if (!place.isEmpty()) break;
+        }
+        if (place.isEmpty()) return "";
+        String country = address.optString("country", "").trim();
+        return country.isEmpty() ? place : place + ", " + country;
     }
 
     private static long unpackPhoneCode(String code) {
