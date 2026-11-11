@@ -6,6 +6,7 @@ import android.graphics.drawable.GradientDrawable;
 final class GlassOsUi {
     private GlassOsUi() { }
     static GradientDrawable controls(Activity host){
+        if(ThemeStyle.harmony(ThemePreferences.get(host)))return HarmonyVisionSurface.sheet(host);
         GradientDrawable d=panel(host,26);
         android.content.SharedPreferences prefs=ThemePreferences.get(host);
         int alpha=PanelTransparency.alpha(Math.min(250,Math.round(235*alpha(prefs)/168f)),prefs,false);
@@ -13,6 +14,11 @@ final class GlassOsUi {
     }
     static GradientDrawable panel(Activity host,int radius) {
         android.content.SharedPreferences prefs=ThemePreferences.get(host);
+        if(ThemeStyle.harmony(prefs)){
+            GradientDrawable material=HarmonyVisionSurface.control(host,false);
+            material.setCornerRadius(GlassSettings.dp(host,radius));
+            return material;
+        }
         int alpha=PanelTransparency.alpha(alpha(prefs),prefs,false);
         GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,ThemeStyle.harmony(prefs)?new int[]{(alpha<<24)|0x305c7b,(Math.min(255,alpha+16)<<24)|0x10263e}:new int[]{(alpha<<24)|0x132539,(Math.min(255,alpha+25)<<24)|0x09182a});
         d.setCornerRadius(GlassSettings.dp(host,radius));

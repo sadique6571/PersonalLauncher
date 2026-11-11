@@ -197,6 +197,16 @@ public class ThemePreferencesTest {
             assertEquals(style==0,prefs.getBoolean("glass_os_defaults_v1",false));
         }
     }
+    @Test public void harmonyDailyWordsPreferenceNeverChangesOtherThemes(){
+        ThemePreferences prefs=new ThemePreferences(new Memory());
+        prefs.edit().putInt("visual_style",ThemeStyle.HARMONY)
+                .putBoolean("harmony_daily_quote",false).apply();
+        assertFalse(prefs.getBoolean("harmony_daily_quote",true));
+        prefs.edit().putInt("visual_style",ThemeStyle.GLASS).apply();
+        assertTrue(prefs.getBoolean("harmony_daily_quote",true));
+        prefs.edit().putInt("visual_style",ThemeStyle.HARMONY).apply();
+        assertFalse(prefs.getBoolean("harmony_daily_quote",true));
+    }
     @Test public void newStyleBackupRestoresSelectedNamespaceRegardlessOfLegacyBoolean() {
         ThemePreferences prefs=new ThemePreferences(new Memory());
         prefs.edit().putInt("visual_style",2).putInt("glass_alpha",31).apply();

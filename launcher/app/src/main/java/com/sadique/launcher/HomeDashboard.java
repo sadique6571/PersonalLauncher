@@ -21,6 +21,36 @@ final class HomeDashboard {
         LinearLayout rows = HomeLibraryUi.rows(host);
         AlertDialog panel = GlassSettings.panel(host, TvGlassStyle.enabled(ThemePreferences.get(host)) ? "Control Center" : host.getString(R.string.h_dashboard), rows, true);
         android.content.SharedPreferences prefs=ThemePreferences.get(host);
+        // Harmony keeps its own Control Center hierarchy instead of inheriting
+        // the long Glass-OS dashboard with duplicated rows and headers.
+        if(ThemeStyle.harmony(prefs)) {
+            rows.setId(R.id.controlCenterPanel);
+            android.widget.TextView heading=GlassSettings.label(host,"HARMONY CONTROL",18,0xfff5fbff);
+            heading.setLetterSpacing(.08f);
+            heading.setPadding(GlassSettings.dp(host,6),GlassSettings.dp(host,8),0,GlassSettings.dp(host,4));
+            rows.addView(heading);
+            rows.addView(GlassSettings.label(host,network,12,0xffa9ccdf));
+            section(host,rows,R.string.h_quick_settings);
+            rows.addView(new ControlCenterGrid(host,action->{
+                if(!actions.keepPanel(action))panel.dismiss();
+                actions.open(action);
+            }));
+            section(host,rows,R.string.h_personalize);
+            row(host,rows,R.string.h_launcher_settings,R.string.h_layout_hint,R.drawable.ic_palette,
+                    ()->{panel.dismiss();actions.open(SETTINGS);});
+            if(!floating)row(host,rows,R.string.h_single_identity,0,R.drawable.ic_person,
+                    ()->{panel.dismiss();actions.open(IDENTITY);});
+            row(host,rows,R.string.h_sleep_timer,R.string.h_sleep_timer_hint,R.drawable.ic_media_pause,
+                    ()->{if(!floating)panel.dismiss();LauncherSleep.show(host,floating);});
+            row(host,rows,R.string.h_local_pin,R.string.h_local_pin_hint,R.drawable.ic_person,
+                    ()->{if(!floating)panel.dismiss();LauncherPin.settings(host);});
+            if(!floating){
+                section(host,rows,R.string.h_more_tools);
+                pair(host,rows,panel,actions,R.string.h_search,R.drawable.ic_search,SEARCH,
+                        R.string.h_store,R.drawable.ic_apps,STORE);
+            }
+            panel.show();return panel;
+        }
         if(ThemeStyle.id(prefs)==ThemeStyle.GLASS || ThemeStyle.harmony(prefs)) {
             rows.setId(R.id.controlCenterPanel);
             rows.addView(GlassSettings.label(host,ThemeStyle.harmony(prefs)?"Harmony Vision • Android TV":prefs.getString("name","Profile")+" • Android TV",12,0xffa5b4cf));

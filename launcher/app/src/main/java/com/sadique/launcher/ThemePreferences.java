@@ -9,7 +9,7 @@ final class ThemePreferences implements SharedPreferences {
     static final String MIGRATED="appearance_profiles_v1";
     private static final String GLASS="appearance.glass.", CLASSIC="appearance.classic.";
     private static final Set<String> VISUAL=new HashSet<>(Arrays.asList(
-            "weather_widget","weather_widget_animation","hijri_adjustment","glass_resume_v3","glass_reference_v2","glass_os_defaults_v1","harmony_clock_face","harmony_clock_finish","harmony_clock_accent","harmony_clock_sweep","harmony_clock_size","ambient_strength","demo_defaults_v1","app_label_size","material_defaults_v1","harmony_defaults_v1","theme_name","custom_accent","app_font","glass_alpha","glass_finish","glass_edge","panel_transparency",
+            "weather_widget","weather_widget_animation","hijri_adjustment","glass_resume_v3","glass_reference_v2","glass_os_defaults_v1","harmony_clock_face","harmony_clock_finish","harmony_clock_accent","harmony_clock_sweep","harmony_clock_size","harmony_daily_quote","ambient_strength","demo_defaults_v1","app_label_size","material_defaults_v1","harmony_defaults_v1","theme_name","custom_accent","app_font","glass_alpha","glass_finish","glass_edge","panel_transparency",
             "clock_size","clock_style","clock_font","clock_align","time_24h","clock_seconds","clock_glow","clock_shadow","clock_wallpaper_v2","hide_clock",
             "hide_greeting","avatar_shape","header_bg_mode","header_bg","header_blur","header_glass_v2",
             "tv_columns","phone_columns","large_tiles","tile_corners","tile_spacing","logo_size","focus_border","focus_title_size","focus_glow","app_entrance",

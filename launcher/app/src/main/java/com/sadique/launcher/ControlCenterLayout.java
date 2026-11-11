@@ -12,7 +12,7 @@ final class ControlCenterLayout {
             case 5: return new int[][]{{0,1},{2,3,4},{5}}; // Sage: folded tiles + screensaver feature
             case 6: return new int[][]{{5},{0,1,2},{3,4}}; // Pine: screensaver feature + utility rails
             case 7: return new int[][]{{0,1,2},{4},{3,5}}; // Amber: sound feature between tool rails
-            case 8: return new int[][]{{0,1},{2},{3,4,5}}; // Harmony: connectivity, inputs and comfort controls
+            case 8: return new int[][]{{0,1},{2,4},{3,5}}; // Harmony: large paired connection, source/sound, display/scenery cards
             default: return new int[][]{{0,1},{2,3},{4,5}}; // Apple: balanced control tiles
         }
     }

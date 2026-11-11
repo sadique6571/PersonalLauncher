@@ -158,12 +158,16 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
         private float lastHeight=-1;
         @Override public void onDrawOver(@NonNull Canvas c,@NonNull RecyclerView parent,@NonNull RecyclerView.State state) {
             float density=parent.getResources().getDisplayMetrics().density;
+            boolean harmony=ThemeStyle.harmony(ThemePreferences.get(parent.getContext()));
+            int columns=parent instanceof HomeAppGrid?((HomeAppGrid<?>)parent).getColumnCount():4;
             int viewport=c.save();
             if(parent.getClipToPadding())c.clipRect(parent.getPaddingLeft(),parent.getPaddingTop(),parent.getWidth()-parent.getPaddingRight(),parent.getHeight()-parent.getPaddingBottom());
             else c.clipRect(0,0,parent.getWidth(),parent.getHeight());
             for(int i=0;i<parent.getChildCount();i++) {
                 View child=parent.getChildAt(i);
                 if(!(child instanceof android.view.ViewGroup)||child.getTag()==null)continue;
+                // Harmony renders only the first app row's mirror, not a row-by-row fake tray.
+                if(harmony&&parent.getChildAdapterPosition(child)>=columns)continue;
                 android.view.ViewGroup group=(android.view.ViewGroup)child;
                 if(group.getChildCount()==0)continue;
                 View card=group.getChildAt(0);if(card.getWidth()<=0||card.getHeight()<=0)continue;
@@ -174,11 +178,14 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
                 if(start>=parent.getHeight()||start+height<=0)continue;
                 area.set(left,start,left+card.getWidth()*sx,start+height);
                 int layer=c.saveLayer(area,null);
-                int upright=c.save();c.translate(left,start);c.scale(sx,height/card.getHeight());card.draw(c);c.restoreToCount(upright);
+                int upright=c.save();c.translate(left,start);
+                c.scale(sx,harmony?-height/card.getHeight():height/card.getHeight());
+                if(harmony)c.translate(0,-card.getHeight());
+                card.draw(c);c.restoreToCount(upright);
                 if(height!=lastHeight) {
                     lastHeight=height;fade=new LinearGradient(0,0,0,height,new int[]{0xbf000000,0x40000000,0x00000000},new float[]{0,.5f,1},Shader.TileMode.CLAMP);
                 }
-                c.translate(0,start);mask.setShader(fade);mask.setAlpha(Math.round(255*card.getAlpha()*child.getAlpha()));mask.setXfermode(dstIn);
+                c.translate(0,start);mask.setShader(fade);mask.setAlpha(Math.round((harmony?160:255)*card.getAlpha()*child.getAlpha()));mask.setXfermode(dstIn);
                 c.drawRect(area.left,0,area.right,height,mask);mask.setXfermode(null);mask.setShader(null);
                 c.restoreToCount(layer);
             }

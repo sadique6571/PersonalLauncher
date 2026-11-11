@@ -24,8 +24,8 @@ public class ControlCenterLayoutTest {
     }
     @Test public void harmonyVisionHasItsOwnRemoteFriendlyControls() {
         assertArrayEquals(new int[]{0,1},ControlCenterLayout.rows(ThemeStyle.HARMONY)[0]);
-        assertArrayEquals(new int[]{2},ControlCenterLayout.rows(ThemeStyle.HARMONY)[1]);
-        assertArrayEquals(new int[]{3,4,5},ControlCenterLayout.rows(ThemeStyle.HARMONY)[2]);
+        assertArrayEquals(new int[]{2,4},ControlCenterLayout.rows(ThemeStyle.HARMONY)[1]);
+        assertArrayEquals(new int[]{3,5},ControlCenterLayout.rows(ThemeStyle.HARMONY)[2]);
         assertEquals(28,ControlCenterLayout.radius(ThemeStyle.HARMONY));
         assertEquals("appearance.harmony.",ThemeStyle.prefix(ThemeStyle.HARMONY));
         assertEquals(ThemeStyle.HARMONY,ThemeStyle.clamp(ThemeStyle.HARMONY));

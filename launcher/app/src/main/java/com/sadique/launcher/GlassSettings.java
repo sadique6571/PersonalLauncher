@@ -43,6 +43,7 @@ final class GlassSettings {
 
     static GradientDrawable background(Activity host, boolean focused) {        java.util.Calendar now = java.util.Calendar.getInstance();
         android.content.SharedPreferences prefs = ThemePreferences.get(host);
+        if(ThemeStyle.harmony(prefs))return HarmonyVisionSurface.control(host,focused);
         if (TvGlassStyle.enabled(prefs)) return TvGlassStyle.surface(dp(host, 18), dp(host, focused ? 2 : 1), focused, prefs);
         float day = HomeAppearance.daylight(prefs.getString("theme_mode", "dark"),
                 now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE));
@@ -349,6 +350,7 @@ final class GlassSettings {
         page.setElevation(dp(host, glass ? 6 : 0));
     }
     private static GradientDrawable shellBackground(Activity host) {
+        if(ThemeStyle.harmony(ThemePreferences.get(host)))return HarmonyVisionSurface.sheet(host);
         if(ThemeStyle.id(ThemePreferences.get(host))==ThemeStyle.GLASS)return GlassOsUi.controls(host);
         boolean glass = TvGlassStyle.enabled(ThemePreferences.get(host));
         GradientDrawable shell = glass ? TvGlassStyle.surface(dp(host, 28), dp(host, 1), false, prefsFor(host))

@@ -49,7 +49,7 @@ final class ControlCenterGrid extends LinearLayout {
         boolean online=caps!=null&&caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)&&caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED);
         boolean ethernet=caps!=null&&caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET);
         wifiLabel.setText((ethernet?"Ethernet":"Wi-Fi")+" • "+(online?"Online":"No Internet"));
-        GradientDrawable d=new GradientDrawable();d.setColor(online?0x8014532d:0x947f1d1d);d.setCornerRadius(GlassSettings.dp(host,22));d.setStroke(GlassSettings.dp(host,wifiTile.isFocused()?2:1),online?0xb322c55e:0xccef4444);wifiTile.setBackground(style==ThemeStyle.HARMONY?surface(wifiTile.isFocused()):d);
+        GradientDrawable d=new GradientDrawable();d.setColor(online?0x8014532d:0x947f1d1d);d.setCornerRadius(GlassSettings.dp(host,22));d.setStroke(GlassSettings.dp(host,wifiTile.isFocused()?2:1),online?0xb322c55e:0xccef4444);wifiTile.setBackground(style==ThemeStyle.HARMONY?HarmonyVisionSurface.control(host,wifiTile.isFocused()):d);
         if(bluetoothLabel!=null&&bluetooth!=null)bluetoothLabel.setText(bluetooth.connectedName());
     }
 
@@ -84,10 +84,10 @@ final class ControlCenterGrid extends LinearLayout {
                     tile.setNextFocusDownId(ids[below[ControlCenterLayout.neighbour(col,items.length,below.length)]]);
                 }
                 LinearLayout.LayoutParams position=new LinearLayout.LayoutParams(0,-1,1);
-                int gap=GlassSettings.dp(host,style==ThemeStyle.COBALT?2:4);
+                int gap=GlassSettings.dp(host,style==ThemeStyle.COBALT?2:style==ThemeStyle.HARMONY?5:4);
                 position.setMargins(gap,gap,gap,gap); row.addView(tile,position);
             }
-            int height=style==ThemeStyle.CLASSIC?64:ControlCenterLayout.stacked(style)?100:items.length==1?76:88;
+            int height=style==ThemeStyle.HARMONY?88:style==ThemeStyle.CLASSIC?64:ControlCenterLayout.stacked(style)?100:items.length==1?76:88;
             addView(row,new LinearLayout.LayoutParams(-1,GlassSettings.dp(host,height)));
         }
         status();
@@ -98,8 +98,9 @@ final class ControlCenterGrid extends LinearLayout {
     GradientDrawable surface(boolean focused) {
         SharedPreferences prefs=ThemePreferences.get(host);
         int radius=GlassSettings.dp(host,ControlCenterLayout.radius(ThemeStyle.id(prefs)));
-        if(ThemeStyle.id(prefs)==ThemeStyle.GLASS || ThemeStyle.harmony(prefs)){
-            GradientDrawable card=GlassOsUi.panel(host,ThemeStyle.harmony(prefs)?28:22);card.setStroke(GlassSettings.dp(host,focused?2:1),focused?0xccffffff:(Math.round((TvGlassStyle.edge(prefs)>>>24)*.47f)<<24)|0xffffff);return card;
+        if(ThemeStyle.harmony(prefs))return HarmonyVisionSurface.control(host,focused);
+        if(ThemeStyle.id(prefs)==ThemeStyle.GLASS){
+            GradientDrawable card=GlassOsUi.panel(host,22);card.setStroke(GlassSettings.dp(host,focused?2:1),focused?0xccffffff:(Math.round((TvGlassStyle.edge(prefs)>>>24)*.47f)<<24)|0xffffff);return card;
         }
         if(ThemeStyle.custom(prefs)) return new DemoCardSurface(radius,GlassSettings.dp(host,1),focused,prefs,false);
         GradientDrawable result=GlassSettings.background(host,focused); result.setCornerRadius(radius); return result;
