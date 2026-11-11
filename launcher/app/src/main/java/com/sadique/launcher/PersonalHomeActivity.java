@@ -96,16 +96,47 @@ public final class PersonalHomeActivity extends Activity {
     private GlassTelemetry telemetry;
     private AppLibraryDialog appLibrary;
     private int glassAccent=0xffe50914;
-    private boolean glassOs() { return ThemeStyle.id(prefs)==ThemeStyle.GLASS; }
+    private boolean harmony() { return ThemeStyle.harmony(prefs); }
+    private boolean glassOs() { return ThemeStyle.id(prefs)==ThemeStyle.GLASS || harmony(); }
     private void glassDefaults() {
-        if(glassOs()&&!prefs.getBoolean("glass_os_defaults_v1",false))
+        if(ThemeStyle.id(prefs)==ThemeStyle.GLASS&&!prefs.getBoolean("glass_os_defaults_v1",false))
             prefs.edit().putBoolean("glass_os_defaults_v1",true).putString("wallpaper_mode","solid")
                 .putInt("wallpaper_source",0).putInt("header_bg_mode",0).putBoolean("header_glass_v2",true).putInt("clock_size",82)
                 .putBoolean("focus_glow",true).putInt("ambient_strength",100).apply();
-        if(glassOs()&&!prefs.getBoolean("glass_resume_v3",false))
+        if(ThemeStyle.id(prefs)==ThemeStyle.GLASS&&!prefs.getBoolean("glass_resume_v3",false))
             prefs.edit().putBoolean("glass_resume_v3",true).putBoolean("continue_watching",true).apply();
-        if(glassOs()&&!prefs.getBoolean("glass_reference_v2",false))
+        if(ThemeStyle.id(prefs)==ThemeStyle.GLASS&&!prefs.getBoolean("glass_reference_v2",false))
             prefs.edit().putBoolean("glass_reference_v2",true).putInt("header_bg_mode",1).putBoolean("header_glass_v2",true).apply();
+        // Dedicated opt-in profile: no change to previously saved styles or TV services.
+        if(harmony()&&!prefs.getBoolean("harmony_defaults_v1",false))
+            prefs.edit().putBoolean("harmony_defaults_v1",true)
+                .putString("wallpaper_mode","mountains").putInt("wallpaper_source",1)
+                .putInt("background_dim",16).putInt("header_bg_mode",0).putBoolean("header_glass_v2",true)
+                .putInt("clock_size",88).putInt("clock_align",0).putInt("clock_style",0)
+                .putBoolean("weather_widget",true).putBoolean("clock_seconds",false)
+                .putBoolean("clock_shadow",true).putBoolean("focus_glow",false)
+                .putInt("tv_columns",4).putInt("tile_corners",2).putInt("tile_spacing",1)
+                .putInt("glass_alpha",58).putInt("glass_finish",0).putInt("glass_edge",1)
+                .putBoolean("panel_transparency",true).putBoolean("continue_watching",false).apply();
+    }
+    /** Lightweight English service shortcuts with D-pad return to the app dock. */
+    private View harmonyShortcuts() {
+        LinearLayout links=new LinearLayout(this);links.setOrientation(LinearLayout.VERTICAL);
+        View apps=GlassSettings.wideCard(this,"All apps",R.drawable.ic_apps,
+                ThemeStyle.focusAccent(prefs),this::showAppLibrary);
+        View scenery=GlassSettings.wideCard(this,"Scenery",R.drawable.ic_picture,
+                ThemeStyle.focusAccent(prefs),()->launch(new Intent(this,LandscapeActivity.class)));
+        for(View entry:new View[]{apps,scenery}) {
+            entry.setOnKeyListener((view,key,event)->{
+                if(event.getAction()==KeyEvent.ACTION_DOWN&&key==KeyEvent.KEYCODE_DPAD_DOWN&&grid!=null){
+                    grid.focusKey(focusedPkg);return true;
+                }
+                return false;
+            });
+            LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,dp(64));
+            params.setMargins(0,dp(3),0,dp(3));links.addView(entry,params);
+        }
+        return links;
     }
     private Bitmap avatarBitmap;
     private Bitmap customWallpaper;
@@ -269,7 +300,7 @@ public final class PersonalHomeActivity extends Activity {
 
     /** Current theme accent color: Midnight Cyan, Sunset Orange, Deep Purple, or Custom. */
     private int accentColor() {
-        if(ThemeStyle.custom(prefs)) return GlassSettings.themeAccent(this);
+        if(ThemeStyle.custom(prefs)||harmony()) return GlassSettings.themeAccent(this);
         switch (prefs.getInt("theme_name", 0)) {
             case 1: return 0xffff9a5c; // Sunset Orange
             case 2: return 0xffb388ff; // Deep Purple
@@ -640,7 +671,7 @@ public final class PersonalHomeActivity extends Activity {
         if(glassOs()) {
             time.setTypeface(android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD));
             ampm.setTypeface(android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD));
-            GradientDrawable ampmBadge=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{0xff1b3855,0xff102941});ampmBadge.setCornerRadius(dp(10));ampmBadge.setStroke(dp(1),0x7796bdf5);
+            GradientDrawable ampmBadge=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{harmony()?0xff406c92:0xff1b3855,harmony()?0xff183b65:0xff102941});ampmBadge.setCornerRadius(dp(10));ampmBadge.setStroke(dp(1),0x7796bdf5);
             ampm.setTextColor(Color.WHITE);ampm.setTextSize(20);ampm.setBackground(ampmBadge);ampm.setPadding(dp(8),dp(4),dp(8),dp(4));
             ampm.setMinWidth(dp(56));ampm.setMinHeight(dp(36));ampm.setGravity(Gravity.CENTER);ampm.setShadowLayer(0,0,0,Color.TRANSPARENT);
             clock.setPadding(0,0,0,0);
@@ -712,7 +743,9 @@ public final class PersonalHomeActivity extends Activity {
         if(glassOs()){appBody.setClipChildren(true);appBody.setClipToPadding(true);}
         // App cards float directly on wallpaper in every visual style.
         boolean liquidGlass=TvGlassStyle.enabled(prefs);
-        appBody.setBackground(null); appBody.setPadding(0,0,0,0); appBody.setClipToOutline(false);
+        appBody.setBackground(harmony()?GlassOsUi.panel(this,32):null);
+        appBody.setPadding(harmony()?dp(8):0,harmony()?dp(4):0,harmony()?dp(8):0,0);
+        appBody.setClipToOutline(false);
         if(ThemeStyle.id(prefs)==ThemeStyle.COBALT) grid.addItemDecoration(new CobaltRails(dp(1)));
         if(ThemeStyle.custom(prefs)&&tv) grid.addOnLayoutChangeListener((v,l,t,rr,bb,ol,ot,orr,obb)->placeDemoCards());
         continueWatching = new ContinueWatchingView(this, label -> { if (!prefs.getBoolean("apps_only", false)) appHeading.setText(label); });
@@ -749,9 +782,12 @@ public final class PersonalHomeActivity extends Activity {
                 weatherWidget.active(resumed);
             }
             if(glassOs()){
-                telemetry=new GlassTelemetry(this);
                 int cardWidth=wide?(weatherWidgetEnabled()?WeatherWidgetLayout.telemetryWidth(available):Math.min(315,getResources().getConfiguration().screenWidthDp/3)):Math.min(280,available);
-                instruments.addView(telemetry,new LinearLayout.LayoutParams(dp(cardWidth),-2));if(resumed)telemetry.start();
+                if(harmony()) instruments.addView(harmonyShortcuts(),new LinearLayout.LayoutParams(dp(cardWidth),-2));
+                else {
+                    telemetry=new GlassTelemetry(this);
+                    instruments.addView(telemetry,new LinearLayout.LayoutParams(dp(cardWidth),-2));if(resumed)telemetry.start();
+                }
             }
             stage.addView(instruments);if(prefs.getBoolean("apps_only",false))stage.setVisibility(View.GONE);scrollContent.addView(stage,new LinearLayout.LayoutParams(-1,-2));
         }else scrollContent.addView(clock,clockParams);
@@ -1384,7 +1420,7 @@ public final class PersonalHomeActivity extends Activity {
         int card=referenceCardHeight(available/cols,cols);
         int spacing=Math.max(0,Math.min(2,prefs.getInt("tile_spacing",1)));
         int margin=new int[]{6,8,12}[spacing];
-        return card+dp(GlassDockLayout.reflectionHeight(Math.round(card/getResources().getDisplayMetrics().density))+margin*2+44);
+        return card+dp(GlassDockLayout.reflectionHeight(Math.round(card/getResources().getDisplayMetrics().density))+margin*2+44)+(harmony()?dp(8):0);
     }
     private View createAppTile(App app, int width, boolean moving) {
         requestAppIcon(app);
@@ -2001,8 +2037,8 @@ public final class PersonalHomeActivity extends Activity {
         String[] hints = {"Eight independent visual styles", "Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels", "Soft, Clear or Frosted panels", "Reflection around glass surfaces", "Solid panels when off; app drawer stays transparent", "Status-bar glass in this theme", "Round or rounded-square profile photo", "Restore defaults for the active style"};
         int[] icons = {R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_person, android.R.drawable.ic_popup_sync};
         Runnable[] choices = {
-            () -> chooseSetting("Visual style", new String[]{"Sadique Glass OS", "Classic", "Dune Loom", "Pearl Current", "Cobalt Rail", "Sage Fold", "Pine Mist", "Amber Night"}, this::switchVisualStyle),
-            () -> chooseSetting("Theme", new String[]{ThemeStyle.custom(prefs)?"Theme default":"Midnight Cyan", "Sunset Orange", "Deep Purple", "Custom"}, which -> {
+            () -> chooseSetting("Visual style", new String[]{"Sadique Glass OS", "Classic", "Dune Loom", "Pearl Current", "Cobalt Rail", "Sage Fold", "Pine Mist", "Amber Night", "Harmony Vision"}, this::switchVisualStyle),
+            () -> chooseSetting("Theme", new String[]{ThemeStyle.custom(prefs)?"Theme default":harmony()?"Harmony Blue":"Midnight Cyan", "Sunset Orange", "Deep Purple", "Custom"}, which -> {
                 prefs.edit().putInt("theme_name", which).apply();
                 if (which == 3) chooseAccentColor();
                 else { applyAppearance(); refreshApps(); }

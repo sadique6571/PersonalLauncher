@@ -43,14 +43,14 @@ public final class QuickSettingsActivity extends Activity {
     private void showPanel() {
         panel=HomeDashboard.show(this,network(),()->{},new HomeDashboard.Actions() {
             @Override public boolean keepPanel(int action) {
-                return (action==HomeDashboard.BLUETOOTH && ThemeStyle.id(ThemePreferences.get(QuickSettingsActivity.this))==ThemeStyle.GLASS) || action==HomeDashboard.INPUTS || action==HomeDashboard.DISPLAY || action==HomeDashboard.SOUND;
+                return (action==HomeDashboard.BLUETOOTH && (ThemeStyle.id(ThemePreferences.get(QuickSettingsActivity.this))==ThemeStyle.GLASS || ThemeStyle.harmony(ThemePreferences.get(QuickSettingsActivity.this)))) || action==HomeDashboard.INPUTS || action==HomeDashboard.DISPLAY || action==HomeDashboard.SOUND;
             }
             @Override public void open(int action) {
                 switch(action) {
                     case HomeDashboard.SETTINGS:
                         openActivity(new Intent(QuickSettingsActivity.this,MainActivity.class).setAction(MainActivity.ACTION_LAUNCHER_SETTINGS)); break;
                     case HomeDashboard.WIFI: openActivity(SystemSettings.intent(QuickSettingsActivity.this,Settings.ACTION_WIFI_SETTINGS)); break;
-                    case HomeDashboard.BLUETOOTH: if(ThemeStyle.id(ThemePreferences.get(QuickSettingsActivity.this))==ThemeStyle.GLASS)bluetooth.show();else openActivity(SystemSettings.bluetoothAccessoriesIntent(QuickSettingsActivity.this)); break;
+                    case HomeDashboard.BLUETOOTH: if((ThemeStyle.id(ThemePreferences.get(QuickSettingsActivity.this))==ThemeStyle.GLASS || ThemeStyle.harmony(ThemePreferences.get(QuickSettingsActivity.this))))bluetooth.show();else openActivity(SystemSettings.bluetoothAccessoriesIntent(QuickSettingsActivity.this)); break;
                     case HomeDashboard.INPUTS: inputs(); break;
                     case HomeDashboard.DISPLAY: TvControlPreview.show(QuickSettingsActivity.this,true); break;
                     case HomeDashboard.SOUND: TvControlPreview.show(QuickSettingsActivity.this,false); break;

@@ -9,12 +9,12 @@ final class GlassOsUi {
         GradientDrawable d=panel(host,26);
         android.content.SharedPreferences prefs=ThemePreferences.get(host);
         int alpha=PanelTransparency.alpha(Math.min(250,Math.round(235*alpha(prefs)/168f)),prefs,false);
-        d.setColors(new int[]{(alpha<<24)|0x0a0e18,(alpha<<24)|0x0c111e});return d;
+        d.setColors(ThemeStyle.harmony(prefs)?new int[]{(alpha<<24)|0x203f62,(alpha<<24)|0x112c4a}:new int[]{(alpha<<24)|0x0a0e18,(alpha<<24)|0x0c111e});return d;
     }
     static GradientDrawable panel(Activity host,int radius) {
         android.content.SharedPreferences prefs=ThemePreferences.get(host);
         int alpha=PanelTransparency.alpha(alpha(prefs),prefs,false);
-        GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{(alpha<<24)|0x132539,(Math.min(255,alpha+25)<<24)|0x09182a});
+        GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,ThemeStyle.harmony(prefs)?new int[]{(alpha<<24)|0x305c7b,(Math.min(255,alpha+16)<<24)|0x10263e}:new int[]{(alpha<<24)|0x132539,(Math.min(255,alpha+25)<<24)|0x09182a});
         d.setCornerRadius(GlassSettings.dp(host,radius));
         int edge=Math.round((TvGlassStyle.edge(prefs)>>>24)*.47f);
         d.setStroke(GlassSettings.dp(host,1),(edge<<24)|0xffffff);return d;

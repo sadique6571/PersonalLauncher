@@ -39,6 +39,12 @@ final class TvGlassStyle {
     }
     static GradientDrawable header(int radius,int strokeWidth,SharedPreferences prefs,boolean frosted) {
         if(ThemeStyle.custom(prefs)) return new DemoHeaderSurface(prefs,frosted,radius,strokeWidth);
+        if(ThemeStyle.harmony(prefs)) {
+            GradientDrawable h=surface(radius,strokeWidth,false,prefs,true,false,frosted?2:finish(prefs));
+            int alpha=HeaderAppearance.alpha(PanelTransparency.alpha(190,prefs,false));
+            h.setColors(new int[]{(alpha<<24)|0x294564,(alpha<<24)|0x10243f});
+            return h;
+        }
         int finish=frosted ? 2 : finish(prefs), intensity=intensity(prefs);
         if (enabled(prefs)) {
             GradientDrawable header=surface(radius,strokeWidth,false,prefs,true,false,finish);
@@ -61,6 +67,18 @@ final class TvGlassStyle {
     }
     private static GradientDrawable surface(int radius,int strokeWidth,boolean focused,SharedPreferences prefs,boolean liquid,boolean drawer,int finish) {
         if(ThemeStyle.custom(prefs)) return new MaterialSurface(radius,strokeWidth,focused,prefs,drawer,finish);
+        if(ThemeStyle.harmony(prefs)) {
+            int strength=intensity(prefs);
+            int raw=(finish==1?34:finish==2?102:65)+Math.round(strength*1.30f);
+            int alpha=PanelTransparency.alpha(Math.min(235,raw+(focused?25:0)),prefs,drawer);
+            GlassSurface card=new GlassSurface(strokeWidth,focused?0xe5f6ffff:edge(prefs));
+            card.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
+            card.setColors(new int[]{(alpha<<24)|0x2d526e,
+                    (Math.max(0,alpha-12)<<24)|0x152b49,(Math.max(0,alpha-6)<<24)|0x0c2039});
+            card.setCornerRadius(radius);
+            if(liquid) card.backdropOpacity(GlassTransparency.backdropAlpha(finish,strength));
+            return card;
+        }
         float strength = intensity(prefs) / 100f;
         int base = finish == 1 ? 24 : finish == 2 ? 96 : 48;
         int alpha = base + Math.round((245 - base) * strength * strength);

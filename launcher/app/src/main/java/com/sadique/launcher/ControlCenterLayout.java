@@ -12,11 +12,12 @@ final class ControlCenterLayout {
             case 5: return new int[][]{{0,1},{2,3,4},{5}}; // Sage: folded tiles + screensaver feature
             case 6: return new int[][]{{5},{0,1,2},{3,4}}; // Pine: screensaver feature + utility rails
             case 7: return new int[][]{{0,1,2},{4},{3,5}}; // Amber: sound feature between tool rails
+            case 8: return new int[][]{{0,1},{2},{3,4,5}}; // Harmony: connectivity, inputs and comfort controls
             default: return new int[][]{{0,1},{2,3},{4,5}}; // Apple: balanced control tiles
         }
     }
     static boolean stacked(int style) { return style == 0 || style == 3 || style == 5; }
-    static int radius(int style) { return new int[]{22,10,6,24,8,14,12,6}[Math.max(0,Math.min(7,style))]; }
+    static int radius(int style) { return new int[]{22,10,6,24,8,14,12,6,28}[Math.max(0,Math.min(8,style))]; }
     /** Align vertical D-pad movement by the centres of equal-width cards. */
     static int neighbour(int column, int count, int targetCount) {
         return Math.min(targetCount-1, (2*column+1)*targetCount/(2*count));
