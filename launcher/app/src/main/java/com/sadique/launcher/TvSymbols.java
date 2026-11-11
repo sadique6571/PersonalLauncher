@@ -35,6 +35,23 @@ final class TvSymbols extends Drawable {
         return resource;
     }
     static Drawable icon(Context context, int resource) {
+        // Harmony's toolbar uses purpose-drawn vector outlines, not the older
+        // procedural symbols shared by Glass OS. App logos use PackageManager.
+        if(ThemeStyle.harmony(ThemePreferences.get(context))){
+            int mapped=resource==R.drawable.ic_apps||resource==R.drawable.ic_apps_pill
+                    ?R.drawable.ic_harmony_apps:
+                    resource==R.drawable.ic_settings||resource==R.drawable.ic_home_settings
+                    ?R.drawable.ic_harmony_settings:
+                    resource==R.drawable.ic_search?R.drawable.ic_harmony_search:
+                    resource==R.drawable.ic_notifications?R.drawable.ic_harmony_notifications:
+                    resource==R.drawable.ic_picture?R.drawable.ic_harmony_picture:resource;
+            Drawable vector=context.getDrawable(mapped);
+            if(vector!=null){
+                vector=vector.mutate();
+                vector.setTint(ThemeStyle.foreground(ThemePreferences.get(context)));
+                return vector;
+            }
+        }
         if(ThemeStyle.id(ThemePreferences.get(context))==ThemeStyle.GLASS){
             int reference=resource==R.drawable.ic_settings?R.drawable.ic_glass_settings:resource==R.drawable.ic_search?R.drawable.ic_glass_search:resource==R.drawable.ic_wifi?R.drawable.ic_glass_wifi:resource==R.drawable.ic_volume_bluetooth||resource==android.R.drawable.stat_sys_data_bluetooth?R.drawable.ic_glass_bluetooth:0;
             if(reference!=0){Drawable d=context.getDrawable(reference);if(d!=null){d=d.mutate();d.setTint(ThemeStyle.foreground(ThemePreferences.get(context)));}return d;}

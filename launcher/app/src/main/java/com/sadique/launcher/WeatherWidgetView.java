@@ -20,9 +20,12 @@ final class WeatherWidgetView extends FrameLayout {
     private WeatherForecast last;private String lastName;private boolean lastUnit;
     WeatherWidgetView(Activity host,Runnable open){
         super(host);this.host=host;prefs=ThemePreferences.get(host);setClipToOutline(true);
-        GradientDrawable shape=new GradientDrawable();shape.setColor(0xff0c2035);shape.setCornerRadius(dp(22));setBackground(shape);
+        GradientDrawable shape=ThemeStyle.harmony(prefs)?HarmonyVisionSurface.feature(host,0,false):new GradientDrawable();
+        if(!ThemeStyle.harmony(prefs))shape.setColor(0xff0c2035);
+        shape.setCornerRadius(dp(ThemeStyle.harmony(prefs)?28:22));setBackground(shape);
         scene=new WeatherConditionView(host);addView(scene,new LayoutParams(-1,-1));
-        copy=new LinearLayout(host);copy.setOrientation(LinearLayout.VERTICAL);copy.setPadding(dp(14),dp(12),dp(14),dp(12));
+        copy=new LinearLayout(host);copy.setOrientation(LinearLayout.VERTICAL);
+        copy.setPadding(dp(ThemeStyle.harmony(prefs)?16:14),dp(12),dp(14),dp(12));
         city=label("",12);city.setSingleLine();city.setEllipsize(android.text.TextUtils.TruncateAt.END);copy.addView(city);
         LinearLayout current=new LinearLayout(host);current.setGravity(Gravity.CENTER_VERTICAL);
         temperature=label("—",36);temperature.setTypeface(temperature.getTypeface(),Typeface.BOLD);temperature.setSingleLine();temperature.setAutoSizeTextTypeUniformWithConfiguration(24,36,1,android.util.TypedValue.COMPLEX_UNIT_SP);current.addView(temperature,new LinearLayout.LayoutParams(0,-2,1));
@@ -44,7 +47,7 @@ final class WeatherWidgetView extends FrameLayout {
     }
     private int dp(float n){return GlassSettings.dp(host,n);}
     private TextView label(String text,int size){TextView t=GlassSettings.label(host,text,size,Color.WHITE);t.setShadowLayer(dp(3),0,dp(1),0xcc000000);return t;}
-    private GradientDrawable edge(boolean focus){GradientDrawable d=new GradientDrawable();d.setColor(Color.TRANSPARENT);d.setCornerRadius(dp(22));d.setStroke(dp(focus?2:1),focus?ThemeStyle.focusAccent(prefs):0x55d5e4f5);return d;}
+    private GradientDrawable edge(boolean focus){GradientDrawable d=new GradientDrawable();d.setColor(Color.TRANSPARENT);d.setCornerRadius(dp(ThemeStyle.harmony(prefs)?28:22));d.setStroke(dp(focus?2:1),focus?0xfff3fcff:0x55d5e4f5);return d;}
     void bind(WeatherForecast model,String name,boolean fahrenheit){
         if(model==last&&name.equals(lastName)&&fahrenheit==lastUnit)return;
         last=model;lastName=name;lastUnit=fahrenheit;
