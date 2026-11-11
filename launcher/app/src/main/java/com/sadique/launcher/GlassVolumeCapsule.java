@@ -30,10 +30,7 @@ final class GlassVolumeCapsule extends LinearLayout {
             shell=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{(alpha<<24)|0x132539,(Math.min(255,alpha+26)<<24)|0x09182a});
             shell.setStroke(dp(1),TvGlassStyle.edge(prefs));
         }else if(ThemeStyle.harmony(prefs)){
-            int alpha=PanelTransparency.alpha(Math.min(238,132+TvGlassStyle.intensity(prefs)),prefs,false);
-            shell=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                    new int[]{(alpha<<24)|0x355d7b,(Math.min(255,alpha+15)<<24)|0x122b49});
-            shell.setStroke(dp(1),0x99c5e9ff);
+            shell=HarmonyVisionSurface.status(context);
         }else if(ThemeStyle.id(prefs)==ThemeStyle.CLASSIC){
             shell=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,new int[]{TvGlassStyle.tinted(0xff132539,prefs),TvGlassStyle.tinted(0xff09182a,prefs)});
             shell.setStroke(dp(1),0x55415a72);shell.setAlpha(PanelTransparency.alpha(ClassicGlassAlpha.card(TvGlassStyle.intensity(prefs),false),prefs,false));
@@ -41,7 +38,7 @@ final class GlassVolumeCapsule extends LinearLayout {
         shell.setCornerRadius(dp(999));setBackground(shell);
         percent=label("—",12,foreground);percent.setId(R.id.volPercent);addView(percent,new LayoutParams(-1,dp(24)));
         track=new Track(context,prefs);track.setId(R.id.volTrack);addView(track,new LayoutParams(dp(38),0,1));
-        TextView caption=label("VOL",10,ThemeStyle.muted(prefs));addView(caption,new LayoutParams(-1,dp(24)));
+        TextView caption=label(ThemeStyle.harmony(prefs)?"SOUND":"VOL",ThemeStyle.harmony(prefs)?9:10,ThemeStyle.muted(prefs));addView(caption,new LayoutParams(-1,dp(24)));
         setFocusable(false);
     }
     private int dp(float n){return Math.round(n*getResources().getDisplayMetrics().density);}

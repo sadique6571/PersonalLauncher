@@ -2,7 +2,7 @@
 
 **Personal Launcher by Sadique Sadiq** — a customizable Home launcher for Android TV / Google TV.
 
-- **Version:** 7.0 · **Android version code:** 80 · Release build numbers increase independently.
+- **Version:** 7.0 · **Android version code:** 81 · Release build numbers increase independently.
 - **Package:** `com.sadique.launcher` · **Minimum Android:** 8.0 / API 26
 - Plain Java and Android Views, with performance profiles for low-memory TVs.
 - Internet access is used for daily Bing wallpaper, Picsum screensaver photos, weather and city lookup.
@@ -294,6 +294,25 @@ glass material. Its wallpaper blend and the header Frosted choice use a separate
 so header blur does not change drawer blur. Sharp/Rounded/Round app-card corners now use one radius
 for the shell, clipped artwork and focus edge; Subtle and Bright outlines retain different strengths.
 Profile photo shape is also available directly in the profile editor.
+
+## Harmony Vision TV home overhaul
+The Huawei Vision-inspired layout is distinct from the Glass theme. The top bar keeps
+profile/network/search/notifications/settings while the duplicate greeting is hidden. The
+central analog clock faces a **single greeting** and a different original short time/harmony
+thought every device-local day; the library contains 96 hand-written English thoughts,
+cycles offline and never uses an API or fabricates author attributions.
+New asymmetric weather/date feature cards use the actual selected place and forecast cache;
+All apps and Scenery have their own compact service shortcuts. On the bottom, the first
+app row floats directly over the wallpaper with a **true vertically mirrored, fading
+reflection**; there is no redundant app drawer/tray behind it or Watch Next footer.
+The Harmony-only Settings and Control Center use independent pearl-blue materials and a
+2×3 quick-action layout. Volume styling and app tiles use separate native palettes.
+All profile namespaces and other themes are left intact. Press OK on the dial or select
+**Launcher settings → Clock → Daily thoughts** to disable/re-enable the rotation.
+
+This is an original Android TV adaptation of Huawei Vision's three home zones
+(status, service cards, app entry); it is not proprietary HarmonyOS or Android SystemUI.
+Physical Haier 1280×720 D-pad, contrast, performance and volume checks are required.
 
 ## Harmony Vision clock on the TV Home
 The Harmony Vision TV theme now displays a native analog clock beside the hero message and
