@@ -68,13 +68,13 @@ public final class PersonalHomeActivity extends Activity {
     private WeatherWidgetView weatherWidget;
     private SweepAnalogClock analogClock;
     private HarmonyVisionClockView harmonyClock;
-    private TextView harmonyWeatherValue,harmonyDateValue,harmonyGreetingValue,harmonyQuoteValue,harmonyWeatherTitle;
+    private TextView harmonyDateValue,harmonyGreetingValue,harmonyQuoteValue;
     private View harmonyWeatherCard;
     private WeatherForecastPanel forecastPanel;
     private WeatherForecast weatherSnapshot;
     private String weatherSnapshotKey="";
     private long weatherSnapshotAt;
-    private boolean weatherWidgetEnabled(){return !harmony()&&prefs.getBoolean("weather_widget",ThemeStyle.id(prefs)==ThemeStyle.GLASS)&&!prefs.getBoolean("apps_only",false);}
+    private boolean weatherWidgetEnabled(){return ((harmony()&&tv)||prefs.getBoolean("weather_widget",ThemeStyle.id(prefs)==ThemeStyle.GLASS))&&!prefs.getBoolean("apps_only",false);}
     private int clockAlignment(){return WeatherWidgetLayout.clockAlignment(weatherWidgetEnabled(),ThemeStyle.clockAlignment(prefs));}
     private long nextWeatherAttempt;
     private String lastWeatherRequestKey="";
@@ -142,149 +142,71 @@ public final class PersonalHomeActivity extends Activity {
         return links;
     }
 /** A dedicated Huawei Vision-inspired scene, not a recoloured Glass OS home. */
+    /** Three balanced zones: the original watch, one daily thought and a real weather widget. */
     private View harmonyHero(){
         LinearLayout stage=new LinearLayout(this);
         stage.setOrientation(LinearLayout.HORIZONTAL);
         stage.setGravity(Gravity.CENTER_VERTICAL);
         stage.setClipChildren(false);stage.setClipToPadding(false);
         int screenH=getResources().getConfiguration().screenHeightDp;
-        int diameter=dp(HarmonyVisionLayout.clockDiameterDp(screenH,prefs.getInt("harmony_clock_size",1)));
+        int screenW=getResources().getConfiguration().screenWidthDp;
+        int side=dp(HarmonyVisionLayout.clockDiameterDp(screenH,prefs.getInt("harmony_clock_size",1)));
         harmonyClock=new HarmonyVisionClockView(this);
-        harmonyClock.setId(View.generateViewId());
         harmonyClock.setOnClickListener(v->harmonyClockSettings());
         harmonyClock.setOnKeyListener((v,key,event)->{
             if(event.getAction()!=KeyEvent.ACTION_DOWN)return false;
             if(key==KeyEvent.KEYCODE_DPAD_DOWN&&grid!=null){grid.focusKey(focusedPkg);return true;}
-            if(key==KeyEvent.KEYCODE_DPAD_RIGHT&&harmonyWeatherCard!=null){harmonyWeatherCard.requestFocus();return true;}
+            if(key==KeyEvent.KEYCODE_DPAD_RIGHT&&weatherWidget!=null){weatherWidget.requestFocus();return true;}
             if(key==KeyEvent.KEYCODE_DPAD_UP&&searchButton!=null){searchButton.requestFocus();return true;}
             return false;
         });
         if(!prefs.getBoolean("hide_clock",false)){
-            LinearLayout.LayoutParams dial=new LinearLayout.LayoutParams(diameter,diameter);
-            dial.setMarginEnd(dp(27));stage.addView(harmonyClock,dial);
+            LinearLayout.LayoutParams face=new LinearLayout.LayoutParams(side,side);
+            face.setMarginEnd(dp(screenW<780?12:22));
+            stage.addView(harmonyClock,face);
         }
-        LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);
-        content.setGravity(Gravity.CENTER_VERTICAL);
-        stage.addView(content,new LinearLayout.LayoutParams(0,-2,1));
-        TextView label=text("HARMONY VISION   /   HOME",10,0xffbad8ec);
-        label.setLetterSpacing(.18f);content.addView(label);
-        harmonyGreetingValue=text(greetingText(),14,0xffedfcff);
+        LinearLayout thought=new LinearLayout(this);
+        thought.setOrientation(LinearLayout.VERTICAL);thought.setGravity(Gravity.CENTER_VERTICAL);
+        stage.addView(thought,new LinearLayout.LayoutParams(0,-2,1));
+        harmonyGreetingValue=text(greetingText(),screenH<470?12:14,0xffd7eaff);
         harmonyGreetingValue.setTypeface(android.graphics.Typeface.create("sans-serif-medium",android.graphics.Typeface.NORMAL));
-        LinearLayout.LayoutParams greetingParams=new LinearLayout.LayoutParams(-1,-2);
-        greetingParams.topMargin=dp(10);content.addView(harmonyGreetingValue,greetingParams);
+        thought.addView(harmonyGreetingValue);
         harmonyQuoteValue=text(HarmonyDailyWords.forCalendar(Calendar.getInstance()),
-                screenH<475?23:28,0xffffffff);
+                screenW<780?19:screenH<470?21:25,0xffffffff);
         harmonyQuoteValue.setTypeface(android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD));
-        harmonyQuoteValue.setMaxLines(2);
+        harmonyQuoteValue.setMaxLines(3);
         harmonyQuoteValue.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        harmonyQuoteValue.setLineSpacing(dp(1),1f);
-        harmonyQuoteValue.setShadowLayer(dp(5),0,dp(2),0x90041628);
-        LinearLayout.LayoutParams quoteParams=new LinearLayout.LayoutParams(-1,-2);
-        quoteParams.topMargin=dp(5);content.addView(harmonyQuoteValue,quoteParams);
-        TextView subtitle=text("A THOUGHT FOR TODAY",10,0xffb4d3e5);
-        subtitle.setLetterSpacing(.16f);
-        LinearLayout.LayoutParams sub=new LinearLayout.LayoutParams(-1,-2);
-        sub.topMargin=dp(9);content.addView(subtitle,sub);
-        boolean quotesOn=prefs.getBoolean("harmony_daily_quote",true);
-        harmonyQuoteValue.setVisibility(quotesOn?View.VISIBLE:View.GONE);
-        subtitle.setVisibility(quotesOn?View.VISIBLE:View.GONE);
-        LinearLayout services=new LinearLayout(this);services.setOrientation(LinearLayout.HORIZONTAL);
-        services.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams row=new LinearLayout.LayoutParams(-1,dp(screenH<475?91:107));
-        row.topMargin=dp(screenH<475?10:16);content.addView(services,row);
-        harmonyWeatherTitle=text("LOCAL WEATHER",10,0xffc1dfe9);
-        harmonyWeatherValue=text("Unavailable",16,0xffffffff);
-        harmonyWeatherCard=harmonyFeatureCard(harmonyWeatherTitle,harmonyWeatherValue,0,R.drawable.ic_wifi,
-                this::showWeatherForecast);
-        harmonyDateValue=text("",16,0xffffffff);
-        View today=harmonyFeatureCard(text("TODAY",10,0xffc1dfe9),harmonyDateValue,1,R.drawable.ic_clock,null);
-        LinearLayout.LayoutParams weather=new LinearLayout.LayoutParams(0,-1,1.35f);
-        weather.setMarginEnd(dp(7));services.addView(harmonyWeatherCard,weather);
-        LinearLayout.LayoutParams todayParams=new LinearLayout.LayoutParams(0,-1,.94f);
-        todayParams.setMarginEnd(dp(7));services.addView(today,todayParams);
-        LinearLayout utilities=new LinearLayout(this);
-        utilities.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams utilitiesParams=new LinearLayout.LayoutParams(dp(screenH<475?127:147),-1);
-        services.addView(utilities,utilitiesParams);
-        View apps=harmonyQuickAction("Apps",R.drawable.ic_apps,this::showAppLibrary,false);
-        View inputs=harmonyQuickAction("Inputs",R.drawable.ic_input,this::showInputs,false);
-        View scenery=harmonyQuickAction("Scenery",R.drawable.ic_picture,
-                ()->launch(new Intent(this,LandscapeActivity.class)),true);
-        View settings=harmonyQuickAction("Controls",R.drawable.ic_settings,this::showSettings,true);
-        apps.setNextFocusRightId(inputs.getId());inputs.setNextFocusLeftId(apps.getId());
-        apps.setNextFocusDownId(scenery.getId());inputs.setNextFocusDownId(settings.getId());
-        scenery.setNextFocusUpId(apps.getId());settings.setNextFocusUpId(inputs.getId());
-        scenery.setNextFocusRightId(settings.getId());settings.setNextFocusLeftId(scenery.getId());
-        View[][] shortcuts={{apps,inputs},{scenery,settings}};
-        for(View[] pair:shortcuts){
-            LinearLayout band=new LinearLayout(this);band.setOrientation(LinearLayout.HORIZONTAL);
-            LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,0,1);
-            if(pair[0]==apps)bp.bottomMargin=dp(5);
-            utilities.addView(band,bp);
-            for(View shortcut:pair){
-                LinearLayout.LayoutParams qp=new LinearLayout.LayoutParams(0,-1,1);
-                qp.setMargins(dp(2),0,dp(2),0);
-                band.addView(shortcut,qp);
-            }
-        }
-        if(!prefs.getBoolean("hide_clock",false))harmonyWeatherCard.setNextFocusLeftId(harmonyClock.getId());
-        harmonyClock.active(resumed&&!prefs.getBoolean("hide_clock",false));
-        setHomeWeather(homeWeather==null?"Unavailable":homeWeather.getText().toString());
-        return stage;
-    }
-    private View harmonyFeatureCard(TextView name,TextView value,int palette,int symbol,Runnable action){
-        LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(13),dp(9),dp(12),dp(9));card.setGravity(Gravity.CENTER_VERTICAL);
-        card.setBackground(HarmonyVisionSurface.feature(this,palette,false));
-        LinearLayout title=new LinearLayout(this);title.setGravity(Gravity.CENTER_VERTICAL);
-        title.addView(name,new LinearLayout.LayoutParams(0,-2,1));
-        ImageView badge=new ImageView(this);badge.setImageDrawable(TvSymbols.icon(this,symbol));
-        badge.setColorFilter(0xfff0fbff);title.addView(badge,new LinearLayout.LayoutParams(dp(19),dp(19)));
-        card.addView(title,new LinearLayout.LayoutParams(-1,-2));
-        value.setSingleLine(true);value.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        value.setTypeface(android.graphics.Typeface.create("sans-serif-medium",android.graphics.Typeface.BOLD));
-        LinearLayout.LayoutParams textParams=new LinearLayout.LayoutParams(-1,-2);textParams.topMargin=dp(6);
-        card.addView(value,textParams);
-        if(action!=null){
-            card.setFocusable(true);card.setFocusableInTouchMode(true);card.setClickable(true);
-            card.setContentDescription("Weather forecast");
-            card.setOnClickListener(v->action.run());
-            card.setOnFocusChangeListener((v,f)->v.setBackground(HarmonyVisionSurface.feature(this,palette,f)));
-            card.setOnKeyListener((v,k,e)->{
-                if(e.getAction()!=KeyEvent.ACTION_DOWN)return false;
-                if(k==KeyEvent.KEYCODE_DPAD_DOWN&&grid!=null){grid.focusKey(focusedPkg);return true;}
-                if(k==KeyEvent.KEYCODE_DPAD_LEFT&&harmonyClock!=null&&harmonyClock.getParent()!=null){harmonyClock.requestFocus();return true;}
-                if(k==KeyEvent.KEYCODE_DPAD_UP&&searchButton!=null){searchButton.requestFocus();return true;}
-                return false;
+        harmonyQuoteValue.setShadowLayer(dp(6),0,dp(2),0x88061627);
+        LinearLayout.LayoutParams quote=new LinearLayout.LayoutParams(-1,-2);
+        quote.topMargin=dp(7);thought.addView(harmonyQuoteValue,quote);
+        harmonyDateValue=text("",12,0xffc0d3e3);
+        LinearLayout.LayoutParams dateParams=new LinearLayout.LayoutParams(-1,-2);
+        dateParams.topMargin=dp(10);thought.addView(harmonyDateValue,dateParams);
+        harmonyQuoteValue.setVisibility(prefs.getBoolean("harmony_daily_quote",true)?View.VISIBLE:View.GONE);
+        if(HarmonyVisionLayout.showNativeWeatherWidget()){
+            weatherWidget=new WeatherWidgetView(this,this::showWeatherForecast);
+            harmonyWeatherCard=weatherWidget;
+            weatherWidget.setOnKeyListener((v,key,event)->{
+                if(event.getAction()!=KeyEvent.ACTION_DOWN)return false;
+                if(key==KeyEvent.KEYCODE_DPAD_DOWN&&grid!=null){grid.focusKey(focusedPkg);return true;}
+                if(key==KeyEvent.KEYCODE_DPAD_UP&&searchButton!=null){searchButton.requestFocus();return true;}
+                if(key==KeyEvent.KEYCODE_DPAD_LEFT&&harmonyClock!=null&&harmonyClock.getParent()!=null){
+                    harmonyClock.requestFocus();return true;
+                }
+                return key==KeyEvent.KEYCODE_DPAD_RIGHT;
             });
+            int weatherWidth=Math.max(210,Math.min(285,Math.round(screenW*.29f)));
+            LinearLayout.LayoutParams wp=new LinearLayout.LayoutParams(dp(weatherWidth),-2);
+            wp.setMarginStart(dp(screenW<780?8:24));
+            stage.addView(weatherWidget,wp);
+            weatherWidget.active(resumed);
+            if(weatherSnapshot!=null&&weatherSnapshotKey.equals(weatherCacheKey())
+                    &&HomeWeatherPolicy.fresh("forecast",weatherSnapshotKey,weatherCacheKey(),
+                    weatherSnapshotAt,System.currentTimeMillis(),WEATHER_CACHE_MS))
+                weatherWidget.bind(weatherSnapshot,weatherCity(),prefs.getBoolean("weather_fahrenheit",false));
         }
-        return card;
-    }
-    private View harmonyQuickAction(String title,int symbol,Runnable action,boolean lastRow){
-        LinearLayout card=new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);card.setGravity(Gravity.CENTER);
-        card.setId(View.generateViewId());card.setPadding(dp(3),dp(3),dp(3),dp(3));
-        card.setBackground(HarmonyVisionSurface.control(this,false));
-        ImageView icon=new ImageView(this);icon.setImageDrawable(TvSymbols.icon(this,symbol));
-        icon.setColorFilter(0xfff1fbff);
-        LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(dp(20),dp(20));
-        card.addView(icon,ip);
-        TextView caption=text(title,9,0xffffffff);caption.setSingleLine(true);
-        caption.setGravity(Gravity.CENTER);
-        caption.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        card.addView(caption,new LinearLayout.LayoutParams(-1,-2));
-        card.setFocusable(true);card.setFocusableInTouchMode(true);card.setClickable(true);
-        card.setContentDescription(title);card.setOnClickListener(v->action.run());
-        card.setOnFocusChangeListener((v,f)->v.setBackground(HarmonyVisionSurface.control(this,f)));
-        card.setOnKeyListener((v,k,e)->{
-            if(e.getAction()!=KeyEvent.ACTION_DOWN)return false;
-            if(k==KeyEvent.KEYCODE_DPAD_DOWN&&lastRow&&grid!=null){grid.focusKey(focusedPkg);return true;}
-            if(k==KeyEvent.KEYCODE_DPAD_UP&&!lastRow&&searchButton!=null){searchButton.requestFocus();return true;}
-            if(k==KeyEvent.KEYCODE_DPAD_LEFT&&("Apps".equals(title)||"Scenery".equals(title))
-                    &&harmonyWeatherCard!=null){harmonyWeatherCard.requestFocus();return true;}
-            return false;
-        });
-        return card;
+        harmonyClock.active(resumed&&!prefs.getBoolean("hide_clock",false));
+        return stage;
     }
     private void harmonyClockSettings(){
         if(!harmony())return;
@@ -387,7 +309,8 @@ public final class PersonalHomeActivity extends Activity {
             boolean focused = tile.isFocused();
             Object tag = tile.getTag();
             int accent = tag instanceof Integer ? (Integer) tag : CYAN;
-            if(tile instanceof GlassIconTile)((GlassIconTile)tile).appearance(accent,focused);
+            if(tile instanceof HarmonyAppTile)((HarmonyAppTile)tile).appearance(focused);
+            else if(tile instanceof GlassIconTile)((GlassIconTile)tile).appearance(accent,focused);
             else {tile.setBackground(appSurface(accent,focused));tile.setForeground(tileBorder(accent,focused));}
         }
         if (sky != null) sky.invalidate();
@@ -633,7 +556,7 @@ public final class PersonalHomeActivity extends Activity {
         if(weatherWidget!=null){weatherWidget.active(false);weatherWidget=null;}
         if(analogClock!=null){analogClock.active(false);analogClock=null;}
         if(harmonyClock!=null){harmonyClock.active(false);harmonyClock=null;}
-        harmonyWeatherValue=null;harmonyDateValue=null;harmonyGreetingValue=null;harmonyQuoteValue=null;harmonyWeatherTitle=null;harmonyWeatherCard=null;
+        harmonyDateValue=null;harmonyGreetingValue=null;harmonyQuoteValue=null;harmonyWeatherCard=null;
         clockDatesInline=glassOs()&&getResources().getConfiguration().screenWidthDp>=700&&!weatherWidgetEnabled()&&prefs.getInt("clock_style",0)!=1;
         islamicDate=null;bluetoothStatus=null;focusedSpotlight=null;
         HeaderAppearance.clockDefaults(prefs);
@@ -778,6 +701,8 @@ public final class PersonalHomeActivity extends Activity {
             bluetoothStatus.setOnClickListener(v->bluetooth.show());bluetoothStatus.setOnKeyListener((v,c,e)->toolbarKey(v,e));
             actions.addView(bluetoothStatus,new LinearLayout.LayoutParams(-2,dp(40)));
             iconAction("Apps",R.drawable.ic_apps,this::showAppLibrary);
+        }else if(harmony()){
+            iconAction("All apps",R.drawable.ic_apps,this::showAppLibrary);
         }
         searchButton = iconAction(getString(R.string.h_search), R.drawable.ic_search, this::searchApps);
         iconAction(getString(R.string.h_notifications), R.drawable.ic_notifications, this::showNotifications);
@@ -897,7 +822,7 @@ public final class PersonalHomeActivity extends Activity {
             });
         }
         timeRow.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{if(r-l!=or-ol&&time.getText().length()>0)fitClockText(time.getText());});
-        if(glassOs()&&!analogClock) {
+        if(glassOs()&&!harmony()&&!analogClock) {
             focusedSpotlight=text("",13,0xffffffff);focusedSpotlight.setSingleLine();focusedSpotlight.setEllipsize(android.text.TextUtils.TruncateAt.END);
             focusedSpotlight.setPadding(dp(13),dp(7),dp(13),dp(7));focusedSpotlight.setBackground(GlassOsUi.panel(this,999));
             LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-2,-2);sp.topMargin=dp(8);clock.addView(focusedSpotlight,sp);updateSpotlight();
@@ -917,11 +842,11 @@ public final class PersonalHomeActivity extends Activity {
         appHeading.setPadding(dp(4), dp(8), 0, dp(12));
         grid = new HomeAppGrid<>(this, app -> app.info.activityInfo.packageName,
                 (app, width) -> createAppTile(app, width, carriedApp != null && app.info.activityInfo.packageName.equals(carriedApp.info.activityInfo.packageName)));
-        grid.setReferenceExpansion(glassOs());
-        grid.setUpFromApps(() -> { if(harmonyWeatherCard!=null&&harmonyWeatherCard.isShown())harmonyWeatherCard.requestFocus();else if(weatherWidget!=null&&weatherWidget.isShown())weatherWidget.requestFocus();else if(searchButton!=null)searchButton.requestFocus(); });
+        grid.setReferenceExpansion(glassOs()&&(!harmony()||HarmonyVisionLayout.expandAppOnFocus()));
+        grid.setUpFromApps(() -> { if(weatherWidget!=null&&weatherWidget.isShown())weatherWidget.requestFocus();else if(searchButton!=null)searchButton.requestFocus(); });
         grid.setClipChildren(false);
         if(glassOs()) {
-            grid.setId(R.id.grid);grid.setPadding(0,dp(harmony()?6:16),0,dp(harmony()?4:18));
+            grid.setId(R.id.grid);grid.setPadding(0,dp(harmony()?5:16),0,dp(harmony()?4:18));
             if(!harmony()||HarmonyVisionLayout.showDockReflections())grid.addItemDecoration(new DockDecoration.Reflections());
         }
         grid.setClipToPadding(glassOs()&&!harmony());
@@ -984,11 +909,7 @@ public final class PersonalHomeActivity extends Activity {
         scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
         boolean referenceStage=glassOs()&&!prefs.getBoolean("apps_only",false);
         page.addView(scroll, referenceStage?new LinearLayout.LayoutParams(-1,0,1):new LinearLayout.LayoutParams(-1,-2));
-        if(harmony()){
-            appHeading.setText("YOUR APPS");appHeading.setTextSize(11);
-            appHeading.setLetterSpacing(.16f);appHeading.setPadding(dp(9),dp(3),0,dp(5));
-            appHeading.setVisibility(View.VISIBLE);
-        }else if(ThemeStyle.custom(prefs)||glassOs())appHeading.setVisibility(View.GONE);
+        if(harmony()||ThemeStyle.custom(prefs)||glassOs())appHeading.setVisibility(View.GONE);
         page.addView(appHeading);
         page.addView(appBody,referenceStage?new LinearLayout.LayoutParams(-1,referenceDockHeight()):new LinearLayout.LayoutParams(-1,0,1));
         // Focus-glow tracker: keep the wallpaper glow on the focused tile no matter
@@ -1263,11 +1184,6 @@ public final class PersonalHomeActivity extends Activity {
     /** Cache key: changes when city or units change, invalidating the cache. */
     private void setHomeWeather(String value) {
         homeWeather.setText(ThemeStyle.custom(prefs)?value.replace(" · "," "):value);
-        if(harmonyWeatherValue!=null)harmonyWeatherValue.setText(value);
-        if(harmonyWeatherTitle!=null){
-            String place=weatherCity();
-            harmonyWeatherTitle.setText(place==null||place.trim().isEmpty()?"LOCAL WEATHER":place.toUpperCase(Locale.ENGLISH));
-        }
         if(ThemeStyle.custom(prefs)&&!"Unavailable".equals(value)) {
             StatusWeatherGlyph glyph=new StatusWeatherGlyph(value,Calendar.getInstance().get(Calendar.HOUR_OF_DAY),HeaderAppearance.foreground(prefs));
             glyph.setBounds(0,0,dp(22),dp(22)); homeWeather.setCompoundDrawablePadding(dp(6));
@@ -1362,6 +1278,15 @@ public final class PersonalHomeActivity extends Activity {
             if (generation != appGeneration || isDestroyed()) return;
             String pkg = app.info.activityInfo.packageName;
             try {
+                if(harmony()){
+                    android.graphics.drawable.Drawable nativeIcon=app.info.loadIcon(getPackageManager());
+                    handler.post(()->{
+                        if(!app.iconRequest.finish(generation))return;
+                        if(!isDestroyed()&&generation==appGeneration)
+                            updateTileIcon(pkg,nativeIcon,ThemeStyle.accent(prefs));
+                    });
+                    return;
+                }
                 IconCache cache = new IconCache(this);
                 android.content.pm.PackageManager pm = getPackageManager();
                 long version = IconCache.version(pm, pkg);
@@ -1406,16 +1331,28 @@ public final class PersonalHomeActivity extends Activity {
 
     /** Cheap letter placeholder so the grid is useful before icons finish. Runs on the worker thread. */
     private android.graphics.drawable.Drawable letterIcon(String name) {
-        Bitmap bitmap = Bitmap.createBitmap(160, 90, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        if(!ThemeStyle.custom(prefs)) canvas.drawColor(0xff0d2036);
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        paint.setColor(ThemeStyle.custom(prefs)?accentColor():0x6640d9ff);
-        paint.setTextSize(44);
-        paint.setTextAlign(Paint.Align.CENTER);
-        String letter = name.isEmpty() ? "?" : name.substring(0, 1).toUpperCase(Locale.ROOT);
-        canvas.drawText(letter, 80, 60, paint);
-        return new android.graphics.drawable.BitmapDrawable(getResources(), bitmap);
+        boolean square=harmony();
+        Bitmap bitmap=Bitmap.createBitmap(square?96:160,square?96:90,Bitmap.Config.ARGB_8888);
+        Canvas canvas=new Canvas(bitmap);
+        Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
+        if(square){
+            paint.setColor(0xff537d9a);
+            canvas.drawRoundRect(5,5,91,91,21,21,paint);
+            paint.setColor(0xfff5fbff);
+            paint.setTextSize(47);
+            paint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            paint.setTextAlign(Paint.Align.CENTER);
+            String letter=name.isEmpty()?"?":name.substring(0,1).toUpperCase(Locale.ROOT);
+            canvas.drawText(letter,48,64,paint);
+        }else{
+            if(!ThemeStyle.custom(prefs))canvas.drawColor(0xff0d2036);
+            paint.setColor(ThemeStyle.custom(prefs)?accentColor():0x6640d9ff);
+            paint.setTextSize(44);
+            paint.setTextAlign(Paint.Align.CENTER);
+            String letter=name.isEmpty()?"?":name.substring(0,1).toUpperCase(Locale.ROOT);
+            canvas.drawText(letter,80,60,paint);
+        }
+        return new android.graphics.drawable.BitmapDrawable(getResources(),bitmap);
     }
 
     /** Swaps a finished icon into the live tile and the cached App. Runs on the UI thread. */
@@ -1430,7 +1367,8 @@ public final class PersonalHomeActivity extends Activity {
         }
         if (carriedApp != null) return;
         View tile = tileViews.get(pkg);
-        if(tile instanceof GlassIconTile){((GlassIconTile)tile).artwork(icon,accent);tile.setTag(accent);if(tile.isFocused())updateGlassAccent(accent);}
+        if(tile instanceof HarmonyAppTile){((HarmonyAppTile)tile).artwork(icon,accent);tile.setTag(accent);}
+        else if(tile instanceof GlassIconTile){((GlassIconTile)tile).artwork(icon,accent);tile.setTag(accent);if(tile.isFocused())updateGlassAccent(accent);}
         else if (tile instanceof android.widget.FrameLayout) {
             View iconView = ((android.widget.FrameLayout) tile).getChildAt(0);
             if (iconView instanceof ImageView) ((ImageView) iconView).setImageDrawable(icon);
@@ -1473,8 +1411,9 @@ public final class PersonalHomeActivity extends Activity {
         visible.removeIf(app -> hidden.contains(app.info.activityInfo.packageName)
                 || (!selectedCategory.isEmpty() && !selectedCategory.equals(library.category(app.info.activityInfo.packageName))));
         int avail = gridWidth();
-        int columns = PersonalHomeModel.columns((int) (avail / getResources().getDisplayMetrics().density),
-                prefs.getInt(tv ? "tv_columns" : "phone_columns", 0), prefs.getBoolean("large_tiles", false));
+        int columns = harmony()?HarmonyVisionLayout.dockColumns(Math.round(avail/getResources().getDisplayMetrics().density)):
+                PersonalHomeModel.columns((int)(avail/getResources().getDisplayMetrics().density),
+                prefs.getInt(tv?"tv_columns":"phone_columns",0),prefs.getBoolean("large_tiles",false));
         grid.submit(visible, columns, avail / columns);
         if (movingRendered) { movingRendered = false; grid.rebind(); }
         if (gridState != null) { grid.getLayoutManager().onRestoreInstanceState(gridState); gridState = null; }
@@ -1617,23 +1556,23 @@ public final class PersonalHomeActivity extends Activity {
         int margin=(tvGlass()?new int[]{dp(6),dp(10),dp(16)}:new int[]{dp(4),dp(8),dp(14)})[spacing];
         int widthDp=Math.round((GlassDockLayout.compactCellWidth(cellWidth*columns,columns)-margin*2)/getResources().getDisplayMetrics().density);
         int height=GlassDockLayout.iconTileHeight(widthDp,getResources().getConfiguration().screenHeightDp,referenceCaptionHeight());
-        if(harmony())height=Math.max(referenceCaptionHeight()+55,Math.round(height*.79f));
+        if(harmony())height=HarmonyVisionLayout.dockTileHeightDp(getResources().getConfiguration().screenHeightDp);
         return dp(height);
     }
     private int referenceCaptionHeight(){return GlassDockLayout.captionHeight(prefs.getInt("app_label_size",16),getResources().getConfiguration().fontScale);}
     private int referenceDockHeight(){
         int available=pageWidth>0?gridWidth():dp(Math.max(160,getResources().getConfiguration().screenWidthDp-(tv?64:32)));
-        int cols=PersonalHomeModel.columns(Math.round(available/getResources().getDisplayMetrics().density),prefs.getInt(tv?"tv_columns":"phone_columns",0),prefs.getBoolean("large_tiles",false));
+        int cols=harmony()?HarmonyVisionLayout.dockColumns(Math.round(available/getResources().getDisplayMetrics().density)):PersonalHomeModel.columns(Math.round(available/getResources().getDisplayMetrics().density),prefs.getInt(tv?"tv_columns":"phone_columns",0),prefs.getBoolean("large_tiles",false));
         int card=referenceCardHeight(available/cols,cols);
         int spacing=Math.max(0,Math.min(2,prefs.getInt("tile_spacing",1)));
         int margin=new int[]{6,8,12}[spacing];
-        if(harmony())return card+dp(GlassDockLayout.reflectionHeight(Math.round(card/getResources().getDisplayMetrics().density))+margin*2+18);
+        if(harmony())return dp(HarmonyVisionLayout.dockHeightDp(getResources().getConfiguration().screenHeightDp));
         return card+dp(GlassDockLayout.reflectionHeight(Math.round(card/getResources().getDisplayMetrics().density))+margin*2+44);
     }
     private View createAppTile(App app, int width, boolean moving) {
         requestAppIcon(app);
-        android.widget.FrameLayout tile = glassOs()?new GlassIconTile(this,app.name,app.icon,app.accent,referenceCardHeight(width)-dp(referenceCaptionHeight()),dp(referenceCaptionHeight()),tileRadius(),moving):ThemeStyle.custom(prefs)?new DemoTile(this,ThemeStyle.id(prefs),tileRadius()):new android.widget.FrameLayout(this);
-        if(!(tile instanceof GlassIconTile)){
+        android.widget.FrameLayout tile = harmony()?new HarmonyAppTile(this,app.name,app.icon,app.accent,HarmonyVisionLayout.dockPlateDp(getResources().getConfiguration().screenHeightDp)):glassOs()?new GlassIconTile(this,app.name,app.icon,app.accent,referenceCardHeight(width)-dp(referenceCaptionHeight()),dp(referenceCaptionHeight()),tileRadius(),moving):ThemeStyle.custom(prefs)?new DemoTile(this,ThemeStyle.id(prefs),tileRadius()):new android.widget.FrameLayout(this);
+        if(!(tile instanceof GlassIconTile)&&!(tile instanceof HarmonyAppTile)){
         tile.setBackground(appSurface(app.accent,false));
         tile.setOutlineProvider(new ViewOutlineProvider() {
             @Override public void getOutline(View view,Outline outline) {
@@ -1647,12 +1586,12 @@ public final class PersonalHomeActivity extends Activity {
         tile.setClickable(true);
         tile.setContentDescription(app.name);
         tile.setTag(app.accent);
-        if(!(tile instanceof GlassIconTile))tile.setForeground(tileBorder(app.accent, false));
+        if(!(tile instanceof GlassIconTile)&&!(tile instanceof HarmonyAppTile))tile.setForeground(tileBorder(app.accent, false));
         if (moving) {
             tile.setScaleX(1.07f);
             tile.setScaleY(1.07f);
             tile.setElevation(dp(10));
-            if(tile instanceof GlassIconTile)((GlassIconTile)tile).appearance(app.accent,true);else tile.setForeground(tileBorder(accentColor(), true));
+            if(tile instanceof HarmonyAppTile)((HarmonyAppTile)tile).appearance(true);else if(tile instanceof GlassIconTile)((GlassIconTile)tile).appearance(app.accent,true);else tile.setForeground(tileBorder(accentColor(), true));
         }
         ImageView icon = new ImageView(this);
         if (app.icon != null) icon.setImageDrawable(app.icon);
@@ -1675,25 +1614,28 @@ public final class PersonalHomeActivity extends Activity {
                 rule.setMarginStart(logoWidth+dp(15)); rule.topMargin=dp(18); rule.bottomMargin=dp(18); tile.addView(separator,rule);
             }
             caption.setMarginStart(logoWidth+dp(24)); caption.setMarginEnd(dp(10)); tile.addView(title,caption);
-        }else if(!(tile instanceof GlassIconTile))tile.addView(icon,new android.widget.FrameLayout.LayoutParams(-1,-1));
+        }else if(!(tile instanceof GlassIconTile)&&!(tile instanceof HarmonyAppTile))tile.addView(icon,new android.widget.FrameLayout.LayoutParams(-1,-1));
         tile.setOnFocusChangeListener((v, focus) -> {
-            if(tile instanceof GlassIconTile)((GlassIconTile)tile).appearance(app.accent,focus||moving);
+            if(tile instanceof HarmonyAppTile)((HarmonyAppTile)tile).appearance(focus||moving);
+            else if(tile instanceof GlassIconTile)((GlassIconTile)tile).appearance(app.accent,focus||moving);
             else {tile.setBackground(appSurface(app.accent,focus));if(!moving)tile.setForeground(tileBorder(app.accent,focus));}
             if(focus)focusedPkg=app.info.activityInfo.packageName;
-            if(glassOs()&&!moving)grid.expandKey(focus?app.info.activityInfo.packageName:null);
+            if(glassOs()&&!harmony()&&!moving)grid.expandKey(focus?app.info.activityInfo.packageName:null);
             if (!moving) {
                 // Focus zoom: gentle scale animation.
                 float scale = focus ? (glassOs()?1f:tvGlass() ? 1.06f : 1.05f) : 1f;
                 float sy=glassOs()?1:scale;
                 float lift=0;
                 v.animate().cancel();
-                if (MemoryProfile.effectiveTier(this, prefs) == MemoryProfile.TIER_LIGHT) {
+                if(harmony()){
+                    v.setScaleX(1f);v.setScaleY(1f);v.setTranslationY(0);
+                }else if (MemoryProfile.effectiveTier(this, prefs) == MemoryProfile.TIER_LIGHT) {
                     v.setScaleX(scale); v.setScaleY(sy);v.setTranslationY(lift);
                 } else v.animate().scaleX(scale).scaleY(sy).translationY(lift).setUpdateListener(a->grid.refreshReflections()).setDuration(tvGlass() ? 180 : 150).start();
-                if(glassOs())grid.refreshReflections();
+                if(glassOs()&&!harmony())grid.refreshReflections();
             }
             tile.setTranslationZ(focus && prefs.getBoolean("focus_glow", true) ? dp(10) : 0);
-            if(glassOs()&&tile.getParent() instanceof View)((View)tile.getParent()).setTranslationZ(focus?dp(10):0);
+            if(glassOs()&&!harmony()&&tile.getParent() instanceof View)((View)tile.getParent()).setTranslationZ(focus?dp(10):0);
             if (android.os.Build.VERSION.SDK_INT >= 28) {
                 tile.setOutlineAmbientShadowColor(app.accent);
                 tile.setOutlineSpotShadowColor(app.accent);
@@ -1746,11 +1688,12 @@ public final class PersonalHomeActivity extends Activity {
         });
         android.widget.FrameLayout.LayoutParams position = new android.widget.FrameLayout.LayoutParams(-1, -2);
         int spacing = Math.max(0, Math.min(2, prefs.getInt("tile_spacing", 1)));
-        int hm = (tvGlass() ? new int[]{dp(6), dp(10), dp(16)} : new int[]{dp(4), dp(8), dp(14)})[spacing];
-        int vm = (glassOs()?new int[]{dp(6),dp(8),dp(12)}:tvGlass() ? new int[]{dp(8), dp(12), dp(18)} : new int[]{dp(5), dp(10), dp(16)})[spacing];
+        int hm = harmony()?dp(3):(tvGlass() ? new int[]{dp(6), dp(10), dp(16)} : new int[]{dp(4), dp(8), dp(14)})[spacing];
+        int vm = harmony()?dp(4):(glassOs()?new int[]{dp(6),dp(8),dp(12)}:tvGlass() ? new int[]{dp(8), dp(12), dp(18)} : new int[]{dp(5), dp(10), dp(16)})[spacing];
         position.width = width - hm * 2;
         position.height = ThemeStyle.custom(prefs)?Math.max(dp(54),Math.round(position.width/DemoGeometry.ratio()))+Math.round(DemoGeometry.footer(ThemeStyle.id(prefs),dp(1))):Math.round(position.width*9f/16f);
-        if(glassOs()){position.height=referenceCardHeight(width);position.width=-1;}
+        if(harmony()){position.height=dp(HarmonyVisionLayout.dockTileHeightDp(getResources().getConfiguration().screenHeightDp));position.width=-1;}
+        else if(glassOs()){position.height=referenceCardHeight(width);position.width=-1;}
         position.setMargins(hm, vm, hm, vm);
         tile.setLayoutParams(position);
         tile.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
@@ -2218,10 +2161,11 @@ public final class PersonalHomeActivity extends Activity {
     private void switchVisualStyle(int style) {
         if (ThemeStyle.id(prefs)==style) return;
         int priorLogo=prefs.getInt("logo_size",1); boolean priorMark=ThemeStyle.id(prefs)!=ThemeStyle.CLASSIC;
+        boolean wasHarmony=harmony();
         appGeneration++; // Reject artwork started for the previous style, even if its palette was similar.
         prefs.edit().putInt("visual_style",style).apply();
         ThemeStyle.demoDefaults(prefs,tv);
-        boolean reload=priorLogo!=prefs.getInt("logo_size",1) || priorMark!=(ThemeStyle.id(prefs)!=ThemeStyle.CLASSIC);
+        boolean reload=wasHarmony!=harmony()||priorLogo!=prefs.getInt("logo_size",1) || priorMark!=(ThemeStyle.id(prefs)!=ThemeStyle.CLASSIC);
         if(cachedApps!=null) for(App app:cachedApps) {
             if(reload) { app.iconReady=false; app.icon=null; }
         }

@@ -2,7 +2,7 @@
 
 **Personal Launcher by Sadique Sadiq** — a customizable Home launcher for Android TV / Google TV.
 
-- **Version:** 7.0 · **Android version code:** 81 · Release build numbers increase independently.
+- **Version:** 7.0 · **Android version code:** 82 · Release build numbers increase independently.
 - **Package:** `com.sadique.launcher` · **Minimum Android:** 8.0 / API 26
 - Plain Java and Android Views, with performance profiles for low-memory TVs.
 - Internet access is used for daily Bing wallpaper, Picsum screensaver photos, weather and city lookup.
@@ -294,6 +294,25 @@ glass material. Its wallpaper blend and the header Frosted choice use a separate
 so header blur does not change drawer blur. Sharp/Rounded/Round app-card corners now use one radius
 for the shell, clipped artwork and focus edge; Subtle and Bright outlines retain different strengths.
 Profile photo shape is also available directly in the profile editor.
+
+## Harmony Vision TV: faithful compact icons and real weather widget
+The Harmony Home now follows the Huawei Vision-style separation of a restrained
+header, a clock + daily thought + **full native weather widget** main area, and
+an icon-only resting dock beneath. The prior fake weather/date/inputs/controls
+cards were removed from the home hero. The real forecast widget is always shown
+on the right in Harmony and uses the existing live forecast, current location,
+sun/moon/weather animation, humidity, wind and offline fallback.
+
+Harmony has a separate compact native app tile with a **square plate**,
+untouched Android app icons and a small focused caption. No 16:9 icon
+compositing, stretch, widened focus span, reflections, duplicated greeting,
+or second app-drawer background. Eight apps fit in the row on a standard
+1280x720 TV; the rest remain reachable by D-pad and via All Apps.
+A fixed, tested dock height and smaller clock leave independent layout areas
+to avoid time/app overlap. Other themes, settings, volume helper, existing
+installation identity and the separate mobile repository are unchanged.
+Physical Haier TV display, performance and remote navigation still require
+device verification.
 
 ## Harmony Vision TV home overhaul
 The Huawei Vision-inspired layout is distinct from the Glass theme. The top bar keeps

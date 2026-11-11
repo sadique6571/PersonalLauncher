@@ -1,15 +1,29 @@
 package com.sadique.launcher;
 
-/** Fixed TV zones and geometry. No second app tray behind the reflective first app row. */
+/** Deterministic, bounded 720p TV geometry; native weather widget fills right-hand zone. */
 final class HarmonyVisionLayout {
     private HarmonyVisionLayout(){}
     static int clockDiameterDp(int screenHeightDp,int requested){
-        int[] sizes={208,242,268};
-        int saved=Math.max(0,Math.min(2,requested));
-        return Math.max(156,Math.min(sizes[saved],screenHeightDp-260));
+        int[] sizes={186,216,242};
+        int chosen=Math.max(0,Math.min(2,requested));
+        return Math.max(148,Math.min(sizes[chosen],screenHeightDp-295));
+    }
+    static int dockColumns(int availableWidthDp){
+        return Math.max(4,Math.min(8,availableWidthDp/108));
+    }
+    static int dockPlateDp(int screenHeightDp){
+        return screenHeightDp<450?58:68;
+    }
+    static int dockTileHeightDp(int screenHeightDp){
+        return dockPlateDp(screenHeightDp)+25;
+    }
+    static int dockHeightDp(int screenHeightDp){
+        return dockTileHeightDp(screenHeightDp)+21;
     }
     static boolean showDockPanel(){return false;}
-    static boolean showDockReflections(){return true;}
+    static boolean showDockReflections(){return false;}
+    static boolean expandAppOnFocus(){return false;}
+    static boolean showNativeWeatherWidget(){return true;}
     static boolean showSecondGreeting(){return false;}
     static boolean showWatchNextFooter(){return false;}
 }
