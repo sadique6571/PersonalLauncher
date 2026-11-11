@@ -169,7 +169,7 @@ public final class PersonalHomeActivity extends Activity {
         TextView label=text("HARMONY VISION   /   HOME",10,0xffbad8ec);
         label.setLetterSpacing(.18f);content.addView(label);
         harmonyGreetingValue=text(greetingText(),14,0xffedfcff);
-        harmonyGreetingValue.setTypeface(android.graphics.Typeface.create("sans-serif-medium",0));
+        harmonyGreetingValue.setTypeface(android.graphics.Typeface.create("sans-serif-medium",android.graphics.Typeface.NORMAL));
         LinearLayout.LayoutParams greetingParams=new LinearLayout.LayoutParams(-1,-2);
         greetingParams.topMargin=dp(10);content.addView(harmonyGreetingValue,greetingParams);
         harmonyQuoteValue=text(HarmonyDailyWords.forCalendar(Calendar.getInstance()),
