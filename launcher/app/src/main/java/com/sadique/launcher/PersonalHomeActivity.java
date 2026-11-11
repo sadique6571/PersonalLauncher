@@ -976,6 +976,7 @@ public final class PersonalHomeActivity extends Activity {
         String requestKey=cacheKey+(forecastNeeded?"|forecast":"|current");
         handler.removeCallbacks(weatherRefresh);homeWeather.setVisibility(widget?View.GONE:View.VISIBLE);
         if(!weatherOnline()){setHomeWeather("Unavailable");bindWeatherForecast(null);nextWeatherAttempt=0;handler.postDelayed(weatherRefresh,60_000L);return;}
+        WeatherSettings.resolvePhonePlace(this, false);
         String cached=prefs.getString("weather_cached",null);long cachedAt=prefs.getLong("weather_cached_at",0);
         boolean currentFresh=HomeWeatherPolicy.fresh(cached,prefs.getString("weather_cache_key",""),cacheKey,cachedAt,now,WEATHER_CACHE_MS);
         boolean modelFresh=weatherSnapshot!=null&&HomeWeatherPolicy.fresh("forecast",weatherSnapshotKey,cacheKey,weatherSnapshotAt,now,WEATHER_CACHE_MS);
