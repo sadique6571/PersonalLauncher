@@ -5,7 +5,7 @@ import android.graphics.*;
 import android.os.SystemClock;
 import android.view.View;
 
-/** Bounded atmospheric weather scene: feathered cloud banks, mist and quiet day/night light. */
+/** Photographic atmosphere with bounded, low-rate precipitation; no full-screen blur. */
 final class WeatherConditionView extends View {
     private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
     private final RectF bounds=new RectF(0,0,320,220);
@@ -13,8 +13,6 @@ final class WeatherConditionView extends View {
     private final int frameMs;
     private Bitmap backdrop;
     private int code=-1;private boolean day=true,active,animation=true;
-    private final Shader cloud=new RadialGradient(0,0,1,new int[]{0x88d9e6ef,0x55aabfcf,0x00aabfcf},new float[]{0,.5f,1},Shader.TileMode.CLAMP);
-    private final Shader mist=new LinearGradient(0,90,0,210,new int[]{0x00afc2d1,0x55afc2d1,0x00afc2d1},new float[]{0,.5f,1},Shader.TileMode.CLAMP);
     WeatherConditionView(Context context){super(context);frameMs=MemoryProfile.effectiveTier(context,ThemePreferences.get(context))==MemoryProfile.TIER_LIGHT?125:66;setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);}
     void condition(int next,boolean daytime){if(code!=next||day!=daytime){code=next;day=daytime;backdrop=null;}invalidate();}
     void active(boolean value,boolean animation){active=value;this.animation=animation;removeCallbacks(frame);invalidate();}
@@ -28,24 +26,42 @@ final class WeatherConditionView extends View {
         int top=code<0?0xff152131:!day?0xff071529:code>=3?0xff294657:0xff206491;
         int bottom=code<0?0xff07111f:!day?0xff14283a:code>=3?0xff50646b:0xff8eafb7;
         paint.setShader(new LinearGradient(0,0,0,220,top,bottom,Shader.TileMode.CLAMP));c.drawRect(bounds,paint);paint.setShader(null);
-        paint.setShader(null);paint.setColor(0xff162b37);Path ridge=new Path();ridge.moveTo(0,185);ridge.cubicTo(45,153,68,174,109,155);ridge.cubicTo(159,128,198,172,239,152);ridge.cubicTo(285,136,309,154,320,148);ridge.lineTo(320,220);ridge.lineTo(0,220);ridge.close();c.drawPath(ridge,paint);
+        Bitmap photo=WeatherImages.scene(WeatherVisualState.kind(code));
+        if(photo!=null){
+            float scale=Math.max(320f/photo.getWidth(),220f/photo.getHeight());
+            float w=photo.getWidth()*scale,h=photo.getHeight()*scale;
+            if(!day)paint.setColorFilter(new PorterDuffColorFilter(0xff53647c,PorterDuff.Mode.MULTIPLY));
+            c.drawBitmap(photo,null,new RectF((320-w)/2,(220-h)/2,(320+w)/2,(220+h)/2),paint);paint.setColorFilter(null);
+        }
         paint.setShader(new LinearGradient(0,0,0,220,new int[]{0x18030b17,0x55030b17,0xee030b17},new float[]{0,.48f,1},Shader.TileMode.CLAMP));c.drawRect(bounds,paint);paint.setShader(null);
     }
-    private void cloud(Canvas c,float x,float y,float w,float h,int opacity){int save=c.save();c.translate(x,y);c.scale(w,h);paint.setShader(cloud);paint.setAlpha(opacity);c.drawCircle(0,0,1,paint);paint.setAlpha(255);paint.setShader(null);c.restoreToCount(save);}
     @Override protected void onDraw(Canvas c){
         super.onDraw(c);if(getWidth()<=0||getHeight()<=0)return;if(backdrop==null)makeBackdrop();
         int save=c.save();c.scale(getWidth()/320f,getHeight()/220f);paint.setAlpha(255);c.drawBitmap(backdrop,null,bounds,paint);
         float seconds=active&&animation?(SystemClock.uptimeMillis()%60000)/1000f:0;
-        if(code>=1){
-            float drift=(float)Math.sin(seconds*.1f)*15;int opacity=day?230:105;
-            cloud(c,218+drift,72,117,25,opacity);cloud(c,266+drift,65,59,29,opacity);cloud(c,164+drift,82,80,18,opacity);
-            if(code>=3){cloud(c,72-drift,51,127,30,opacity);cloud(c,36-drift,61,78,22,opacity);cloud(c,160-drift,35,88,26,opacity);}
+        int kind=WeatherVisualState.kind(code);
+        int drops=WeatherVisualState.drops(code);
+        // Depth-dependent speed, opacity and length: fine precipitation rather than blue stripes.
+        if(drops>0){
+            for(int i=0;i<drops;i++){
+                float depth=.35f+(i%7)/10f,speed=70+depth*110;
+                float x=(i*73%350)-10,y=(i*47+seconds*speed)%248-20,len=4+depth*12;
+                paint.setColor(Color.WHITE);paint.setAlpha((int)(24+depth*54));paint.setStrokeWidth(.35f+depth*.6f);
+                c.drawLine(x,y,x-1-depth*2,y+len,paint);
+            }
+            paint.setAlpha(255);
         }
-        if(code==45||code==48){paint.setShader(mist);c.drawRect(0,75,320,220,paint);paint.setShader(null);for(int i=0;i<3;i++)cloud(c,80+i*85+(float)Math.sin(seconds*.15f+i)*12,119+i*19,135,17,210);}
-        if((code>=51&&code<=67)||(code>=80&&code<=82)||code>=95){paint.setColor(0x779cc4da);paint.setStrokeWidth(.65f);for(int i=0;i<24;i++){float x=(i*43)%330,y=((i*31+seconds*85)%190);c.drawLine(x,y,x-4,y+12,paint);}}
-        if((code>=71&&code<=77)||code==85||code==86){paint.setColor(0xaaddedef);for(int i=0;i<20;i++){float x=(i*59)%320+(float)Math.sin(seconds*.4f+i)*5,y=(i*29+seconds*12)%210;c.drawCircle(x,y,i%3==0?1.4f:.7f,paint);}}
-        if(code>=95){float flash=(float)Math.max(0,Math.sin(seconds*.7f)-.985f);paint.setColor(Color.WHITE);paint.setAlpha(Math.round(flash*1400));c.drawRect(bounds,paint);paint.setAlpha(255);}
+        if(kind==WeatherVisualState.SNOW){
+            for(int i=0;i<24;i++){
+                float depth=.3f+(i%5)*.15f,x=(i*59)%320+(float)Math.sin(seconds*.35f+i)*9,y=(i*29+seconds*(8+depth*12))%230-10;
+                paint.setColor(Color.WHITE);paint.setAlpha((int)(70+depth*100));c.drawCircle(x,y,.4f+depth,paint);
+            }paint.setAlpha(255);
+        }
+        if(kind==WeatherVisualState.STORM){
+            float cycle=seconds%19f;
+            if(cycle>12&&cycle<12.16f){paint.setColor(0x20dce7f3);c.drawRect(bounds,paint);}
+        }
         c.restoreToCount(save);
-        if(active&&animation&&code>=0&&getWindowVisibility()==VISIBLE&&isShown()){removeCallbacks(frame);postDelayed(frame,frameMs);}
+        if(active&&animation&&(drops>0||kind==WeatherVisualState.SNOW||kind==WeatherVisualState.STORM)&&getWindowVisibility()==VISIBLE&&isShown()){removeCallbacks(frame);postDelayed(frame,frameMs);}
     }
 }

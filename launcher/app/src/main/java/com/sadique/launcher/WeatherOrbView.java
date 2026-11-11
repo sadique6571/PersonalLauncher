@@ -30,14 +30,20 @@ final class WeatherOrbView extends View {
     private void render(){
         artwork=Bitmap.createBitmap(128,128,Bitmap.Config.ARGB_8888);Canvas c=new Canvas(artwork);c.scale(2,2);
         if(code<0)return;
-        paint.setAlpha(255);
-        paint.setShader(new RadialGradient(32,29,30,day?0x55ffe3a1:0x225e82a8,Color.TRANSPARENT,Shader.TileMode.CLAMP));c.drawCircle(32,29,30,paint);paint.setShader(null);
-        if(day){paint.setShader(new RadialGradient(27,24,23,0xfffff0c0,0xffffb438,Shader.TileMode.CLAMP));c.drawCircle(32,29,18,paint);paint.setShader(null);}
-        else if(moon!=null){paint.setColor(Color.WHITE);paint.setFilterBitmap(true);c.drawBitmap(moon,null,new RectF(4,1,60,57),paint);}
-        else {paint.setColor(0xffa2a9b0);c.drawCircle(32,29,21,paint);} // Worker prepares detail before normal weather binding.
-        if(code>=2){
-            paint.setAlpha(255);paint.setShader(new RadialGradient(32,45,26,new int[]{0xffb5c7d1,0xaa8da6b8,0x008da6b8},new float[]{0,.55f,1},Shader.TileMode.CLAMP));
-            c.save();c.scale(1,.55f);c.drawCircle(32,78,26,paint);c.restore();paint.setShader(null);
+        paint.setAlpha(255);paint.setColor(Color.WHITE);paint.setFilterBitmap(true);
+        int kind=WeatherVisualState.kind(code);
+        if(kind==WeatherVisualState.UNKNOWN)return;
+        if(kind==WeatherVisualState.CLEAR||kind==WeatherVisualState.PARTLY){
+            Bitmap disc=day?WeatherImages.sun:moon;
+            if(disc!=null)c.drawBitmap(disc,null,new RectF(3,0,61,58),paint);
+        }
+        if(kind!=WeatherVisualState.CLEAR&&WeatherImages.cloud!=null){
+            paint.setColorFilter(new PorterDuffColorFilter(kind==WeatherVisualState.STORM||kind==WeatherVisualState.RAIN?0xff82909b:0xffe3e8eb,PorterDuff.Mode.MULTIPLY));
+            c.drawBitmap(WeatherImages.cloud,null,new RectF(0,kind==WeatherVisualState.PARTLY?24:12,64,63),paint);paint.setColorFilter(null);
+            if(kind==WeatherVisualState.RAIN||kind==WeatherVisualState.STORM){
+                paint.setColor(0xffa9c4d3);paint.setStrokeWidth(.8f);for(int i=0;i<5;i++)c.drawLine(17+i*7,52,15+i*7,59,paint);
+            }else if(kind==WeatherVisualState.SNOW){paint.setColor(0xfff0f5f7);for(int i=0;i<4;i++)c.drawCircle(19+i*8,56,1.2f,paint);}
+            else if(kind==WeatherVisualState.FOG){paint.setColor(0xffb5c1c9);paint.setStrokeWidth(1.2f);for(int i=0;i<3;i++)c.drawLine(14,48+i*4,52-i*3,48+i*4,paint);}
         }
     }
     @Override protected void onDraw(Canvas c){super.onDraw(c);if(artwork==null)render();float side=Math.min(getWidth(),getHeight());destination.set((getWidth()-side)/2,(getHeight()-side)/2,(getWidth()+side)/2,(getHeight()+side)/2);paint.setColor(Color.WHITE);paint.setFilterBitmap(true);c.drawBitmap(artwork,null,destination,paint);}

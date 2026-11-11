@@ -17,7 +17,7 @@ public class GlassDockLayoutTest {
             assertTrue(side>=48&&side<=128);assertTrue(side<=width);
             int body=GlassDockLayout.wideBodyHeight(width,screen),bodyWidth=GlassDockLayout.wideBodyWidth(width,body);
             assertEquals(body+caption,GlassDockLayout.iconTileHeight(width,screen,caption));
-            assertTrue(bodyWidth<=width);assertEquals(1.45,bodyWidth/(double)body,.025);
+            assertTrue(bodyWidth<=width);assertEquals(1.60,bodyWidth/(double)body,.025);
             assertTrue(GlassDockLayout.reflectionHeight(side+caption)<side/2);
         }
         assertTrue(GlassDockLayout.captionHeight(20,1.5f)>GlassDockLayout.captionHeight(16,1));

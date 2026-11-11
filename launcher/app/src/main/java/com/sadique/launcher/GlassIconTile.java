@@ -38,7 +38,7 @@ final class GlassIconTile extends FrameLayout {
     void artwork(Drawable artwork,int accent){logo.setImageDrawable(artwork==null?TvSymbols.icon(getContext(),R.drawable.ic_apps):artwork);appearance(accent,isFocused()||moving);}
     void appearance(int accent,boolean selected){boolean next=selected&&!moving;if(focused!=next){focused=next;requestLayout();}panel.setBackground(GlassAppCard.surface(getContext(),accent,selected||moving,radius));invalidate();}
     @Override protected void onMeasure(int widthSpec,int heightSpec){
-        int width=resolveSize(Math.round(preferredHeight*1.45f),widthSpec),height=resolveSize(preferredHeight+captionHeight,heightSpec);setMeasuredDimension(width,height);
+        int width=resolveSize(GlassDockLayout.wideBodyWidth(Integer.MAX_VALUE, preferredHeight),widthSpec),height=resolveSize(preferredHeight+captionHeight,heightSpec);setMeasuredDimension(width,height);
         int bodyHeight=Math.min(preferredHeight,Math.max(1,height-captionHeight));
         int compactWidth=GlassDockLayout.wideBodyWidth(width,bodyHeight),bodyWidth=focused?width:compactWidth;
         inset=Math.min(dp(12),Math.max(dp(8),radius/2+1));inset=Math.min(inset,Math.max(0,(Math.min(bodyWidth,bodyHeight)-1)/3));
