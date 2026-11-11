@@ -13,7 +13,8 @@ public class HarmonyVisionClockMathTest {
         assertEquals(180d,HarmonyVisionClockMath.hourAngle(6,0,0,0),.00001);
         assertEquals(270d,HarmonyVisionClockMath.hourAngle(9,0,0,0),.00001);
         assertEquals(3d,HarmonyVisionClockMath.minuteAngle(0,30,0),.00001);
-        assertTrue(HarmonyVisionClockMath.hourAngle(12,30,0,0)>15);
+        assertEquals(15d,HarmonyVisionClockMath.hourAngle(12,30,0,0),.00001);
+        assertTrue(HarmonyVisionClockMath.hourAngle(12,31,0,0)>15);
     }
     @Test public void faceIdsAreBounded(){
         assertEquals(0,HarmonyVisionClockMath.clampFace(-1));
