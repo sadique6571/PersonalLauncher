@@ -2,7 +2,7 @@
 
 **Personal Launcher by Sadique Sadiq** — a customizable Home launcher for Android TV / Google TV.
 
-- **Version:** 7.0 · **Android version code:** 79 · Release build numbers increase independently.
+- **Version:** 7.0 · **Android version code:** 80 · Release build numbers increase independently.
 - **Package:** `com.sadique.launcher` · **Minimum Android:** 8.0 / API 26
 - Plain Java and Android Views, with performance profiles for low-memory TVs.
 - Internet access is used for daily Bing wallpaper, Picsum screensaver photos, weather and city lookup.
@@ -294,6 +294,17 @@ glass material. Its wallpaper blend and the header Frosted choice use a separate
 so header blur does not change drawer blur. Sharp/Rounded/Round app-card corners now use one radius
 for the shell, clipped artwork and focus edge; Subtle and Bright outlines retain different strengths.
 Profile photo shape is also available directly in the profile editor.
+
+## Harmony Vision clock on the TV Home
+The Harmony Vision TV theme now displays a native analog clock beside the hero message and
+live weather/date shortcuts, with a compact floating app dock below. Select the clock with
+the remote and press OK, or use **Launcher settings → Clock**, to choose **Heritage**,
+**Chronograph**, or **Skeleton**, four metal finishes, three accents, smooth sweep/Quartz
+seconds, time format and clock size. No WebView, external script, fabricated health sensor
+values or continuously running background service is involved. The face stops repainting
+when Home is paused. Live weather falls back to `Unavailable` when offline.
+All changes are TV-specific to the Harmony Vision theme and can be reverted by selecting
+another visual style. Physical 1280×720 Haier TV testing is still required.
 
 ## Harmony Vision — Android TV
 Select **Launcher settings → Theme → Visual style → Harmony Vision** to use the new English-language

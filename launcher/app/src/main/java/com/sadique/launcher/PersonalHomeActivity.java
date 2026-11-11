@@ -67,11 +67,14 @@ public final class PersonalHomeActivity extends Activity {
     private boolean weatherBusy,weatherForceRefresh,clockDatesInline;
     private WeatherWidgetView weatherWidget;
     private SweepAnalogClock analogClock;
+    private HarmonyVisionClockView harmonyClock;
+    private TextView harmonyWeatherValue,harmonyDateValue,harmonyGreetingValue;
+    private View harmonyWeatherCard;
     private WeatherForecastPanel forecastPanel;
     private WeatherForecast weatherSnapshot;
     private String weatherSnapshotKey="";
     private long weatherSnapshotAt;
-    private boolean weatherWidgetEnabled(){return prefs.getBoolean("weather_widget",ThemeStyle.id(prefs)==ThemeStyle.GLASS)&&!prefs.getBoolean("apps_only",false);}
+    private boolean weatherWidgetEnabled(){return !harmony()&&prefs.getBoolean("weather_widget",ThemeStyle.id(prefs)==ThemeStyle.GLASS)&&!prefs.getBoolean("apps_only",false);}
     private int clockAlignment(){return WeatherWidgetLayout.clockAlignment(weatherWidgetEnabled(),ThemeStyle.clockAlignment(prefs));}
     private long nextWeatherAttempt;
     private String lastWeatherRequestKey="";
@@ -137,6 +140,111 @@ public final class PersonalHomeActivity extends Activity {
             params.setMargins(0,dp(3),0,dp(3));links.addView(entry,params);
         }
         return links;
+    }
+/** Integrated Harmony Vision TV hero: native clock and genuine weather/date cards. */
+    private View harmonyHero(){
+        LinearLayout stage=new LinearLayout(this);stage.setOrientation(LinearLayout.HORIZONTAL);
+        stage.setGravity(Gravity.CENTER_VERTICAL);stage.setClipChildren(false);stage.setClipToPadding(false);
+        int screenH=getResources().getConfiguration().screenHeightDp;
+        int saved=Math.max(0,Math.min(2,prefs.getInt("harmony_clock_size",1)));
+        int requested=new int[]{214,250,278}[saved];
+        int side=dp(Math.min(requested,Math.max(182,screenH-282)));
+        harmonyClock=new HarmonyVisionClockView(this);
+        harmonyClock.setOnClickListener(v->harmonyClockSettings());
+        harmonyClock.setOnKeyListener((v,key,event)->{
+            if(event.getAction()!=KeyEvent.ACTION_DOWN)return false;
+            if(key==KeyEvent.KEYCODE_DPAD_DOWN&&grid!=null){grid.focusKey(focusedPkg);return true;}
+            if(key==KeyEvent.KEYCODE_DPAD_RIGHT&&harmonyWeatherCard!=null){harmonyWeatherCard.requestFocus();return true;}
+            return false;
+        });
+        if(!prefs.getBoolean("hide_clock",false)){
+            LinearLayout.LayoutParams face=new LinearLayout.LayoutParams(side,side);
+            face.setMarginEnd(dp(24));stage.addView(harmonyClock,face);
+        }
+        LinearLayout right=new LinearLayout(this);right.setOrientation(LinearLayout.VERTICAL);
+        right.setGravity(Gravity.CENTER_VERTICAL);stage.addView(right,new LinearLayout.LayoutParams(0,-2,1));
+        TextView eyebrow=text("IMMERSIVE HOME  ·  HARMONY VISION",10,0xffb8d9e9);
+        eyebrow.setLetterSpacing(.18f);right.addView(eyebrow);
+        harmonyGreetingValue=text(greetingText().toUpperCase(Locale.ENGLISH),11,0xffabdbef);
+        harmonyGreetingValue.setLetterSpacing(.14f);
+        LinearLayout.LayoutParams gp=new LinearLayout.LayoutParams(-1,-2);
+        gp.topMargin=dp(13);right.addView(harmonyGreetingValue,gp);
+        TextView heading=text("Time feels\na little calmer.",screenH<500?27:33,0xfff7fbff);
+        heading.setTypeface(android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD));
+        right.addView(heading);
+        TextView description=text("Your apps, weather and settings — right where you need them.",12,0xffbad3e4);
+        description.setMaxLines(2);
+        LinearLayout.LayoutParams desc=new LinearLayout.LayoutParams(-1,-2);
+        desc.topMargin=dp(5);right.addView(description,desc);
+        LinearLayout cards=new LinearLayout(this);cards.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,dp(62));
+        cp.topMargin=dp(13);right.addView(cards,cp);
+        harmonyWeatherValue=text("Unavailable",13,Color.WHITE);
+        harmonyWeatherCard=harmonyInfoCard("LOCAL WEATHER",harmonyWeatherValue,this::showWeatherForecast);
+        harmonyDateValue=text("",13,Color.WHITE);
+        View calendar=harmonyInfoCard("TODAY",harmonyDateValue,null);
+        TextView scenery=text("Scenery",13,Color.WHITE);
+        View explore=harmonyInfoCard("EXPLORE",scenery,
+                ()->launch(new Intent(this,LandscapeActivity.class)));
+        for(View item:new View[]{harmonyWeatherCard,calendar,explore}){
+            LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,-1,1);
+            params.setMargins(dp(3),0,dp(3),0);cards.addView(item,params);
+        }
+        harmonyClock.active(resumed&&!prefs.getBoolean("hide_clock",false));
+        return stage;
+    }
+    private View harmonyInfoCard(String title,TextView value,Runnable action){
+        LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setGravity(Gravity.CENTER_VERTICAL);panel.setPadding(dp(10),dp(5),dp(8),dp(5));
+        panel.setBackground(GlassOsUi.panel(this,19));
+        TextView name=text(title,9,0xffaacfe5);name.setSingleLine();name.setLetterSpacing(.05f);
+        value.setSingleLine();value.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        value.setTypeface(value.getTypeface(),android.graphics.Typeface.BOLD);
+        panel.addView(name);panel.addView(value);
+        if(action!=null){
+            panel.setFocusable(true);panel.setClickable(true);
+            panel.setContentDescription(title+". Open.");
+            panel.setOnClickListener(v->action.run());
+            panel.setOnFocusChangeListener((v,focus)->{
+                android.graphics.drawable.GradientDrawable bg=GlassOsUi.panel(this,19);
+                bg.setStroke(dp(focus?2:1),focus?0xffe5f8ff:0x668db7d3);
+                v.setBackground(bg);
+            });
+            panel.setOnKeyListener((v,key,event)->{
+                if(event.getAction()==KeyEvent.ACTION_DOWN&&key==KeyEvent.KEYCODE_DPAD_DOWN&&grid!=null){
+                    grid.focusKey(focusedPkg);return true;
+                }
+                return false;
+            });
+        }
+        return panel;
+    }
+    private void harmonyClockSettings(){
+        if(!harmony())return;
+        String[] names={"Watch face","Metal finish","Clock accent","Second hand","Time format","Clock size","Hide clock"};
+        String[] hints={"Heritage, Chronograph, Skeleton","Space Blue, Obsidian, Titanium, Ceramic",
+                "Ice blue, Gold or Rose","Smooth sweep or Quartz tick","12-hour or 24-hour",
+                "Fit the clock on the TV","Show or hide the dial"};
+        int[] icons={R.drawable.ic_clock,R.drawable.ic_palette,R.drawable.ic_palette,R.drawable.ic_clock,
+                R.drawable.ic_clock,R.drawable.ic_clock,R.drawable.ic_clock};
+        GlassSettings.options(this,"Harmony Vision Clock",names,hints,icons,which->{
+            switch(which){
+                case 0:chooseSetting("Watch face",new String[]{"Heritage","Chronograph","Skeleton"},
+                        i->{prefs.edit().putInt("harmony_clock_face",i).apply();if(harmonyClock!=null)harmonyClock.configure(prefs);});break;
+                case 1:chooseSetting("Metal finish",new String[]{"Space Blue","Obsidian","Titanium","Ceramic"},
+                        i->{prefs.edit().putInt("harmony_clock_finish",i).apply();if(harmonyClock!=null)harmonyClock.configure(prefs);});break;
+                case 2:chooseSetting("Clock accent",new String[]{"Ice Blue","Gold","Rose"},
+                        i->{prefs.edit().putInt("harmony_clock_accent",i).apply();if(harmonyClock!=null)harmonyClock.configure(prefs);});break;
+                case 3:chooseSetting("Second hand",new String[]{"Smooth sweep","Quartz tick"},
+                        i->{prefs.edit().putBoolean("harmony_clock_sweep",i==0).apply();if(harmonyClock!=null)harmonyClock.configure(prefs);});break;
+                case 4:chooseSetting("Time format",new String[]{"12-hour","24-hour"},
+                        i->{prefs.edit().putBoolean("time_24h",i==1).apply();if(harmonyClock!=null)harmonyClock.configure(prefs);updateClock();});break;
+                case 5:chooseSetting("Harmony clock size",new String[]{"Small","Normal","Large"},
+                        i->{prefs.edit().putInt("harmony_clock_size",i).apply();buildHomeSoon();});break;
+                case 6:chooseSetting("Hide clock",new String[]{"Show","Hide"},
+                        i->{prefs.edit().putBoolean("hide_clock",i==1).apply();buildHomeSoon();});break;
+            }
+        });
     }
     private Bitmap avatarBitmap;
     private Bitmap customWallpaper;
@@ -455,6 +563,8 @@ public final class PersonalHomeActivity extends Activity {
         if(telemetry!=null){telemetry.stop();telemetry=null;}
         if(weatherWidget!=null){weatherWidget.active(false);weatherWidget=null;}
         if(analogClock!=null){analogClock.active(false);analogClock=null;}
+        if(harmonyClock!=null){harmonyClock.active(false);harmonyClock=null;}
+        harmonyWeatherValue=null;harmonyDateValue=null;harmonyGreetingValue=null;harmonyWeatherCard=null;
         clockDatesInline=glassOs()&&getResources().getConfiguration().screenWidthDp>=700&&!weatherWidgetEnabled()&&prefs.getInt("clock_style",0)!=1;
         islamicDate=null;bluetoothStatus=null;focusedSpotlight=null;
         HeaderAppearance.clockDefaults(prefs);
@@ -480,6 +590,12 @@ public final class PersonalHomeActivity extends Activity {
         sky.setScaleX(1.06f);
         sky.setScaleY(1.06f);
         root.addView(sky, new ViewGroup.LayoutParams(-1, -1));
+        if(harmony()&&tv){
+            View tint=new View(this);
+            tint.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                    new int[]{0x6d132f49,0x97071c35}));
+            root.addView(tint,new ViewGroup.LayoutParams(-1,-1));
+        }
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(glassOs());
         scroll.setClipToPadding(false);
@@ -633,7 +749,7 @@ public final class PersonalHomeActivity extends Activity {
         time.setTypeface(android.graphics.Typeface.create(
                 ThemeStyle.clockFontFamily(prefs),ThemeStyle.clockBold(prefs)?android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL));
         // Analog mode uses a bounded independent dial, including on the Glass gradient.
-        boolean analogClock = prefs.getInt("clock_style", 0) == 1;
+        boolean analogClock = prefs.getInt("clock_style", 0) == 1 && !harmony();
         // AM/PM is a separate view, not a span: it can never be clipped when
         // seconds make the string longest. (User 2026-11-01.)
         ampm = text("", Math.max(14, (int) (clockSize * 0.42f)), TEXT);
@@ -731,10 +847,10 @@ public final class PersonalHomeActivity extends Activity {
         grid = new HomeAppGrid<>(this, app -> app.info.activityInfo.packageName,
                 (app, width) -> createAppTile(app, width, carriedApp != null && app.info.activityInfo.packageName.equals(carriedApp.info.activityInfo.packageName)));
         grid.setReferenceExpansion(glassOs());
-        grid.setUpFromApps(() -> { if(weatherWidget!=null&&weatherWidget.isShown())weatherWidget.requestFocus();else if (searchButton != null) searchButton.requestFocus(); });
+        grid.setUpFromApps(() -> { if(harmonyWeatherCard!=null&&harmonyWeatherCard.isShown())harmonyWeatherCard.requestFocus();else if(weatherWidget!=null&&weatherWidget.isShown())weatherWidget.requestFocus();else if(searchButton!=null)searchButton.requestFocus(); });
         grid.setClipChildren(false);
         if(glassOs()) {
-            grid.setId(R.id.grid);grid.setPadding(0,dp(16),0,dp(18));
+            grid.setId(R.id.grid);grid.setPadding(0,dp(harmony()?7:16),0,dp(harmony()?7:18));
             grid.addItemDecoration(new DockDecoration.Reflections());
         }
         grid.setClipToPadding(glassOs());
@@ -760,7 +876,9 @@ public final class PersonalHomeActivity extends Activity {
         int align = clockAlignment();
         LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(-1, -2);
         clockParams.gravity = new int[]{Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END}[align];
-        if(glassOs()||weatherWidgetEnabled()) {
+        if(harmony()&&tv&&!prefs.getBoolean("apps_only",false)) {
+            scrollContent.addView(harmonyHero(),new LinearLayout.LayoutParams(-1,-2));
+        } else if(glassOs()||weatherWidgetEnabled()) {
             LinearLayout stage=new LinearLayout(this);stage.setGravity(Gravity.CENTER_VERTICAL|Gravity.END);
             boolean wide=getResources().getConfiguration().screenWidthDp>=700;
             stage.setOrientation(wide?LinearLayout.HORIZONTAL:LinearLayout.VERTICAL);
@@ -794,7 +912,11 @@ public final class PersonalHomeActivity extends Activity {
         scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
         boolean referenceStage=glassOs()&&!prefs.getBoolean("apps_only",false);
         page.addView(scroll, referenceStage?new LinearLayout.LayoutParams(-1,0,1):new LinearLayout.LayoutParams(-1,-2));
-        if(ThemeStyle.custom(prefs)||glassOs()) appHeading.setVisibility(View.GONE);
+        if(harmony()){
+            appHeading.setText("YOUR FAVORITES");appHeading.setTextSize(11);
+            appHeading.setLetterSpacing(.16f);appHeading.setPadding(dp(9),dp(3),0,dp(5));
+            appHeading.setVisibility(View.VISIBLE);
+        }else if(ThemeStyle.custom(prefs)||glassOs())appHeading.setVisibility(View.GONE);
         page.addView(appHeading);
         page.addView(appBody,referenceStage?new LinearLayout.LayoutParams(-1,referenceDockHeight()):new LinearLayout.LayoutParams(-1,0,1));
         // Focus-glow tracker: keep the wallpaper glow on the focused tile no matter
@@ -900,6 +1022,8 @@ public final class PersonalHomeActivity extends Activity {
             ampm.setVisibility(analog ? View.INVISIBLE : (ampmText.isEmpty() ? View.GONE : View.VISIBLE));
         }
         date.setText(new java.text.SimpleDateFormat("EEE, d MMM yyyy", Locale.ENGLISH).format(now.getTime()));
+        if(harmonyDateValue!=null)harmonyDateValue.setText(new java.text.SimpleDateFormat("EEE, d MMM",Locale.ENGLISH).format(now.getTime()));
+        if(harmonyGreetingValue!=null)harmonyGreetingValue.setText(greetingText().toUpperCase(Locale.ENGLISH));
         if(islamicDate!=null)try{
             java.time.LocalDate today=java.time.LocalDate.of(now.get(Calendar.YEAR),now.get(Calendar.MONTH)+1,now.get(Calendar.DAY_OF_MONTH));
             islamicDate.setText(HijriCalendar.format(today,prefs.getInt("hijri_adjustment",0)));
@@ -1010,7 +1134,7 @@ public final class PersonalHomeActivity extends Activity {
         if(homeWeather==null||!resumed||isDestroyed())return;
         String cacheKey=weatherCacheKey();long now=System.currentTimeMillis();boolean widget=weatherWidgetEnabled(),forecastNeeded=weatherNeedsForecast();
         String requestKey=cacheKey+(forecastNeeded?"|forecast":"|current");
-        handler.removeCallbacks(weatherRefresh);homeWeather.setVisibility(widget?View.GONE:View.VISIBLE);
+        handler.removeCallbacks(weatherRefresh);homeWeather.setVisibility(widget||harmony()?View.GONE:View.VISIBLE);
         if(!weatherOnline()){setHomeWeather("Unavailable");bindWeatherForecast(null);nextWeatherAttempt=0;handler.postDelayed(weatherRefresh,60_000L);return;}
         WeatherSettings.resolvePhonePlace(this, false);
         String cached=prefs.getString("weather_cached",null);long cachedAt=prefs.getLong("weather_cached_at",0);
@@ -1052,7 +1176,7 @@ public final class PersonalHomeActivity extends Activity {
                 boolean online=weatherOnline();setHomeWeather(online&&value!=null?value:"Unavailable");
                 WeatherForecast ready=result!=null?result:weatherSnapshot!=null&&HomeWeatherPolicy.fresh("forecast",weatherSnapshotKey,cacheKey,weatherSnapshotAt,System.currentTimeMillis(),WEATHER_CACHE_MS)?weatherSnapshot:null;
                 bindWeatherForecast(online?ready:null);
-                homeWeather.setVisibility(weatherWidgetEnabled()?View.GONE:View.VISIBLE);
+                homeWeather.setVisibility(weatherWidgetEnabled()||harmony()?View.GONE:View.VISIBLE);
                 handler.removeCallbacks(weatherRefresh);
                 if((weatherNeedsForecast()&&!forecastNeeded)||weatherForceRefresh){nextWeatherAttempt=0;handler.post(weatherRefresh);}
                 else handler.postDelayed(weatherRefresh,value==null?60_000L:Math.max(60_000L,WEATHER_CACHE_MS-(System.currentTimeMillis()-fetchedAt)));
@@ -1063,6 +1187,7 @@ public final class PersonalHomeActivity extends Activity {
     /** Cache key: changes when city or units change, invalidating the cache. */
     private void setHomeWeather(String value) {
         homeWeather.setText(ThemeStyle.custom(prefs)?value.replace(" · "," "):value);
+        if(harmonyWeatherValue!=null)harmonyWeatherValue.setText(value);
         if(ThemeStyle.custom(prefs)&&!"Unavailable".equals(value)) {
             StatusWeatherGlyph glyph=new StatusWeatherGlyph(value,Calendar.getInstance().get(Calendar.HOUR_OF_DAY),HeaderAppearance.foreground(prefs));
             glyph.setBounds(0,0,dp(22),dp(22)); homeWeather.setCompoundDrawablePadding(dp(6));
@@ -1261,7 +1386,7 @@ public final class PersonalHomeActivity extends Activity {
     private void renderApps(List<App> apps) {
         boolean restoreFocus = !grid.footerFocusedOrPending()&&(grid.hasFocus() || (focusedPkg != null && !hasWindowFocus()));
         cachedApps = apps;
-        appHeading.setText(R.string.h_your_apps);
+        appHeading.setText(harmony()?"YOUR FAVORITES":getString(R.string.h_your_apps));
         HomeLibraryStore library = new HomeLibraryStore(this);
         List<App> visible = orderedApps(apps);
         Set<String> hidden = prefs.getStringSet("hidden_apps", Collections.emptySet());
@@ -1411,7 +1536,9 @@ public final class PersonalHomeActivity extends Activity {
         int spacing=Math.max(0,Math.min(2,prefs.getInt("tile_spacing",1)));
         int margin=(tvGlass()?new int[]{dp(6),dp(10),dp(16)}:new int[]{dp(4),dp(8),dp(14)})[spacing];
         int widthDp=Math.round((GlassDockLayout.compactCellWidth(cellWidth*columns,columns)-margin*2)/getResources().getDisplayMetrics().density);
-        return dp(GlassDockLayout.iconTileHeight(widthDp,getResources().getConfiguration().screenHeightDp,referenceCaptionHeight()));
+        int height=GlassDockLayout.iconTileHeight(widthDp,getResources().getConfiguration().screenHeightDp,referenceCaptionHeight());
+        if(harmony())height=Math.max(referenceCaptionHeight()+55,Math.round(height*.79f));
+        return dp(height);
     }
     private int referenceCaptionHeight(){return GlassDockLayout.captionHeight(prefs.getInt("app_label_size",16),getResources().getConfiguration().fontScale);}
     private int referenceDockHeight(){
@@ -1420,7 +1547,8 @@ public final class PersonalHomeActivity extends Activity {
         int card=referenceCardHeight(available/cols,cols);
         int spacing=Math.max(0,Math.min(2,prefs.getInt("tile_spacing",1)));
         int margin=new int[]{6,8,12}[spacing];
-        return card+dp(GlassDockLayout.reflectionHeight(Math.round(card/getResources().getDisplayMetrics().density))+margin*2+44)+(harmony()?dp(8):0);
+        if(harmony())return card+dp(GlassDockLayout.reflectionHeight(Math.round(card/getResources().getDisplayMetrics().density))+margin*2+18);
+        return card+dp(GlassDockLayout.reflectionHeight(Math.round(card/getResources().getDisplayMetrics().density))+margin*2+44);
     }
     private View createAppTile(App app, int width, boolean moving) {
         requestAppIcon(app);
@@ -1963,6 +2091,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void clockSettings() {
+        if(harmony()&&tv){harmonyClockSettings();return;}
         String[] labels = {"Clock size", "Clock style", "Clock font", "Time format", "Clock alignment", "Clock seconds", "Clock glow", "Clock shadow", "Hide clock", "Hide greeting", "Hijri day adjustment"};
         String[] hints = {"Small, normal or large", "Digital or analog", "Bold, serif or mono", "12-hour or 24-hour", "Left, center or right", "Show seconds", "Halo behind the clock", "Shadow for readability", "Hide the clock", "Hide the greeting", "Adjust for local moon sighting"};
         int[] icons = {R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock};
@@ -2299,6 +2428,11 @@ public final class PersonalHomeActivity extends Activity {
             case "App entrance": return prefs.getBoolean("app_entrance", true) ? 1 : 0;
             case "Clock size": return indexOf(ThemeStyle.custom(prefs)?DemoGeometry.clockSizes(tv):tv?new int[]{42,52,62}:new int[]{36,44,52},prefs.getInt("clock_size",tv?52:44));
             case "Clock style": return prefs.getInt("clock_style", 0);
+            case "Watch face": return prefs.getInt("harmony_clock_face",0);
+            case "Metal finish": return prefs.getInt("harmony_clock_finish",0);
+            case "Clock accent": return prefs.getInt("harmony_clock_accent",0);
+            case "Second hand": return prefs.getBoolean("harmony_clock_sweep",true)?0:1;
+            case "Harmony clock size": return prefs.getInt("harmony_clock_size",1);
             case "Clock font": return prefs.getInt("clock_font", 0);
             case "Home weather widget": return prefs.getBoolean("weather_widget",ThemeStyle.id(prefs)==ThemeStyle.GLASS)?0:1;
             case "Widget animation": return prefs.getBoolean("weather_widget_animation",true)?0:1;
@@ -2718,7 +2852,7 @@ public final class PersonalHomeActivity extends Activity {
         super.onResume();
         resumed = true;
         if(bluetooth!=null){bluetooth.start();updateBluetooth();}
-        if(telemetry!=null)telemetry.start();if(weatherWidget!=null)weatherWidget.active(true);if(analogClock!=null)analogClock.active(true);
+        if(telemetry!=null)telemetry.start();if(weatherWidget!=null)weatherWidget.active(true);if(analogClock!=null)analogClock.active(true);if(harmonyClock!=null)harmonyClock.active(true);
         GitHubUpdates.resume(this);
         VolumeAutoStart.request(this);
         HomeAutomation.onResume(this);
@@ -2752,7 +2886,7 @@ public final class PersonalHomeActivity extends Activity {
         VolumeKeys.stop();
         VolumeSlider.hide(this);
         resumed = false;
-        if(weatherWidget!=null)weatherWidget.active(false);if(analogClock!=null)analogClock.active(false);
+        if(weatherWidget!=null)weatherWidget.active(false);if(analogClock!=null)analogClock.active(false);if(harmonyClock!=null)harmonyClock.active(false);
         if(bluetooth!=null)bluetooth.stop();if(telemetry!=null)telemetry.stop();
         if (grid != null && grid.getLayoutManager() != null) gridState = grid.getLayoutManager().onSaveInstanceState();
         if (focusedPkg != null) prefs.edit().putString("home_focus_pkg", focusedPkg).apply();
@@ -2809,7 +2943,7 @@ public final class PersonalHomeActivity extends Activity {
         if (liquidBackdrop != null) { liquidBackdrop.close(); liquidBackdrop=null; }
         if (headerBackdrop != null) { headerBackdrop.close(); headerBackdrop=null; }
         unregisterReceiver(appChanges);
-        if(weatherWidget!=null)weatherWidget.active(false);if(analogClock!=null)analogClock.active(false);if(forecastPanel!=null)forecastPanel.close();
+        if(weatherWidget!=null)weatherWidget.active(false);if(analogClock!=null)analogClock.active(false);if(harmonyClock!=null)harmonyClock.active(false);if(forecastPanel!=null)forecastPanel.close();
         if(bluetooth!=null)bluetooth.stop();if(telemetry!=null)telemetry.stop();
         if(appLibrary!=null)appLibrary.close();
         if (panel != null) panel.dismiss();
