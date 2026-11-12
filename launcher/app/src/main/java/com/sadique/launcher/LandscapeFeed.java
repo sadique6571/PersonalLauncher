@@ -173,13 +173,13 @@ final class LandscapeFeed {
     /** Visually reviewed solo portraits. The CDN crop is pinned to keep the subject in the wide frame. */
     private static List<Scene> portraits() {
         List<Scene> result = new ArrayList<>();
-        portrait(result, "1764740146693-4955d02c98f9", "Outdoor portrait · South Asia", .43); // Akugnc8ROwg
+        portrait(result, "1764740146693-4955d02c98f9", "Outdoor portrait · South Asia", .55); // Akugnc8ROwg
         portrait(result, "1771507057202-353aee0a508e", "Traditional attire · Bangladesh", .37); // DsQtyCdU2QY
         portrait(result, "1778148046680-cd802a2199ea", "Garden portrait · India", .48); // 7wY-3plrc48
         portrait(result, "1745690720220-24e337e571c7", "Maasai portrait · Kenya", .42); // JlK7DNQvRxE
-        portrait(result, "1762368229295-81f2742fb8a5", "Schäfler at sunset · Switzerland", .67); // w7h4KYsuYk4
+        portrait(result, "1762368229295-81f2742fb8a5", "Schäfler at sunset · Switzerland", .55); // w7h4KYsuYk4
         portrait(result, "1698357856852-100709daa31e", "Autumn in the Alps · Switzerland", .59); // 10-KHNApcRQ
-        portrait(result, "1513266913343-a1bfd2ffd806", "Portrait · Peru", .42); // B0U_OFXXSNo
+        portrait(result, "1513266913343-a1bfd2ffd806", "Portrait · Peru", .32); // B0U_OFXXSNo
         return result;
     }
 
