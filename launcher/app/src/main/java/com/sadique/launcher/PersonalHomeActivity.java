@@ -208,6 +208,19 @@ public final class PersonalHomeActivity extends Activity {
         harmonyClock.active(resumed&&!prefs.getBoolean("hide_clock",false));
         return stage;
     }
+    /** Strict focus bridge; no geometric focus jump from Watch Next into hidden controls. */
+    boolean onHarmonyContinueKey(int key){
+        if(key==KeyEvent.KEYCODE_DPAD_DOWN){
+            if(grid!=null){grid.focusKey(focusedPkg);return true;}
+            return false;
+        }
+        if(key==KeyEvent.KEYCODE_DPAD_UP){
+            if(harmonyClock!=null&&harmonyClock.isShown())return harmonyClock.requestFocus();
+            if(weatherWidget!=null&&weatherWidget.isShown())return weatherWidget.requestFocus();
+            if(searchButton!=null)return searchButton.requestFocus();
+        }
+        return false;
+    }
     private void harmonyClockSettings(){
         if(!harmony())return;
         String[] names={"Watch face","Metal finish","Clock accent","Second hand","Time format","Clock size","Hide clock","Daily thoughts"};
