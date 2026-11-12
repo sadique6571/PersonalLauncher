@@ -13,13 +13,14 @@ final class OnlineContent {
         return host.equals("images.unsplash.com")
                 || host.equals("api.open-meteo.com") || host.equals("geocoding-api.open-meteo.com") || host.equals("wttr.in")
                 || host.equals("picsum.photos") || host.equals("fastly.picsum.photos")
-                || host.equals("nominatim.openstreetmap.org") || host.equals("www.bing.com");
+                || host.equals("nominatim.openstreetmap.org") || host.equals("www.bing.com")
+                || host.equals("commons.wikimedia.org") || host.equals("upload.wikimedia.org");
     }
 
     private static boolean imageHost(String host) {
         return host.equals("images.unsplash.com")
                 || host.equals("picsum.photos") || host.equals("fastly.picsum.photos")
-                || host.equals("www.bing.com");
+                || host.equals("www.bing.com") || host.equals("upload.wikimedia.org");
     }
 
     static byte[] get(String address, int limit) throws IOException {
