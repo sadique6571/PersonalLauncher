@@ -155,7 +155,7 @@ public final class PersonalHomeActivity extends Activity {
         harmonyClock.setOnClickListener(v->harmonyClockSettings());
         harmonyClock.setOnKeyListener((v,key,event)->{
             if(event.getAction()!=KeyEvent.ACTION_DOWN)return false;
-            if(key==KeyEvent.KEYCODE_DPAD_DOWN&&grid!=null){grid.focusKey(focusedPkg);return true;}
+            if(key==KeyEvent.KEYCODE_DPAD_DOWN&&grid!=null){if(continueWatching!=null&&continueWatching.isShown()&&continueWatching.focusEntry())return true;grid.focusKey(focusedPkg);return true;}
             if(key==KeyEvent.KEYCODE_DPAD_RIGHT&&weatherWidget!=null){weatherWidget.requestFocus();return true;}
             if(key==KeyEvent.KEYCODE_DPAD_UP&&searchButton!=null){searchButton.requestFocus();return true;}
             return false;
@@ -188,7 +188,7 @@ public final class PersonalHomeActivity extends Activity {
             harmonyWeatherCard=weatherWidget;
             weatherWidget.setOnKeyListener((v,key,event)->{
                 if(event.getAction()!=KeyEvent.ACTION_DOWN)return false;
-                if(key==KeyEvent.KEYCODE_DPAD_DOWN&&grid!=null){grid.focusKey(focusedPkg);return true;}
+                if(key==KeyEvent.KEYCODE_DPAD_DOWN&&grid!=null){if(continueWatching!=null&&continueWatching.isShown()&&continueWatching.focusEntry())return true;grid.focusKey(focusedPkg);return true;}
                 if(key==KeyEvent.KEYCODE_DPAD_UP&&searchButton!=null){searchButton.requestFocus();return true;}
                 if(key==KeyEvent.KEYCODE_DPAD_LEFT&&harmonyClock!=null&&harmonyClock.getParent()!=null){
                     harmonyClock.requestFocus();return true;
@@ -844,7 +844,10 @@ public final class PersonalHomeActivity extends Activity {
         grid = new HomeAppGrid<>(this, app -> app.info.activityInfo.packageName,
                 (app, width) -> createAppTile(app, width, carriedApp != null && app.info.activityInfo.packageName.equals(carriedApp.info.activityInfo.packageName)));
         grid.setReferenceExpansion(glassOs()&&(!harmony()||HarmonyVisionLayout.expandAppOnFocus()));
-        grid.setUpFromApps(() -> { if(harmony()&&harmonyClock!=null&&harmonyClock.isShown())harmonyClock.requestFocus();else if(weatherWidget!=null&&weatherWidget.isShown())weatherWidget.requestFocus();else if(searchButton!=null)searchButton.requestFocus(); });
+        grid.setUpFromApps(() -> { if(harmony()&&continueWatching!=null&&continueWatching.isShown()&&continueWatching.focusEntry())return;
+            if(harmony()&&harmonyClock!=null&&harmonyClock.isShown())harmonyClock.requestFocus();
+            else if(weatherWidget!=null&&weatherWidget.isShown())weatherWidget.requestFocus();
+            else if(searchButton!=null)searchButton.requestFocus(); });
         grid.setClipChildren(false);
         if(glassOs()) {
             grid.setId(R.id.grid);grid.setPadding(0,dp(harmony()?5:16),0,dp(harmony()?4:18));
@@ -865,7 +868,7 @@ public final class PersonalHomeActivity extends Activity {
         if(ThemeStyle.id(prefs)==ThemeStyle.COBALT) grid.addItemDecoration(new CobaltRails(dp(1)));
         if(ThemeStyle.custom(prefs)&&tv) grid.addOnLayoutChangeListener((v,l,t,rr,bb,ol,ot,orr,obb)->placeDemoCards());
         continueWatching = new ContinueWatchingView(this, label -> { if (!prefs.getBoolean("apps_only", false)) appHeading.setText(label); });
-        if (!prefs.getBoolean("apps_only", false)&&(!harmony()||HarmonyVisionLayout.showWatchNextFooter())) grid.setFooter(continueWatching);
+        if (!prefs.getBoolean("apps_only", false)&&!harmony()) grid.setFooter(continueWatching);
         appBody.addView(grid, new LinearLayout.LayoutParams(-1, -1));
         // Scrollable content: clock only. The "Your apps" header and the
         // drawer panel stay fixed below; tiles scroll inside the panel.
@@ -880,6 +883,8 @@ public final class PersonalHomeActivity extends Activity {
             LinearLayout.LayoutParams heroParams=new LinearLayout.LayoutParams(-1,-2);
             heroParams.bottomMargin=dp(HarmonyVisionLayout.heroBottomGapDp());
             scrollContent.addView(harmonyHero(),heroParams);
+            // A separate bounded Watch Next shelf below the clock, never overlaying app tiles.
+            scrollContent.addView(continueWatching,new LinearLayout.LayoutParams(-1,-2));
         } else if(glassOs()||weatherWidgetEnabled()) {
             LinearLayout stage=new LinearLayout(this);stage.setGravity(Gravity.CENTER_VERTICAL|Gravity.END);
             boolean wide=getResources().getConfiguration().screenWidthDp>=700;
