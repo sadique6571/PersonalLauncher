@@ -34,7 +34,7 @@ public final class LandscapeView extends FrameLayout {
     private ExecutorService weatherWorker;
     private boolean running, registered, photoBusy, weatherBusy, hasPhoto, networkOnline;
     private int generation;
-    private final java.util.Random photoRandom = new java.util.Random();
+    private LandscapeFeed photoFeed;
 
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
         @Override public void onAvailable(Network network) { handler.post(() -> networkChanged()); }
@@ -141,7 +141,8 @@ public final class LandscapeView extends FrameLayout {
         running = true;
         generation++;
         photoBusy = weatherBusy = false;
-        worker = Executors.newFixedThreadPool(2);
+        worker = Executors.newSingleThreadExecutor();
+        photoFeed = new LandscapeFeed();
         weatherWorker = Executors.newSingleThreadExecutor();
         networkOnline = false;
         city.setText(prefs.getString("weather_city", LandscapeModel.CITY));
@@ -229,32 +230,39 @@ public final class LandscapeView extends FrameLayout {
         if (!running || photoBusy || !online()) return;
         photoBusy = true;
         int request = generation;
-        int seed = photoRandom.nextInt();
+        LandscapeFeed feed = photoFeed;
         worker.execute(() -> {
             Bitmap result = null;
+            String subject = "";
             try (LandscapeHistory history = new LandscapeHistory(getContext())) {
                 for (int attempt = 0; attempt < 3 && result == null && !Thread.currentThread().isInterrupted(); attempt++) {
-                    LandscapeFeed.Scene scene = LandscapeFeed.photo(seed + attempt, System.nanoTime());
+                    LandscapeFeed.Scene scene = feed.next(history::contains);
+                    if (scene == null) break;
                     try {
-                        byte[] bytes = OnlineContent.get(scene.url, 6 * 1024 * 1024);
+                        byte[] bytes = OnlineContent.get(scene.url, 6 * 1024 * 1024, 5000, 8000);
                         BitmapFactory.Options bounds = new BitmapFactory.Options();
                         bounds.inJustDecodeBounds = true;
                         BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
-                        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) continue;
+                        if (!LandscapeFeed.wide(bounds.outWidth, bounds.outHeight)) continue;
                         bounds.inJustDecodeBounds = false; bounds.inSampleSize = 1;
                         while (Math.max(bounds.outWidth, bounds.outHeight) / bounds.inSampleSize > 1920) bounds.inSampleSize *= 2;
                         Bitmap decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
                         if (decoded == null) continue;
-                        if (!history.remember(scene.id, bytes)) { decoded.recycle(); continue; }
+                        if ((!scene.reviewedPortrait && !clearLandscape(decoded)) || !history.remember(scene.id, bytes, visualFingerprint(decoded))) {
+                            decoded.recycle();
+                            continue;
+                        }
                         result = decoded;
+                        subject = scene.subject;
                     } catch (Exception unavailable) {
-                        android.util.Log.w("PersonalLandscape", "Picsum image/history failed", unavailable);
+                        android.util.Log.w("PersonalLandscape", "Scenery photo unavailable", unavailable);
                     }
                 }
             } catch (Exception unavailable) {
                 android.util.Log.w("PersonalLandscape", "Photo history unavailable", unavailable);
             }
             Bitmap image = result;
+            String caption = subject;
             handler.post(() -> {
                 if (!running || request != generation) { if (image != null) image.recycle(); return; }
                 photoBusy = false;
@@ -263,7 +271,7 @@ public final class LandscapeView extends FrameLayout {
                     photo.animate().alpha(0f).setDuration(250).withEndAction(() -> {
                         if (!running || request != generation || !online()) { image.recycle(); return; }
                         photo.setImageBitmap(image);
-                        details.setText("");
+                        details.setText(caption);
                         photo.animate().alpha(1f).setDuration(500).start();
                     }).start();
                     hasPhoto = true;
@@ -272,12 +280,51 @@ public final class LandscapeView extends FrameLayout {
                     adaptClockColors();
                 } else {
                     if (image != null) image.recycle();
-                    status.setText("New photo unavailable · retrying automatically");
+                    photo.animate().cancel();
+                    photo.setImageDrawable(null);
+                    details.setText("");
+                    hasPhoto = false;
+                    status.setText(online() ? "New photo unavailable · retrying automatically" : "Offline · photos unavailable");
                     handler.removeCallbacks(photoRetry);
                     handler.postDelayed(photoRetry, 15_000);
                 }
             });
         });
+    }
+
+    private static long[] visualFingerprint(Bitmap image) {
+        int width = Math.min(image.getWidth(), Math.round(image.getHeight() * 16f / 9));
+        int height = Math.min(image.getHeight(), Math.round(image.getWidth() * 9f / 16));
+        int left = (image.getWidth() - width) / 2;
+        int top = (image.getHeight() - height) / 2;
+        int size = LandscapeFingerprint.SIZE;
+        Bitmap sample = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        try {
+            android.graphics.Canvas canvas = new android.graphics.Canvas(sample);
+            canvas.drawBitmap(image, new android.graphics.Rect(left, top, left + width, top + height),
+                    new android.graphics.Rect(0, 0, size, size), new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG));
+            int[] pixels = new int[size * size];
+            sample.getPixels(pixels, 0, size, 0, 0, size, size);
+            return LandscapeFingerprint.of(pixels);
+        } finally {
+            sample.recycle();
+        }
+    }
+
+    /** Supplement source filters with a lightweight on-device face check for live landscapes. */
+    private static boolean clearLandscape(Bitmap image) {
+        int width = 480;
+        int height = Math.max(1, Math.round((float) width * image.getHeight() / image.getWidth()));
+        Bitmap sample = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565);
+        try {
+            android.graphics.Canvas canvas = new android.graphics.Canvas(sample);
+            canvas.drawBitmap(image, null, new android.graphics.Rect(0, 0, width, height),
+                    new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG));
+            android.media.FaceDetector detector = new android.media.FaceDetector(width, height, 1);
+            return detector.findFaces(sample, new android.media.FaceDetector.Face[1]) == 0;
+        } finally {
+            sample.recycle();
+        }
     }
 
     private void requestWeather() {

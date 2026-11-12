@@ -48,17 +48,19 @@ final class ShellVolumePanel implements AutoCloseable {
                 data.enforceInterface(descriptor);
                 int stream = data.readInt();
                 int flags = data.readInt();
-                if (stream == 3) channel.signal();
+                int forwardedFlags = channel.isOpen() ? VolumePanelSession.flags(stream, flags) : flags;
                 Parcel filtered = Parcel.obtain();
                 try {
                     filtered.writeInterfaceToken(descriptor);
                     filtered.writeInt(stream);
                     // A lost app connection must not leave the user without a volume popup.
-                    filtered.writeInt(channel.isOpen() ? VolumePanelSession.flags(stream, flags) : flags);
+                    filtered.writeInt(forwardedFlags);
                     int remaining = data.dataAvail();
                     if (remaining > 0) filtered.appendFrom(data, data.dataPosition(), remaining);
                     filtered.setDataPosition(0);
-                    return original.transact(code, filtered, reply, transactionFlags);
+                    boolean forwarded = original.transact(code, filtered, reply, transactionFlags);
+                    if (forwarded && forwardedFlags != flags) channel.signal();
+                    return forwarded;
                 } finally { filtered.recycle(); }
             }
         };
@@ -85,7 +87,6 @@ final class ShellVolumePanel implements AutoCloseable {
         session.install();
         System.out.println("Launcher volume panel active: stock media-popup flag suppressed; warnings forwarded.");
     }
-    void signal() { channel.signal(); }
     boolean restoreFailed() { return restoreFailed; }
     @Override public void close() {
         try { session.close(); restoreFailed = false; }

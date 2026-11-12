@@ -3,14 +3,10 @@ package com.sadique.launcher;
 import android.accessibilityservice.AccessibilityService;
 import android.app.Activity;
 import android.content.Context;
-import android.content.BroadcastReceiver;
-import android.content.Intent;
-import android.content.IntentFilter;
 import android.graphics.PixelFormat;
 import android.media.AudioManager;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.Build;
 import android.os.SystemClock;
 import android.view.View;
 import android.util.Log;
@@ -27,91 +23,55 @@ final class VolumeSlider {
     private static GlassVolumeCapsule capsule;
     private static android.media.AudioDeviceCallback deviceCallback;
     private static AudioManager observedAudio;
-    private static boolean observedMute;
     private static long routeChecked;
     private static int routeIcon = R.drawable.ic_volume;
     private static final Runnable HIDE = VolumeSlider::hide;
     private static final java.util.Set<AccessibilityService> SERVICES = new java.util.LinkedHashSet<>();
     private static AccessibilityService observerOwner;
-    private static BroadcastReceiver receiver;
     private static VolumePanelUpdates direct;
-    private static long directUntil;
-    private static int observedVolume = -1;
     private static int maximum;
     private static int drawnStyle;
 
     private VolumeSlider() { }
 
-    /** Firmware can apply a volume key without delivering it to the key filter. Observe the actual
-     * stream change as well; both enabled helpers share one receiver and one window. */
+    /** Both accessibility services share one overlay and one endpoint for the shell relay. */
     static void observe(AccessibilityService service) {
         SERVICES.add(service);
-        if (receiver != null) return;
+        if (observerOwner != null) return;
         AudioManager audio = service.getSystemService(AudioManager.class);
         if (audio == null) return;
-        observedVolume = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
-        observedMute = audio.isStreamMute(AudioManager.STREAM_MUSIC);
+        observerOwner = service;
         direct = new VolumePanelUpdates(HANDLER::post, sentAt -> {
             long now = SystemClock.uptimeMillis();
             if (!VolumePanelUpdates.fresh(sentAt, now) || observerOwner != service) return;
-            directUntil = now + 2000;
             boolean first = panel == null || panel.getVisibility() != View.VISIBLE;
             boolean shown = show(service, audio);
             if (first && shown) Log.d("PersonalVolume", "direct panel UI applied, age=" + (SystemClock.uptimeMillis() - sentAt) + "ms");
         });
         VolumePanelBinder.attach(direct);
-        BroadcastReceiver changes = new BroadcastReceiver() {
-            @Override public void onReceive(Context context, Intent intent) {
-                if (!"android.media.VOLUME_CHANGED_ACTION".equals(intent.getAction())
-                        && !"android.media.STREAM_MUTE_CHANGED_ACTION".equals(intent.getAction())) return;
-                if (SystemClock.uptimeMillis() < directUntil) return;
-                int stream = intent.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", AudioManager.STREAM_MUSIC);
-                if (stream != AudioManager.STREAM_MUSIC) return;
-                int value = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
-                boolean muted = audio.isStreamMute(AudioManager.STREAM_MUSIC);
-                if (value == observedVolume && muted == observedMute) return;
-                observedVolume = value; observedMute = muted;
-                Log.d("PersonalVolume", "stream changed: " + value);
-                show(service, audio);
+        observedAudio = audio;
+        deviceCallback = new android.media.AudioDeviceCallback() {
+            private void changed() {
+                routeChecked = 0;
+                if (panel != null && panel.getVisibility() == View.VISIBLE) show(service, audio);
             }
+            @Override public void onAudioDevicesAdded(android.media.AudioDeviceInfo[] devices) { changed(); }
+            @Override public void onAudioDevicesRemoved(android.media.AudioDeviceInfo[] devices) { changed(); }
         };
-        try {
-            IntentFilter filter = new IntentFilter("android.media.VOLUME_CHANGED_ACTION");
-            filter.addAction("android.media.STREAM_MUTE_CHANGED_ACTION");
-            // Read AudioManager, not broadcast extras. Privileged vendor audio processes may be senders.
-            if (Build.VERSION.SDK_INT >= 33) service.registerReceiver(changes, filter, Context.RECEIVER_EXPORTED);
-            else service.registerReceiver(changes, filter);
-            observerOwner = service; receiver = changes;
-            observedAudio = audio;
-            deviceCallback = new android.media.AudioDeviceCallback() {
-                private void changed() {
-                    routeChecked = 0;
-                    if (panel != null && panel.getVisibility() == View.VISIBLE) show(service, audio);
-                }
-                @Override public void onAudioDevicesAdded(android.media.AudioDeviceInfo[] devices) { changed(); }
-                @Override public void onAudioDevicesRemoved(android.media.AudioDeviceInfo[] devices) { changed(); }
-            };
-            try { audio.registerAudioDeviceCallback(deviceCallback, HANDLER); }
-            catch (RuntimeException unavailable) { deviceCallback = null; }
-            Log.d("PersonalVolume", "volume observer connected: " + service.getClass().getSimpleName());
-        } catch (RuntimeException unavailable) {
-            Log.w("PersonalVolume", "Volume observer unavailable", unavailable);
-            if (direct != null) { VolumePanelBinder.detach(direct); direct.close(); }
-            direct = null;
-        }
+        try { audio.registerAudioDeviceCallback(deviceCallback, HANDLER); }
+        catch (RuntimeException unavailable) { deviceCallback = null; }
+        Log.d("PersonalVolume", "volume observer connected: " + service.getClass().getSimpleName());
     }
 
     static void release(AccessibilityService service) {
         SERVICES.remove(service);
         hide(service);
         if (observerOwner != service) return;
-        try { service.unregisterReceiver(receiver); }
-        catch (RuntimeException detached) { /* Android may already have removed the service. */ }
         if (observedAudio != null && deviceCallback != null) observedAudio.unregisterAudioDeviceCallback(deviceCallback);
         observedAudio = null; deviceCallback = null;
         if (direct != null) { VolumePanelBinder.detach(direct); direct.close(); }
-        direct = null; directUntil = 0;
-        observerOwner = null; receiver = null;
+        direct = null;
+        observerOwner = null;
         if (!SERVICES.isEmpty()) observe(SERVICES.iterator().next());
     }
 
@@ -154,20 +114,12 @@ final class VolumeSlider {
     private static void update(AudioManager audio, boolean animate) {
         int value=audio.getStreamVolume(AudioManager.STREAM_MUSIC);
         boolean muted=audio.isStreamMute(AudioManager.STREAM_MUSIC);
-        observedVolume=value;observedMute=muted;
         int accent=GlassSettings.themeAccent(owner);
         long now=SystemClock.uptimeMillis();
         if(routeChecked==0||now-routeChecked>=500){routeIcon=AudioOutputIcon.resource(audio);routeChecked=now;}
         int icon=muted||value==0?R.drawable.ic_volume_muted:routeIcon;
         int percent=VolumeLevel.percent(value,maximum,muted);
         capsule.state(VolumeLevel.fraction(value,maximum,muted),percent,muted,icon,accent,animate);
-    }
-    /** Show immediately, then read the result after the firmware handles the native mute key. */
-    static void nativeMute(Context context) {
-        AudioManager audio = context.getSystemService(AudioManager.class);
-        if (audio == null) return;
-        show(context, audio);
-        HANDLER.postDelayed(() -> { if (owner != null) show(owner, audio); }, 70);
     }
     private static void scheduleHide() { HANDLER.removeCallbacks(HIDE); HANDLER.postDelayed(HIDE, 1600); }
     static void hide(Context context) { if (owner == context) dispose(); }

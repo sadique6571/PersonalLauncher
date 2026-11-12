@@ -22,7 +22,6 @@ import android.widget.Toast;
 public final class QuickSettingsActivity extends Activity {
     private AlertDialog panel, gate;
     private boolean authorized;
-    private GlassBluetooth bluetooth;
     private final Handler main=new Handler(Looper.getMainLooper());
     @Override protected void attachBaseContext(android.content.Context base) {
         super.attachBaseContext(LauncherLocale.wrap(base));
@@ -30,7 +29,6 @@ public final class QuickSettingsActivity extends Activity {
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         overridePendingTransition(0,0);
-        bluetooth=new GlassBluetooth(this,()->{});
         FrameLayout scrim=new FrameLayout(this); scrim.setBackgroundColor(android.graphics.Color.TRANSPARENT);
         scrim.setOnClickListener(v->finish()); setContentView(scrim);
         gate=LauncherPin.require(this,()-> {
@@ -43,14 +41,15 @@ public final class QuickSettingsActivity extends Activity {
     private void showPanel() {
         panel=HomeDashboard.show(this,network(),()->{},new HomeDashboard.Actions() {
             @Override public boolean keepPanel(int action) {
-                return (action==HomeDashboard.BLUETOOTH && (ThemeStyle.id(ThemePreferences.get(QuickSettingsActivity.this))==ThemeStyle.GLASS || ThemeStyle.harmony(ThemePreferences.get(QuickSettingsActivity.this)))) || action==HomeDashboard.INPUTS || action==HomeDashboard.DISPLAY || action==HomeDashboard.SOUND;
+                return action==HomeDashboard.INPUTS || action==HomeDashboard.DISPLAY || action==HomeDashboard.SOUND;
             }
             @Override public void open(int action) {
                 switch(action) {
                     case HomeDashboard.SETTINGS:
                         openActivity(new Intent(QuickSettingsActivity.this,MainActivity.class).setAction(MainActivity.ACTION_LAUNCHER_SETTINGS)); break;
+                    case HomeDashboard.SYSTEM: openActivity(SystemSettings.intent(QuickSettingsActivity.this, Settings.ACTION_SETTINGS)); break;
                     case HomeDashboard.WIFI: openActivity(SystemSettings.intent(QuickSettingsActivity.this,Settings.ACTION_WIFI_SETTINGS)); break;
-                    case HomeDashboard.BLUETOOTH: if((ThemeStyle.id(ThemePreferences.get(QuickSettingsActivity.this))==ThemeStyle.GLASS || ThemeStyle.harmony(ThemePreferences.get(QuickSettingsActivity.this))))bluetooth.show();else openActivity(SystemSettings.bluetoothAccessoriesIntent(QuickSettingsActivity.this)); break;
+                    case HomeDashboard.BLUETOOTH: SystemSettings.openBluetoothAccessories(QuickSettingsActivity.this); finish(); break;
                     case HomeDashboard.INPUTS: inputs(); break;
                     case HomeDashboard.DISPLAY: TvControlPreview.show(QuickSettingsActivity.this,true); break;
                     case HomeDashboard.SOUND: TvControlPreview.show(QuickSettingsActivity.this,false); break;
@@ -91,18 +90,11 @@ public final class QuickSettingsActivity extends Activity {
         finish();
     }
     @Override protected void onNewIntent(Intent intent) { super.onNewIntent(intent); finish(); }
-    @Override protected void onPause() { if(bluetooth!=null)bluetooth.stop();super.onPause();if(bluetooth==null||!bluetooth.requestingPermission){finish();overridePendingTransition(0,0);} }
+    @Override protected void onPause() { super.onPause(); finish(); overridePendingTransition(0,0); }
     @Override protected void onDestroy() {
         if(gate!=null) { gate.setOnDismissListener(null); gate.dismiss(); }
         if(panel!=null) { panel.setOnDismissListener(null); panel.dismiss(); }
         main.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
-    @Override protected void onResume(){super.onResume();if(bluetooth!=null)bluetooth.start();}
-    @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){
-        super.onRequestPermissionsResult(code,permissions,results);
-        if(code==GlassBluetooth.PERMISSION)bluetooth.requestingPermission=false;
-        if(code==GlassBluetooth.PERMISSION && results.length>0 && results[0]==android.content.pm.PackageManager.PERMISSION_GRANTED){bluetooth.stop();bluetooth.start();bluetooth.show();}
-    }
-
 }

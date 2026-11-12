@@ -10,6 +10,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
 /** One bounded viewport for app tiles and the full-width content shelf. Never nested in a ScrollView. */
@@ -20,7 +21,9 @@ final class HomeAppGrid<T> extends RecyclerView {
     private final Function<T, String> key;
     private final Factory<T> factory;
     private List<T> items = Collections.emptyList();
-    private View footer;
+    private View header, footer;
+    private BooleanSupplier pendingHeaderFocus;
+    private static final int HEADER_TYPE = 2;
     private boolean pendingFooter;
     private String pendingFocus;
     private String lastAppKey,footerReturnKey,returnVisibleKey;
@@ -47,18 +50,24 @@ final class HomeAppGrid<T> extends RecyclerView {
     @Override protected void onDetachedFromWindow(){removeCallbacks(applyExpansion);if(expansionAnimator!=null)expansionAnimator.cancel();super.onDetachedFromWindow();}
     private Runnable upFromApps;
     void setUpFromApps(Runnable action) { upFromApps = action; }
-    void cancelPendingFocus() { pendingFocus = null; pendingFooter=false; }
+    void cancelPendingFocus() { pendingFocus = null; pendingFooter = false; pendingHeaderFocus = null; }
 
     HomeAppGrid(Context context, Function<T, String> key, Factory<T> factory) {
         super(context);
         this.key = key; this.factory = factory;
         manager = new GridLayoutManager(context, 4){
+            @Override public void onLayoutCompleted(RecyclerView.State state) {
+                super.onLayoutCompleted(state);
+                if (pendingHeaderFocus != null) post(HomeAppGrid.this::restoreHeaderFocus);
+                if (pendingFocus != null) post(HomeAppGrid.this::restorePendingFocus);
+            }
             @Override public int getColumnCountForAccessibility(RecyclerView.Recycler recycler,RecyclerView.State state){return columns;}
         };
         manager.setSpanSizeLookup(new GridLayoutManager.SpanSizeLookup() {
             @Override public int getSpanSize(int position) {
-                if(position>=items.size())return manager.getSpanCount();
-                return referenceExpansion?GlassDockLayout.span(position,columns,priorExpanded,nextExpanded,expansion):1;
+                int app = position - headerCount();
+                if (app < 0 || app >= items.size()) return manager.getSpanCount();
+                return referenceExpansion?GlassDockLayout.span(app,columns,priorExpanded,nextExpanded,expansion):1;
             }
         });
         setLayoutManager(manager);
@@ -73,6 +82,39 @@ final class HomeAppGrid<T> extends RecyclerView {
         setPreserveFocusAfterLayout(true);
     }
 
+    void setHeader(View view) {
+        header = view;
+        adapter.notifyDataSetChanged();
+    }
+
+    boolean hasHeader() { return header != null; }
+    private int headerCount() { return hasHeader() ? 1 : 0; }
+    boolean headerHasFocus() { return header != null && header.hasFocus(); }
+
+    void focusHeader(BooleanSupplier target) {
+        cancelPendingFocus();
+        stopScroll();
+        if (header == null) return;
+        pendingHeaderFocus = target;
+        if (manager.findFirstVisibleItemPosition() == 0 && header.isShown()) {
+            restoreHeaderFocus();
+        } else {
+            manager.scrollToPositionWithOffset(0, 0);
+        }
+    }
+
+    private void restoreHeaderFocus() {
+        if (pendingHeaderFocus == null || header == null || !header.isShown()) return;
+        BooleanSupplier target = pendingHeaderFocus;
+        pendingHeaderFocus = null;
+        target.getAsBoolean();
+    }
+
+    void focusFirstRow(String pkg) {
+        int app = index(pkg);
+        focusKey(app >= 0 && app < columns ? pkg : null);
+    }
+
     void setFooter(View view) {
         footer = view;
         adapter.notifyDataSetChanged();
@@ -81,7 +123,7 @@ final class HomeAppGrid<T> extends RecyclerView {
     boolean footerFocusedOrPending(){return pendingFooter||(footer!=null&&footer.hasFocus());}
     @Override public void requestChildFocus(View child,View focused){
         View cell=focused==null?null:findContainingItemView(focused);
-        int position=cell==null?NO_POSITION:getChildAdapterPosition(cell);
+        int position=cell==null?NO_POSITION:getChildAdapterPosition(cell)-headerCount();
         if(position>=0&&position<items.size()){lastAppKey=key.apply(items.get(position));lastAppPosition=position;}
         super.requestChildFocus(child,focused);
     }
@@ -99,17 +141,24 @@ final class HomeAppGrid<T> extends RecyclerView {
         // Snapshot both lists: adapter positions may change again before a pending layout runs.
         List<T> after = items;
         if (resized) adapter.notifyDataSetChanged();
-        else DiffUtil.calculateDiff(new DiffUtil.Callback() {
-            @Override public int getOldListSize() { return before.size() + (footer == null ? 0 : 1); }
-            @Override public int getNewListSize() { return after.size() + (footer == null ? 0 : 1); }
-            @Override public boolean areItemsTheSame(int a, int b) {
-                if (a == before.size() || b == after.size()) return a == before.size() && b == after.size();
-                return key.apply(before.get(a)).equals(key.apply(after.get(b)));
-            }
-            @Override public boolean areContentsTheSame(int a, int b) {
-                return a == before.size() || before.get(a) == after.get(b);
-            }
-        }).dispatchUpdatesTo(adapter);
+        else {
+            int headers = headerCount();
+            DiffUtil.calculateDiff(new DiffUtil.Callback() {
+                @Override public int getOldListSize() { return headers + before.size() + (footer == null ? 0 : 1); }
+                @Override public int getNewListSize() { return headers + after.size() + (footer == null ? 0 : 1); }
+                @Override public boolean areItemsTheSame(int a, int b) {
+                    if (a < headers || b < headers) return a == b;
+                    a -= headers; b -= headers;
+                    if (a == before.size() || b == after.size()) return a == before.size() && b == after.size();
+                    return key.apply(before.get(a)).equals(key.apply(after.get(b)));
+                }
+                @Override public boolean areContentsTheSame(int a, int b) {
+                    if (a < headers) return true;
+                    a -= headers; b -= headers;
+                    return a == before.size() || before.get(a) == after.get(b);
+                }
+            }).dispatchUpdatesTo(adapter);
+        }
         if(preserveFooter){pendingFocus=null;pendingFooter=true;post(this::restoreFooterFocus);}
     }
 
@@ -119,6 +168,7 @@ final class HomeAppGrid<T> extends RecyclerView {
         boolean horizontal = code == android.view.KeyEvent.KEYCODE_DPAD_LEFT || code == android.view.KeyEvent.KEYCODE_DPAD_RIGHT;
         boolean vertical = code == android.view.KeyEvent.KEYCODE_DPAD_UP || code == android.view.KeyEvent.KEYCODE_DPAD_DOWN;
         if (!horizontal && !vertical) return false;
+        if (pendingHeaderFocus != null && vertical) return true;
         if(pendingFooter){
             if(vertical&&code==android.view.KeyEvent.KEYCODE_DPAD_UP&&event.getAction()==android.view.KeyEvent.ACTION_DOWN&&!event.isCanceled())returnFromFooter();
             return true;
@@ -130,7 +180,7 @@ final class HomeAppGrid<T> extends RecyclerView {
         if (position < 0) {
             View focused = findFocus();
             View cell = focused == null ? null : findContainingItemView(focused);
-            if (cell != null) position = getChildAdapterPosition(cell);
+            if (cell != null) position = getChildAdapterPosition(cell) - headerCount();
         }
         if (position == items.size() && footer != null && vertical) {
             if (event.getAction() == android.view.KeyEvent.ACTION_DOWN && code == android.view.KeyEvent.KEYCODE_DPAD_UP)
@@ -149,7 +199,7 @@ final class HomeAppGrid<T> extends RecyclerView {
         return true;
     }
 
-    void rebind() { adapter.notifyItemRangeChanged(0, items.size()); }
+    void rebind() { adapter.notifyItemRangeChanged(headerCount(), items.size()); }
     /** Focus can change during RecyclerView layout; redraw safely without invalidating its offsets then. */
     void refreshReflections() { if(isComputingLayout())postInvalidateOnAnimation();else invalidateItemDecorations(); }
     private void enterFooter(int position){
@@ -179,14 +229,14 @@ final class HomeAppGrid<T> extends RecyclerView {
         if(focused)pendingFooter=false;
     }
     void focusKey(String pkg) {
-        pendingFooter=false;
+        cancelPendingFocus();
         if (items.isEmpty()) { focusFooter(); return; }
         int position = 0;
         for (int i = 0; i < items.size(); i++) if (key.apply(items.get(i)).equals(pkg)) { position = i; break; }
         pendingFocus = key.apply(items.get(position));
         restorePendingFocus();
         if (pendingFocus == null) return;
-        scrollToPosition(position);
+        scrollToPosition(position + headerCount());
         post(this::restorePendingFocus);
     }
 
@@ -203,15 +253,20 @@ final class HomeAppGrid<T> extends RecyclerView {
     }
 
     private final class Tiles extends Adapter<Cell> {
-        @Override public int getItemCount() { return items.size() + (footer == null ? 0 : 1); }
-        @Override public int getItemViewType(int position) { return position == items.size() ? 1 : 0; }
+        @Override public int getItemCount() { return headerCount() + items.size() + (footer == null ? 0 : 1); }
+        @Override public int getItemViewType(int position) {
+            int app = position - headerCount();
+            return app < 0 ? HEADER_TYPE : app == items.size() ? 1 : 0;
+        }
         @Override public long getItemId(int position) {
+            position -= headerCount();
+            if (position < 0) return Long.MIN_VALUE + 1;
             if (position == items.size()) return Long.MIN_VALUE;
             return HomeLibraryModel.stableId(key.apply(items.get(position)));
         }
         @Override public Cell onCreateViewHolder(ViewGroup parent, int type) {
             FrameLayout frame = new FrameLayout(getContext());
-            frame.setClipChildren(false); frame.setClipToPadding(false);
+            frame.setClipChildren(hasHeader()); frame.setClipToPadding(hasHeader());
             frame.setFocusable(false);
             frame.setLayoutParams(new RecyclerView.LayoutParams(-1, -2));
             return new Cell(frame);
@@ -219,7 +274,11 @@ final class HomeAppGrid<T> extends RecyclerView {
         @Override public void onBindViewHolder(Cell cell, int position) {
             FrameLayout frame = (FrameLayout) cell.itemView;
             frame.removeAllViews();
-            if (position == items.size()) {
+            position -= headerCount();
+            if (position < 0) {
+                if (header.getParent() instanceof ViewGroup) ((ViewGroup) header.getParent()).removeView(header);
+                frame.addView(header, new FrameLayout.LayoutParams(-1, -2));
+            } else if (position == items.size()) {
                 if (footer.getParent() instanceof ViewGroup) ((ViewGroup) footer.getParent()).removeView(footer);
                 frame.setTag(null); frame.addView(footer, new FrameLayout.LayoutParams(-1, -2));
             } else {
@@ -230,8 +289,8 @@ final class HomeAppGrid<T> extends RecyclerView {
                 tile.setAccessibilityDelegate(new View.AccessibilityDelegate() {
                     @Override public void onInitializeAccessibilityNodeInfo(View host, android.view.accessibility.AccessibilityNodeInfo info) {
                         super.onInitializeAccessibilityNodeInfo(host, info);
-                        int current = cell.getBindingAdapterPosition();
-                        if (current != RecyclerView.NO_POSITION) {
+                        int current = cell.getBindingAdapterPosition() - headerCount();
+                        if (current >= 0) {
                             int columns = getColumnCount();
                             info.setCollectionItemInfo(android.view.accessibility.AccessibilityNodeInfo.CollectionItemInfo.obtain(
                                     current / columns, 1, current % columns, 1, false));

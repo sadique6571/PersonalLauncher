@@ -89,8 +89,7 @@ public final class ShellVolumeBridge {
                 (task, delay) -> {
                     java.util.concurrent.ScheduledFuture<?> future = scheduler.schedule(task, delay, TimeUnit.MILLISECONDS);
                     return () -> future.cancel(false);
-                }, injector, error -> { failed.set(true); error.printStackTrace(System.err); reader.destroy(); }, repeatMs,
-                () -> { if (panel != null) panel.signal(); });
+                }, injector, error -> { failed.set(true); error.printStackTrace(System.err); reader.destroy(); }, repeatMs);
         // Android SIGTERM need not execute Java shutdown hooks. Exit through the reader/finally
         // path when the wrapper requests stop, so the saved volume controller is restored first.
         scheduler.scheduleWithFixedDelay(() -> {

@@ -17,6 +17,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.View;
 import android.widget.Button;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
@@ -65,7 +66,8 @@ public final class ContinueWatchingView extends LinearLayout {
         setOrientation(VERTICAL); setPadding(0, dp(harmony?2:compact?8:22), 0, dp(harmony?2:compact?8:12));
         heading = label("Continue watching", harmony?14:compact?18:23);
         addView(heading);
-        TvHorizontalShelf scroll = new TvHorizontalShelf(host);
+        HorizontalScrollView scroll = harmony ? new HorizontalScrollView(host) : new TvHorizontalShelf(host);
+        if (harmony) scroll.setSmoothScrollingEnabled(false);
         scroll.setHorizontalScrollBarEnabled(false);
         cards = new LinearLayout(host);
         cards.setPadding(0, dp(harmony?3:compact?6:10), 0, dp(harmony?3:compact?6:10));
@@ -129,14 +131,15 @@ public final class ContinueWatchingView extends LinearLayout {
         query = new CancellationSignal();
         CancellationSignal cancellation = query;
         boolean hadFocus=hasFocus();
-        cards.removeAllViews();explanation.setFocusable(true);
+        explanation.setFocusable(true);
         if (host.getPackageManager().resolveContentProvider(TvContract.AUTHORITY, 0) == null) {
+            cards.removeAllViews();
             allow.setVisibility(GONE); explanation.setText("Resume is available on Android TVs with a shared Watch Next provider.");if(hadFocus)focusEntry();return;
         }
         boolean permitted = host.checkSelfPermission(PERMISSION) == PackageManager.PERMISSION_GRANTED;
         allow.setVisibility(permitted ? GONE : VISIBLE);
-        if (!permitted) { explanation.setText("Allow TV listings access to read shared Watch Next entries. Some TVs restrict this feature.");explanation.setFocusable(false);if(hadFocus)focusEntry();return; }
-        explanation.setText("Loading shared resume entries…");if(hadFocus)focusEntry();
+        if (!permitted) { cards.removeAllViews(); explanation.setText("Allow TV listings access to read shared Watch Next entries. Some TVs restrict this feature.");explanation.setFocusable(false);if(hadFocus)focusEntry();return; }
+        if (cards.getChildCount() == 0) explanation.setText("Loading shared resume entries…");
         worker.execute(() -> {
             List<Item> entries = new ArrayList<>();
             String error = null;
@@ -164,6 +167,7 @@ public final class ContinueWatchingView extends LinearLayout {
             handler.post(() -> {
                 if (!running || request != generation) return;
                 boolean restore=hasFocus();
+                cards.removeAllViews();
                 for (Item item : entries) addCard(item);
                 explanation.setFocusable(entries.isEmpty());
                 if(restore)focusEntry();
@@ -217,7 +221,19 @@ public final class ContinueWatchingView extends LinearLayout {
         }
         card.setTag(item.pkg+"|"+item.intent);
         card.setOnFocusChangeListener((v, focused) -> { card.setBackground(background(focused)); if (focused) {focusedEntry=(String)card.getTag();focusTitle.accept(item.owner);} });
-        card.setOnKeyListener((v,key,event)->harmony&&routeHarmonyKey(key,event));
+        card.setOnKeyListener((v, key, event) -> {
+            if (!harmony) return false;
+            if (key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN && !event.isCanceled()) {
+                    boolean forward = (key == KeyEvent.KEYCODE_DPAD_RIGHT) == (cards.getLayoutDirection() != LAYOUT_DIRECTION_RTL);
+                    int next = cards.indexOfChild(v) + (forward ? 1 : -1);
+                    View target = cards.getChildAt(next);
+                    if (target != null) target.requestFocus();
+                }
+                return true;
+            }
+            return routeHarmonyKey(key, event);
+        });
         card.setOnClickListener(v -> {
             try {
                 Intent intent = Intent.parseUri(item.intent, Intent.URI_INTENT_SCHEME);

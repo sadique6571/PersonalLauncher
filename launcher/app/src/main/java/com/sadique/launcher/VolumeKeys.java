@@ -5,6 +5,7 @@ import android.media.AudioManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.KeyEvent;
+import android.view.KeyCharacterMap;
 
 /** Shared held-volume controller for the remote helpers and the launcher volume slider. */
 final class VolumeKeys {
@@ -22,20 +23,21 @@ final class VolumeKeys {
     static boolean changesPress(int action, int repeatCount) { return action != KeyEvent.ACTION_DOWN || repeatCount == 0; }
     /** Explicit consume_volume_keys compatibility mode keeps the firmware's initial step. */
     static boolean handle(Context context, KeyEvent event) {
-        if (direction(event.getKeyCode()) == 0) return false;
+        if (!canHandle(event)) return false;
         process(context, event, true); return true;
     }
     /** Own the tap and held repeat, suppressing the system OSD in favour of our slider. */
     static boolean control(Context context, KeyEvent event) {
-        if (direction(event.getKeyCode()) == 0) return false;
+        if (!canHandle(event)) return false;
         AudioManager audio = context.getSystemService(AudioManager.class);
         if (audio == null || audio.isVolumeFixed()) return false;
         process(context, event, true, true);
         return true;
     }
-    /** Normal mode passes the tap through and checks whether native repeats actually change volume. */
-    static void observe(Context context, KeyEvent event) {
-        if (direction(event.getKeyCode()) != 0) process(context, event, false);
+    private static boolean canHandle(KeyEvent event) {
+        // The shell helper injects these pairs through Android so its controller owns their panel.
+        return direction(event.getKeyCode()) != 0
+                && !(event.getDeviceId() == KeyCharacterMap.VIRTUAL_KEYBOARD && event.getScanCode() == 0);
     }
     private static void process(Context context, KeyEvent event, boolean consume) {
         process(context, event, consume, false);
@@ -54,12 +56,12 @@ final class VolumeKeys {
         }
         AudioManager audio = context.getSystemService(AudioManager.class);
         if (audio == null || audio.isVolumeFixed()) { stop(); return; }
-        if (event.getAction() == KeyEvent.ACTION_DOWN && !event.isCanceled()) VolumeSlider.show(context, audio);
         repeater.event(event.getDeviceId(), event.getKeyCode(), event.getDownTime(), event.getEventTime(),
                 event.getAction(), event.getRepeatCount(), event.isCanceled(), consume, initialStep,
                 () -> {
-                    audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction(event.getKeyCode()), 0);
-                    if (!VolumeSlider.show(context, audio)) {
+                    int flags = initialStep ? 0 : AudioManager.FLAG_SHOW_UI;
+                    audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction(event.getKeyCode()), flags);
+                    if (initialStep && !VolumeSlider.show(context, audio)) {
                         audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_SAME, AudioManager.FLAG_SHOW_UI);
                     }
                 },
