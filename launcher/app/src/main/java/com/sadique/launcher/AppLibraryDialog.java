@@ -32,6 +32,7 @@ import androidx.dynamicanimation.animation.FloatPropertyCompat;
 import androidx.dynamicanimation.animation.SpringAnimation;
 import androidx.dynamicanimation.animation.SpringForce;
 import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.text.Collator;
@@ -103,6 +104,8 @@ final class AppLibraryDialog {
     private float scrollOffset;
     private boolean highlightShown;
     private final int catalogWidth;
+    private final boolean harmonyDrawer;
+    private final int drawerColumns;
 
     private void stopHighlight() {
         if (spring != null) spring.cancel();
@@ -160,6 +163,7 @@ final class AppLibraryDialog {
         this.dismissed = dismissed;
         this.excludedApps = excludedApps;
         density = activity.getResources().getDisplayMetrics().density;
+        harmonyDrawer = ThemeStyle.harmony(ThemePreferences.get(activity));
         panel = new LinearLayout(activity);
         panel.setLayoutDirection(rtl ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
         panel.setOrientation(LinearLayout.VERTICAL);
@@ -167,8 +171,9 @@ final class AppLibraryDialog {
         panel.setBackground(null); panel.setClipToOutline(false);
         View decor = activity.getWindow().getDecorView();
         catalogWidth = Math.min(dp(800), Math.max(dp(200), decor.getWidth() - dp(64)));
+        drawerColumns = HarmonyVisionLayout.drawerColumns(Math.round(catalogWidth / density));
         int width = catalogWidth;
-        int height = dp(280);
+        int height = dp(harmonyDrawer?HarmonyVisionLayout.drawerHeightDp(activity.getResources().getConfiguration().screenHeightDp):280);
         popup = new PopupWindow(panel, width, height, true);
         popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         popup.setOutsideTouchable(true);
@@ -351,7 +356,7 @@ final class AppLibraryDialog {
 
     private void showCatalog() {
         stopHighlight();
-        resize(catalogWidth, dp(280));
+        resize(catalogWidth, dp(harmonyDrawer?HarmonyVisionLayout.drawerHeightDp(activity.getResources().getConfiguration().screenHeightDp):280));
         panel.removeAllViews();
         LinearLayout header = new LinearLayout(activity);
         header.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
@@ -389,16 +394,17 @@ final class AppLibraryDialog {
         shelf = new FrameLayout(activity);
         // The glass uses physical x coordinates; only the catalogue mirrors its item order.
         shelf.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
-        shelf.setClipChildren(false);
+        shelf.setClipChildren(!harmonyDrawer);
         RecyclerView list = new RecyclerView(activity);
         list.setLayoutDirection(rtl ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
         catalog = list;
-        list.setLayoutManager(new LinearLayoutManager(activity, RecyclerView.HORIZONTAL, false) {
+        if(harmonyDrawer)list.setLayoutManager(new GridLayoutManager(activity,drawerColumns));
+        else list.setLayoutManager(new LinearLayoutManager(activity, RecyclerView.HORIZONTAL, false) {
             @Override protected boolean isLayoutRTL() { return rtl; }
         });
         list.setItemAnimator(null);
         list.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        list.setClipToPadding(false);
+        list.setClipToPadding(!harmonyDrawer);
         list.setPadding(dp(10), dp(8), dp(10), dp(8));
         list.setAdapter(new Catalog());
         shelf.addView(list, new FrameLayout.LayoutParams(-1, -1));
@@ -408,6 +414,7 @@ final class AppLibraryDialog {
         highlight.setFocusable(false);
         highlight.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         shelf.addView(highlight, new FrameLayout.LayoutParams(dp(144), dp(180)));
+        if(harmonyDrawer)highlight.setVisibility(View.GONE);
         scrollOffset = 0;
         spring = new SpringAnimation(highlight, new FloatPropertyCompat<View>("libraryScrollX") {
             @Override public float getValue(View view) { return view.getTranslationX() + scrollOffset; }
@@ -417,8 +424,8 @@ final class AppLibraryDialog {
         else spring.setSpring(new SpringForce().setStiffness(260f).setDampingRatio(0.58f));
         list.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
-                scrollOffset += dx;
-                highlight.setTranslationX(highlight.getTranslationX() - dx);
+                if(!harmonyDrawer){scrollOffset += dx;
+                    highlight.setTranslationX(highlight.getTranslationX() - dx);}
             }
         });
         panel.addView(shelf, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -426,7 +433,8 @@ final class AppLibraryDialog {
         for (int i = 0; i < apps.size(); i++) {
             if (apps.get(i).activityInfo.packageName.equals(selectedPackage)) { position = i; break; }
         }
-        ((LinearLayoutManager) list.getLayoutManager()).scrollToPositionWithOffset(position, selectedOffset);
+        if(harmonyDrawer)((GridLayoutManager)list.getLayoutManager()).scrollToPositionWithOffset(position,selectedOffset);
+        else ((LinearLayoutManager) list.getLayoutManager()).scrollToPositionWithOffset(position, selectedOffset);
         final int target = position;
         list.post(() -> {
             if (catalog != list || !popup.isShowing()) return;
@@ -688,12 +696,14 @@ final class AppLibraryDialog {
                 if (focused) {
                     selectedPackage = pkg;
                     instructions.setText(hint(onHome.test(pkg)));
-                    v.post(() -> { if (v.hasFocus() && catalog != null) highlight(v, true); });
+                    if(!harmonyDrawer)v.post(() -> { if (v.hasFocus() && catalog != null) highlight(v, true); });
+                    else v.setBackground(surface(0x5056a9e7,18));
                     int index = holder.getBindingAdapterPosition();
                     if (index != RecyclerView.NO_POSITION) selectedPosition = index;
                 }
             });
             holder.itemView.setOnKeyListener((v, key, event) -> {
+                if(harmonyDrawer)return false; // Default 2D GridLayoutManager handles D-pad rows/columns.
                 int index = holder.getBindingAdapterPosition();
                 return event.getAction() == KeyEvent.ACTION_DOWN && (key == KeyEvent.KEYCODE_DPAD_UP
                         || key == KeyEvent.KEYCODE_DPAD_DOWN
