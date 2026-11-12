@@ -120,11 +120,7 @@ public final class PersonalHomeActivity extends Activity {
                 .putBoolean("clock_shadow",true).putBoolean("focus_glow",false)
                 .putInt("tv_columns",4).putInt("tile_corners",2).putInt("tile_spacing",1)
                 .putInt("glass_alpha",58).putInt("glass_finish",0).putInt("glass_edge",1)
-                .putBoolean("panel_transparency",true).putBoolean("continue_watching",false).apply();
-        // Harmony Watch Next is now a bounded shelf; preserve subsequent user toggles.
-        if(harmony()&&!prefs.getBoolean("harmony_layout_v2",false))
-            prefs.edit().putBoolean("harmony_layout_v2",true)
-                    .putBoolean("continue_watching",true).apply();
+                .putBoolean("panel_transparency",true).apply();
     }
     /** Lightweight English service shortcuts with D-pad return to the app dock. */
     private View harmonyShortcuts() {
@@ -218,31 +214,17 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private boolean focusHarmonyBelowHero() {
-        if (continueWatching != null && continueWatching.isShown() && continueWatching.focusEntry()) return true;
         if (grid == null || grid.appCount() == 0) return false;
-        grid.focusFirstRow(focusedPkg);
+        grid.focusKey(focusedPkg);
         return true;
     }
 
-    private void focusBelowToolbar() {
-        if (grid == null) return;
-        if (grid.hasHeader()) {
-            grid.focusHeader(() -> focusHarmonyHero() || focusHarmonyBelowHero());
-        } else {
-            grid.focusKey(focusedPkg);
-        }
+    private boolean fixedHarmonyDock() {
+        return harmony() && tv && !prefs.getBoolean("apps_only", false);
     }
 
-    boolean onHarmonyContinueKey(int key) {
-        if (key == KeyEvent.KEYCODE_DPAD_DOWN) {
-            if (grid == null || grid.appCount() == 0) return false;
-            grid.focusFirstRow(focusedPkg);
-            return true;
-        }
-        if (key == KeyEvent.KEYCODE_DPAD_UP) {
-            return focusHarmonyHero() || (searchButton != null && searchButton.requestFocus());
-        }
-        return false;
+    private void focusBelowToolbar() {
+        if (grid != null && (!grid.isHorizontalDock() || !focusHarmonyHero())) grid.focusKey(focusedPkg);
     }
     private void harmonyClockSettings(){
         if(!harmony())return;
@@ -390,8 +372,8 @@ public final class PersonalHomeActivity extends Activity {
         else registerReceiver(appChanges, packages);
         lastLight = appearanceDaylight() >= .5f;
         focusedPkg = prefs.getString("home_focus_pkg", null);
-        if (state != null && state.getBoolean("home_grid_has_header")
-                == (harmony() && tv && !prefs.getBoolean("apps_only", false)))
+        if (state != null && !state.getBoolean("home_grid_has_header")
+                && state.getBoolean("home_grid_horizontal_dock") == fixedHarmonyDock())
             gridState = state.getParcelable("home_grid_state");
         loadAvatar();
         buildHome();
@@ -612,8 +594,8 @@ public final class PersonalHomeActivity extends Activity {
         handler.removeCallbacks(buildHomeTask);
         buildHomePending = false;
         if (continueWatching != null) continueWatching.stop();
-        boolean harmonyHome = harmony() && tv && !prefs.getBoolean("apps_only", false);
-        if (grid != null) gridState = grid.getLayoutManager() != null && grid.hasHeader() == harmonyHome
+        boolean harmonyHome = fixedHarmonyDock();
+        if (grid != null) gridState = grid.getLayoutManager() != null && grid.isHorizontalDock() == harmonyHome
                 ? grid.getLayoutManager().onSaveInstanceState() : null;
         tileViews.clear();
         pageWidth = 0;
@@ -890,38 +872,35 @@ public final class PersonalHomeActivity extends Activity {
         appHeading.setEllipsize(android.text.TextUtils.TruncateAt.END);
         appHeading.setPadding(dp(4), dp(8), 0, dp(12));
         grid = new HomeAppGrid<>(this, app -> app.info.activityInfo.packageName,
-                (app, width) -> createAppTile(app, width, carriedApp != null && app.info.activityInfo.packageName.equals(carriedApp.info.activityInfo.packageName)));
-        grid.setReferenceExpansion(glassOs()&&(!harmony()||HarmonyVisionLayout.expandAppOnFocus()));
+                (app, width) -> createAppTile(app, width, carriedApp != null && app.info.activityInfo.packageName.equals(carriedApp.info.activityInfo.packageName)),
+                harmonyHome);
+        grid.setReferenceExpansion(glassOs() && !harmony());
         grid.setUpFromApps(() -> {
-            if (grid.hasHeader()) {
-                grid.focusHeader(() -> (continueWatching.isShown() && continueWatching.focusEntry())
-                        || focusHarmonyHero() || (searchButton != null && searchButton.requestFocus()));
-                return;
-            }
-            if(harmony()&&harmonyClock!=null&&harmonyClock.isShown())harmonyClock.requestFocus();
-            else if(weatherWidget!=null&&weatherWidget.isShown())weatherWidget.requestFocus();
-            else if(searchButton!=null)searchButton.requestFocus(); });
+            if (harmony() && focusHarmonyHero()) return;
+            if (weatherWidget != null && weatherWidget.isShown()) weatherWidget.requestFocus();
+            else if (searchButton != null) searchButton.requestFocus();
+        });
         grid.setClipChildren(false);
         if(glassOs()) {
             grid.setId(R.id.grid);grid.setPadding(0,dp(harmony()?5:16),0,dp(harmony()?4:18));
-            if(!harmony()||HarmonyVisionLayout.showDockReflections())grid.addItemDecoration(new DockDecoration.Reflections());
+            if(!harmony())grid.addItemDecoration(new DockDecoration.Reflections());
         }
         grid.setClipToPadding(glassOs());
         if(harmony())grid.setClipChildren(true);
         appBody = new LinearLayout(this);
         appBody.setOrientation(LinearLayout.VERTICAL);
         if (harmony()) { appBody.setClipChildren(true); appBody.setClipToPadding(true); }
-        // App cards float directly on wallpaper in every visual style.
-        appBody.setBackground(harmony()&&HarmonyVisionLayout.showDockPanel()?HarmonyVisionSurface.status(this):null);
-        // No opaque drawer behind the reflective first row in Harmony.
+        if (harmonyHome) appBody.setBackground(new android.graphics.drawable.InsetDrawable(
+                HarmonyVisionSurface.dock(this), 0, dp(18), 0, 0));
         appBody.setPadding(0,0,0,0);
         appBody.setClipToOutline(false);
         if(ThemeStyle.id(prefs)==ThemeStyle.COBALT) grid.addItemDecoration(new CobaltRails(dp(1)));
         if(ThemeStyle.custom(prefs)&&tv) grid.addOnLayoutChangeListener((v,l,t,rr,bb,ol,ot,orr,obb)->placeDemoCards());
-        continueWatching = new ContinueWatchingView(this, label -> { if (!prefs.getBoolean("apps_only", false)) appHeading.setText(label); });
-        if (!prefs.getBoolean("apps_only", false)&&!harmony()) grid.setFooter(continueWatching);
+        continueWatching = harmony() ? null : new ContinueWatchingView(this, label -> {
+            if (!prefs.getBoolean("apps_only", false)) appHeading.setText(label);
+        });
+        if (continueWatching != null && !prefs.getBoolean("apps_only", false)) grid.setFooter(continueWatching);
         appBody.addView(grid, new LinearLayout.LayoutParams(-1, -1));
-        // Harmony keeps its hero, Watch Next and apps in the same vertical list.
         LinearLayout scrollContent = new LinearLayout(this);
         scrollContent.setOrientation(LinearLayout.VERTICAL);
         if(glassOs()&&!harmony())scrollContent.setGravity(Gravity.CENTER_VERTICAL);
@@ -930,12 +909,7 @@ public final class PersonalHomeActivity extends Activity {
         LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(-1, -2);
         clockParams.gravity = new int[]{Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END}[align];
         if (harmonyHome) {
-            LinearLayout.LayoutParams heroParams=new LinearLayout.LayoutParams(-1,-2);
-            heroParams.bottomMargin=dp(HarmonyVisionLayout.heroBottomGapDp());
-            scrollContent.addView(harmonyHero(),heroParams);
-            scrollContent.addView(continueWatching,new LinearLayout.LayoutParams(-1,-2));
-            scrollContent.setPadding(0, 0, 0, dp(12));
-            grid.setHeader(scrollContent);
+            scrollContent.addView(harmonyHero(), new LinearLayout.LayoutParams(-1, -2));
         } else if(glassOs()||weatherWidgetEnabled()) {
             LinearLayout stage=new LinearLayout(this);stage.setGravity(Gravity.CENTER_VERTICAL|Gravity.END);
             boolean wide=getResources().getConfiguration().screenWidthDp>=700;
@@ -967,12 +941,10 @@ public final class PersonalHomeActivity extends Activity {
             }
             stage.addView(instruments);if(prefs.getBoolean("apps_only",false))stage.setVisibility(View.GONE);scrollContent.addView(stage,new LinearLayout.LayoutParams(-1,-2));
         }else scrollContent.addView(clock,clockParams);
-        boolean referenceStage=glassOs()&&!prefs.getBoolean("apps_only",false) && !harmonyHome;
-        if (!harmonyHome) {
-            scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
-            page.addView(scroll, referenceStage ? new LinearLayout.LayoutParams(-1, 0, 1)
-                    : new LinearLayout.LayoutParams(-1, -2));
-        }
+        boolean referenceStage = glassOs() && !prefs.getBoolean("apps_only", false);
+        scroll.addView(scrollContent, new ViewGroup.LayoutParams(-1, -2));
+        page.addView(scroll, referenceStage ? new LinearLayout.LayoutParams(-1, 0, 1)
+                : new LinearLayout.LayoutParams(-1, -2));
         if(harmony()||ThemeStyle.custom(prefs)||glassOs())appHeading.setVisibility(View.GONE);
         page.addView(appHeading);
         page.addView(appBody,referenceStage?new LinearLayout.LayoutParams(-1,referenceDockHeight()):new LinearLayout.LayoutParams(-1,0,1));
@@ -1030,7 +1002,7 @@ public final class PersonalHomeActivity extends Activity {
         WindowManager.LayoutParams brightness = getWindow().getAttributes();
         brightness.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
         getWindow().setAttributes(brightness);
-        if (resumed && !prefs.getBoolean("apps_only", false)&&(!harmony()||HarmonyVisionLayout.showWatchNextFooter())) continueWatching.start();
+        if (resumed && continueWatching != null && !prefs.getBoolean("apps_only", false)) continueWatching.start();
         BootLog.mark("home buildHome", buildMs);
         if (firstBuild) {
             firstBuild = false;
@@ -1466,7 +1438,7 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void renderApps(List<App> apps) {
-        boolean restoreFocus = !grid.headerHasFocus() && !grid.footerFocusedOrPending()&&(grid.hasFocus() || (focusedPkg != null && !hasWindowFocus()));
+        boolean restoreFocus = !grid.footerFocusedOrPending()&&(grid.hasFocus() || (focusedPkg != null && !hasWindowFocus()));
         cachedApps = apps;
         appHeading.setText(harmony()?"YOUR APPS":getString(R.string.h_your_apps));
         HomeLibraryStore library = new HomeLibraryStore(this);
@@ -1478,7 +1450,7 @@ public final class PersonalHomeActivity extends Activity {
         int columns = harmony()?HarmonyVisionLayout.dockColumns(Math.round(avail/getResources().getDisplayMetrics().density)):
                 PersonalHomeModel.columns((int)(avail/getResources().getDisplayMetrics().density),
                 prefs.getInt(tv?"tv_columns":"phone_columns",0),prefs.getBoolean("large_tiles",false));
-        grid.submit(visible, columns, avail / columns);
+        submitHomeApps(visible, columns, avail);
         if (movingRendered) { movingRendered = false; grid.rebind(); }
         if (gridState != null) { grid.getLayoutManager().onRestoreInstanceState(gridState); gridState = null; }
         appHeading.setText(visible.isEmpty()?R.string.h_no_apps:R.string.h_your_apps);
@@ -1486,6 +1458,18 @@ public final class PersonalHomeActivity extends Activity {
             grid.focusKey(focusedPkg);
         firstGridRender = false;
         if (searchRefresh != null) searchRefresh.run();
+    }
+
+    private void submitHomeApps(List<App> apps, int columns, int availableWidth) {
+        if (!grid.isHorizontalDock()) {
+            grid.submit(apps, columns, availableWidth / columns);
+            return;
+        }
+        int height = getResources().getConfiguration().screenHeightDp;
+        int cellWidth = Math.min(availableWidth, dp(HarmonyVisionLayout.dockCellWidthDp(height)));
+        int side = HarmonyVisionLayout.dockSidePadding(availableWidth, cellWidth, apps.size());
+        grid.setPadding(side, dp(4), side, dp(4));
+        grid.submit(apps, 1, cellWidth);
     }
 
     private void chooseCategoryFilter() {
@@ -1522,7 +1506,7 @@ public final class PersonalHomeActivity extends Activity {
         String movingPkg = carriedApp.info.activityInfo.packageName;
         List<App> moved = new ArrayList<>();
         for (String pkg : moveOrder) { App app = byPackage.get(pkg); if (app != null) moved.add(app); }
-        grid.submit(moved, columns, avail / columns); grid.rebind(); grid.focusKey(movingPkg);
+        submitHomeApps(moved, columns, avail); grid.rebind(); grid.focusKey(movingPkg);
     }
 
     private void commitMove() {
@@ -1578,7 +1562,7 @@ public final class PersonalHomeActivity extends Activity {
                 && (event.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER || event.getKeyCode() == KeyEvent.KEYCODE_ENTER
                 || event.getKeyCode() == KeyEvent.KEYCODE_NUMPAD_ENTER)) {
             View focused = getCurrentFocus();
-            if (focused != null && tileViews.containsValue(focused)) {
+            if (focused != null && !(focused instanceof HarmonyAppTile) && tileViews.containsValue(focused)) {
                 focused.animate().scaleX(.94f).scaleY(.94f).setDuration(80).start();
             }
         }
@@ -1593,7 +1577,13 @@ public final class PersonalHomeActivity extends Activity {
             }
             if (code == KeyEvent.KEYCODE_BACK) { cancelMove(); return true; }
             int to = -1;
-            if (code == KeyEvent.KEYCODE_DPAD_LEFT) { if (from % cols != 0) to = from - 1; }
+            if (grid.isHorizontalDock() && (code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+                boolean forward = (code == KeyEvent.KEYCODE_DPAD_RIGHT) == (grid.getLayoutDirection() != View.LAYOUT_DIRECTION_RTL);
+                to = AppGridNavigation.horizontal(from, moveOrder.size(), forward);
+                if (to == from) to = -1;
+            } else if (grid.isHorizontalDock() && (code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_DPAD_DOWN)) {
+                return true;
+            } else if (code == KeyEvent.KEYCODE_DPAD_LEFT) { if (from % cols != 0) to = from - 1; }
             else if (code == KeyEvent.KEYCODE_DPAD_RIGHT) { if (from % cols != cols - 1 && from + 1 < moveOrder.size()) to = from + 1; }
             else if (code == KeyEvent.KEYCODE_DPAD_UP) { if (from - cols >= 0) to = from - cols; }
             else if (code == KeyEvent.KEYCODE_DPAD_DOWN) { if (from + cols < moveOrder.size()) to = from + cols; }
@@ -1627,17 +1617,17 @@ public final class PersonalHomeActivity extends Activity {
     }
     private int referenceCaptionHeight(){return GlassDockLayout.captionHeight(prefs.getInt("app_label_size",16),getResources().getConfiguration().fontScale);}
     private int referenceDockHeight(){
+        if (harmony()) return dp(HarmonyVisionLayout.dockHeightDp(getResources().getConfiguration().screenHeightDp));
         int available=pageWidth>0?gridWidth():dp(Math.max(160,getResources().getConfiguration().screenWidthDp-(tv?64:32)));
         int cols=harmony()?HarmonyVisionLayout.dockColumns(Math.round(available/getResources().getDisplayMetrics().density)):PersonalHomeModel.columns(Math.round(available/getResources().getDisplayMetrics().density),prefs.getInt(tv?"tv_columns":"phone_columns",0),prefs.getBoolean("large_tiles",false));
         int card=referenceCardHeight(available/cols,cols);
         int spacing=Math.max(0,Math.min(2,prefs.getInt("tile_spacing",1)));
         int margin=new int[]{6,8,12}[spacing];
-        if(harmony())return dp(HarmonyVisionLayout.dockHeightDp(getResources().getConfiguration().screenHeightDp));
         return card+dp(GlassDockLayout.reflectionHeight(Math.round(card/getResources().getDisplayMetrics().density))+margin*2+44);
     }
     private View createAppTile(App app, int width, boolean moving) {
         requestAppIcon(app);
-        android.widget.FrameLayout tile = harmony()?new HarmonyAppTile(this,app.name,app.icon,app.accent,HarmonyVisionLayout.dockPlateDp(getResources().getConfiguration().screenHeightDp)):glassOs()?new GlassIconTile(this,app.name,app.icon,app.accent,referenceCardHeight(width)-dp(referenceCaptionHeight()),dp(referenceCaptionHeight()),tileRadius(),moving):ThemeStyle.custom(prefs)?new DemoTile(this,ThemeStyle.id(prefs),tileRadius()):new android.widget.FrameLayout(this);
+        android.widget.FrameLayout tile = harmony()?new HarmonyAppTile(this,app.name,app.icon,app.accent,HarmonyVisionLayout.dockPlateDp(getResources().getConfiguration().screenHeightDp), grid.isHorizontalDock()):glassOs()?new GlassIconTile(this,app.name,app.icon,app.accent,referenceCardHeight(width)-dp(referenceCaptionHeight()),dp(referenceCaptionHeight()),tileRadius(),moving):ThemeStyle.custom(prefs)?new DemoTile(this,ThemeStyle.id(prefs),tileRadius()):new android.widget.FrameLayout(this);
         if(!(tile instanceof GlassIconTile)&&!(tile instanceof HarmonyAppTile)){
         tile.setBackground(appSurface(app.accent,false));
         tile.setOutlineProvider(new ViewOutlineProvider() {
@@ -1733,6 +1723,10 @@ public final class PersonalHomeActivity extends Activity {
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED));
             };
             if (carriedApp != null) { open.run(); return; }
+            if (v instanceof HarmonyAppTile && grid.isHorizontalDock()) {
+                ((HarmonyAppTile) v).launchEffect(open);
+                return;
+            }
             v.animate().scaleX(glassOs()?1f:1.08f).scaleY(glassOs()?1f:1.08f).alpha(.7f).setDuration(120).withEndAction(() -> {
                 v.setScaleX(glassOs()?1f:1.05f); v.setScaleY(glassOs()?1:1.05f); v.setAlpha(1f);
                 open.run();
@@ -1760,6 +1754,7 @@ public final class PersonalHomeActivity extends Activity {
         position.height = ThemeStyle.custom(prefs)?Math.max(dp(54),Math.round(position.width/DemoGeometry.ratio()))+Math.round(DemoGeometry.footer(ThemeStyle.id(prefs),dp(1))):Math.round(position.width*9f/16f);
         if(harmony()){position.height=dp(HarmonyVisionLayout.dockTileHeightDp(getResources().getConfiguration().screenHeightDp));position.width=-1;}
         else if(glassOs()){position.height=referenceCardHeight(width);position.width=-1;}
+        if (grid.isHorizontalDock()) position.height += dp(HarmonyVisionLayout.DOCK_HEADROOM_DP);
         position.setMargins(hm, vm, hm, vm);
         tile.setLayoutParams(position);
         tile.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
@@ -2347,13 +2342,20 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void appMenu() {
+        if (harmony()) {
+            subMenu("Apps", new String[]{"Hide / unhide apps", "Rearrange apps"},
+                    new String[]{"Choose which apps appear", "Choose the order of app cards"},
+                    new int[]{R.drawable.ic_apps, R.drawable.ic_swap_vert},
+                    new Runnable[]{this::hiddenApps, this::rearrangeApps});
+            return;
+        }
         String[] labels = {"Hide / unhide apps", "Rearrange apps", "Continue watching"};
         String[] hints = {"Choose which apps appear", "Choose the order of app cards", "Resume titles shared by your TV apps"};
         int[] icons = {R.drawable.ic_apps, R.drawable.ic_swap_vert, R.drawable.ic_livetv};
         Runnable[] choices = {
             this::hiddenApps,
             this::rearrangeApps,
-            () -> chooseSetting("Continue watching", new String[]{harmony() ? "Show above apps" : "Show below apps", "Hide row", "Allow TV Watch Next access"}, which -> {
+            () -> chooseSetting("Continue watching", new String[]{"Show below apps", "Hide row", "Allow TV Watch Next access"}, which -> {
                 if (which == 2) continueWatching.requestAccess();
                 else {
                     SharedPreferences.Editor settings=prefs.edit().putBoolean("continue_watching",which==0);
@@ -2953,14 +2955,14 @@ public final class PersonalHomeActivity extends Activity {
         handler.removeCallbacks(tick);
         tick.run();
         updateNetwork();
-        if (!prefs.getBoolean("apps_only", false)&&(!harmony()||HarmonyVisionLayout.showWatchNextFooter())) continueWatching.start();
+        if (continueWatching != null && !prefs.getBoolean("apps_only", false)) continueWatching.start();
         refreshHomeWeather();
         updateOnlineWallpaper();
         armSlideshow();
         handler.removeCallbacks(secondTick);
         if (prefs.getBoolean("clock_seconds", false)) secondTick.run();
         if (pageWidth > 0 && cachedApps == null) loadApps();
-        else if (grid != null && !grid.headerHasFocus() && !grid.footerFocusedOrPending() && focusedPkg != null && (panel == null || !panel.isShowing())) grid.post(() -> grid.focusKey(focusedPkg));
+        else if (grid != null && !grid.footerFocusedOrPending() && focusedPkg != null && (panel == null || !panel.isShowing())) grid.post(() -> grid.focusKey(focusedPkg));
         if (connectivity != null && !networkRegistered) {
             try { connectivity.registerDefaultNetworkCallback(networkCallback); networkRegistered = true; }
             catch (RuntimeException unavailable) { /* Snapshot above remains available. */ }
@@ -2970,7 +2972,7 @@ public final class PersonalHomeActivity extends Activity {
     @Override protected void onSaveInstanceState(Bundle state) {
         super.onSaveInstanceState(state);
         if (grid != null && grid.getLayoutManager() != null) {
-            state.putBoolean("home_grid_has_header", grid.hasHeader());
+            state.putBoolean("home_grid_horizontal_dock", grid.isHorizontalDock());
             state.putParcelable("home_grid_state", grid.getLayoutManager().onSaveInstanceState());
         }
     }

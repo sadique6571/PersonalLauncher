@@ -61,6 +61,13 @@ final class HarmonyVisionSurface {
         d.setStroke(dp(ctx,1),0x65d5e9f5);
         return d;
     }
+    static GradientDrawable dock(Context ctx) {
+        GradientDrawable d = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{material(ctx, 0xcf203952, true), material(ctx, 0xef0b192a, true)});
+        d.setCornerRadius(dp(ctx, 28));
+        d.setStroke(dp(ctx, 1), 0x7aa7c5db);
+        return d;
+    }
     static GradientDrawable sheet(Context ctx){
         GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.TL_BR,
                 new int[]{material(ctx,0xf825415d,false),material(ctx,0xf90d1c34,false)});

@@ -518,6 +518,21 @@ final class AppLibraryDialog {
         selectedPackage = next >= 0 ? apps.get(next).activityInfo.packageName : app.activityInfo.packageName;
     }
 
+    private void openFromCard(ResolveInfo app, View card) {
+        if (!harmonyDrawer) {
+            open(app);
+            return;
+        }
+        if (card.hasTransientState()) return;
+        card.animate().scaleX(1.045f).scaleY(1.045f).alpha(.72f).setDuration(reducedMotion ? Motion.REDUCED_MS : 150)
+                .withEndAction(() -> {
+                    card.setAlpha(1f);
+                    card.setScaleX(1f);
+                    card.setScaleY(1f);
+                    if (popup.isShowing()) open(app);
+                }).start();
+    }
+
     private void open(ResolveInfo app) {
         close();
         Intent intent = new Intent(Intent.ACTION_MAIN).setComponent(
@@ -689,7 +704,7 @@ final class AppLibraryDialog {
             check.setVisibility(home || recent ? View.VISIBLE : View.GONE);
             holder.itemView.setOnClickListener(v -> {
                 boolean onHomeNow = onHome.test(pkg);
-                if (LibraryApps.okOpens(selectionMode, okOpens, onHomeNow)) open(app);
+                if (LibraryApps.okOpens(selectionMode, okOpens, onHomeNow)) openFromCard(app, v);
                 else changeHome(app, !onHomeNow);
             });
             holder.itemView.setOnLongClickListener(selectionMode ? null : v -> { showActions(app, v); return true; });

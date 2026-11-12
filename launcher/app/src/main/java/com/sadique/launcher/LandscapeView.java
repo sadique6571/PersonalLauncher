@@ -28,7 +28,9 @@ public final class LandscapeView extends FrameLayout {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final SharedPreferences prefs;
     private final ConnectivityManager connectivity;
-    private final ImageView photo;
+    private final boolean reducedMotion;
+    private ImageView photo, previousPhoto;
+    private int photoEffect;
     private final TextView clock, date, wifi, weather, city, status, details;
     private ExecutorService worker;
     private ExecutorService weatherWorker;
@@ -68,10 +70,11 @@ public final class LandscapeView extends FrameLayout {
         prefs = ThemePreferences.get(context);
         connectivity = context.getSystemService(ConnectivityManager.class);
         setBackgroundColor(0xff041225);
-        photo = new ImageView(context);
-        photo.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        photo.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
-        addView(photo, new LayoutParams(-1, -1));
+        reducedMotion = Config.load(context).reducedMotion;
+        FrameLayout photos = new FrameLayout(context);
+        photo = photoLayer(context, photos);
+        previousPhoto = photoLayer(context, photos);
+        addView(photos, new LayoutParams(-1, -1));
         View shade = new View(context);
         shade.setBackgroundColor(0x60000000);
         addView(shade, new LayoutParams(-1, -1));
@@ -125,6 +128,60 @@ public final class LandscapeView extends FrameLayout {
         addView(details, detailsPosition);
     }
 
+    private static ImageView photoLayer(Context context, FrameLayout parent) {
+        ImageView layer = new ImageView(context);
+        layer.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        layer.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+        parent.addView(layer, new LayoutParams(-1, -1));
+        return layer;
+    }
+
+    private void clearPhotos() {
+        photo.animate().cancel();
+        previousPhoto.animate().cancel();
+        photo.setImageDrawable(null);
+        previousPhoto.setImageDrawable(null);
+        hasPhoto = false;
+    }
+
+    private void showPhoto(Bitmap image, String caption) {
+        photo.animate().cancel();
+        previousPhoto.animate().cancel();
+        ImageView outgoing = photo;
+        photo = previousPhoto;
+        previousPhoto = outgoing;
+        ImageView incoming = photo;
+        incoming.bringToFront();
+        incoming.setImageBitmap(image);
+        incoming.setAlpha(0f);
+        incoming.setTranslationX(0f);
+        incoming.setTranslationY(0f);
+        incoming.setScaleX(1f);
+        incoming.setScaleY(1f);
+        if (hasPhoto && !reducedMotion) {
+            float horizontal = getWidth() * .085f;
+            float vertical = getHeight() * .10f;
+            float scale = 1f;
+            switch (photoEffect++ % 7) {
+                case 1: scale = 1.14f; break;             // Pull back.
+                case 2: scale = .91f; break;              // Push in.
+                case 3: incoming.setTranslationX(horizontal); break;
+                case 4: incoming.setTranslationX(-horizontal); break;
+                case 5: incoming.setTranslationY(vertical); break;
+                case 6: incoming.setTranslationY(-vertical); break;
+                default: break;                          // Crossfade.
+            }
+            incoming.setScaleX(scale);
+            incoming.setScaleY(scale);
+        }
+        details.setText(caption);
+        incoming.animate().alpha(1f).translationX(0f).translationY(0f).scaleX(1f).scaleY(1f)
+                .setInterpolator(new android.view.animation.DecelerateInterpolator())
+                .setDuration(reducedMotion ? Motion.REDUCED_MS : 620)
+                .withEndAction(() -> outgoing.setImageDrawable(null)).start();
+        hasPhoto = true;
+    }
+
     private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
     private TextView label(int size) {
         TextView label = new TextView(getContext());
@@ -163,10 +220,8 @@ public final class LandscapeView extends FrameLayout {
         }
         if (worker != null) worker.shutdownNow();
         if (weatherWorker != null) weatherWorker.shutdownNow();
-        photo.animate().cancel();
-        photo.setImageDrawable(null);
+        clearPhotos();
         details.setText("");
-        hasPhoto = false;
     }
 
     private NetworkCapabilities capabilities() {
@@ -190,8 +245,7 @@ public final class LandscapeView extends FrameLayout {
         wifi.setText(connected ? "Online" : "No internet");
         wifi.setTextColor(color);
         if (!connected) {
-            photo.animate().cancel();
-            photo.setImageDrawable(null); hasPhoto = false;
+            clearPhotos();
             details.setText("");
             status.setText("Offline · photos need internet");
             weather.setText("Unavailable");
@@ -267,23 +321,14 @@ public final class LandscapeView extends FrameLayout {
                 if (!running || request != generation) { if (image != null) image.recycle(); return; }
                 photoBusy = false;
                 if (image != null && online()) {
-                    // Fade through: old photo out, new photo in.
-                    photo.animate().alpha(0f).setDuration(250).withEndAction(() -> {
-                        if (!running || request != generation || !online()) { image.recycle(); return; }
-                        photo.setImageBitmap(image);
-                        details.setText(caption);
-                        photo.animate().alpha(1f).setDuration(500).start();
-                    }).start();
-                    hasPhoto = true;
+                    showPhoto(image, caption);
                     status.setText("");
                     // Wallpaper details caption at the bottom (user 2026-11-01).
                     adaptClockColors();
                 } else {
                     if (image != null) image.recycle();
-                    photo.animate().cancel();
-                    photo.setImageDrawable(null);
+                    clearPhotos();
                     details.setText("");
-                    hasPhoto = false;
                     status.setText(online() ? "New photo unavailable · retrying automatically" : "Offline · photos unavailable");
                     handler.removeCallbacks(photoRetry);
                     handler.postDelayed(photoRetry, 15_000);

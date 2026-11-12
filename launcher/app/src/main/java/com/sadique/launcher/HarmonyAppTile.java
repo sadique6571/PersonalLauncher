@@ -19,10 +19,13 @@ final class HarmonyAppTile extends FrameLayout {
     private final ImageView icon;
     private final TextView name;
     private int accent;
+    private final boolean dock;
+    private boolean selected, launching;
     private final int plateSize;
-    HarmonyAppTile(Context context,String label,Drawable artwork,int accent,int plateSizeDp){
+    HarmonyAppTile(Context context,String label,Drawable artwork,int accent,int plateSizeDp,boolean dock){
         super(context);
         this.accent=accent;
+        this.dock=dock;
         plateSize=dp(plateSizeDp);
         setClipChildren(false);setClipToPadding(false);
         setBackground(null);setForeground(null);
@@ -32,6 +35,7 @@ final class HarmonyAppTile extends FrameLayout {
         plate.setClipToOutline(true);
         FrameLayout.LayoutParams pl=new FrameLayout.LayoutParams(plateSize,plateSize,
                 Gravity.TOP|Gravity.CENTER_HORIZONTAL);
+        if (dock) pl.topMargin = dp(HarmonyVisionLayout.DOCK_HEADROOM_DP);
         addView(plate,pl);
         icon=new ImageView(context);
         icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
@@ -53,8 +57,30 @@ final class HarmonyAppTile extends FrameLayout {
         caption.leftMargin=dp(3);caption.rightMargin=dp(3);
         addView(name,caption);
         artwork(artwork,accent);
-        appearance(false);
     }
+    void launchEffect(Runnable open) {
+        if (launching) return;
+        launching = true;
+        animate().scaleX(.94f).scaleY(.94f).setDuration(55).withEndAction(() ->
+            animate().scaleX(1.045f).scaleY(1.045f).alpha(.76f).setDuration(105).withEndAction(() -> {
+                resetLaunch();
+                open.run();
+            }).start()).start();
+    }
+
+    @Override protected void onDetachedFromWindow() {
+        animate().cancel();
+        resetLaunch();
+        super.onDetachedFromWindow();
+    }
+
+    private void resetLaunch() {
+        launching = false;
+        setAlpha(1f);
+        setScaleX(1f);
+        setScaleY(1f);
+    }
+
     private int dp(float value){return Math.round(value*getResources().getDisplayMetrics().density);}
     void artwork(Drawable image,int accent){
         this.accent=accent;
@@ -63,9 +89,15 @@ final class HarmonyAppTile extends FrameLayout {
     }
     void appearance(boolean selected){
         plate.setBackground(HarmonyVisionSurface.app(getContext(),accent,selected,dp(19)));
-        // Native icon remains the same size on focus. Caption only appears on focus.
         name.setVisibility(selected?VISIBLE:INVISIBLE);
         plate.setElevation(selected?dp(7):dp(2));
+        if (dock && this.selected != selected) {
+            plate.animate().cancel();
+            float scale = selected ? HarmonyVisionLayout.DOCK_FOCUS_SCALE : 1f;
+            float lift = selected ? -dp(HarmonyVisionLayout.DOCK_FOCUS_LIFT_DP) : 0f;
+            plate.animate().scaleX(scale).scaleY(scale).translationY(lift).setDuration(160).start();
+        }
+        this.selected = selected;
         invalidate();
     }
 }
