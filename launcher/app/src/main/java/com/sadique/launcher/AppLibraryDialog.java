@@ -168,7 +168,8 @@ final class AppLibraryDialog {
         panel.setLayoutDirection(rtl ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(12), dp(8), dp(12), dp(12));
-        panel.setBackground(null); panel.setClipToOutline(false);
+        panel.setBackground(harmonyDrawer?HarmonyVisionSurface.sheet(activity):null);
+        panel.setClipToOutline(harmonyDrawer);
         View decor = activity.getWindow().getDecorView();
         catalogWidth = Math.min(dp(800), Math.max(dp(200), decor.getWidth() - dp(64)));
         drawerColumns = HarmonyVisionLayout.drawerColumns(Math.round(catalogWidth / density));
