@@ -217,14 +217,14 @@ public final class PersonalHomeActivity extends Activity {
     private void harmonyClockSettings(){
         if(!harmony())return;
         String[] names={"Watch face","Metal finish","Clock accent","Second hand","Time format","Clock size","Hide clock","Daily thoughts"};
-        String[] hints={"Heritage, Chronograph, Skeleton","Space Blue, Obsidian, Titanium, Ceramic",
+        String[] hints={"Heritage, Chronograph, Skeleton, Mechanical","Space Blue, Obsidian, Titanium, Ceramic",
                 "Ice blue, Gold or Rose","Smooth sweep or Quartz tick","12-hour or 24-hour",
                 "Fit the clock on the TV","Show or hide the dial","An original thought for every day"};
         int[] icons={R.drawable.ic_clock,R.drawable.ic_palette,R.drawable.ic_palette,R.drawable.ic_clock,
                 R.drawable.ic_clock,R.drawable.ic_clock,R.drawable.ic_clock,R.drawable.ic_clock};
         GlassSettings.options(this,"Harmony Vision Clock",names,hints,icons,which->{
             switch(which){
-                case 0:chooseSetting("Watch face",new String[]{"Heritage","Chronograph","Skeleton"},
+                case 0:chooseSetting("Watch face",new String[]{"Heritage","Chronograph","Skeleton","Mechanical (V17 TV)"},
                         i->{prefs.edit().putInt("harmony_clock_face",i).apply();if(harmonyClock!=null)harmonyClock.configure(prefs);});break;
                 case 1:chooseSetting("Metal finish",new String[]{"Space Blue","Obsidian","Titanium","Ceramic"},
                         i->{prefs.edit().putInt("harmony_clock_finish",i).apply();if(harmonyClock!=null)harmonyClock.configure(prefs);});break;
