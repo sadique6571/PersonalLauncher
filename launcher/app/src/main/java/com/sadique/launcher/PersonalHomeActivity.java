@@ -195,10 +195,10 @@ public final class PersonalHomeActivity extends Activity {
             weatherWidget.setOnKeyListener((v,key,event)->{
                 if(event.getAction()!=KeyEvent.ACTION_DOWN)return false;
                 if(key==KeyEvent.KEYCODE_DPAD_DOWN){
-                if(continueWatching!=null&&continueWatching.getVisibility()==View.VISIBLE
-                        &&continueWatching.focusEntry())return true;
-                if(grid!=null){grid.focusKey(focusedPkg);return true;}
-            }
+                    if(continueWatching!=null&&continueWatching.getVisibility()==View.VISIBLE
+                            &&continueWatching.focusEntry())return true;
+                    if(grid!=null){grid.focusKey(focusedPkg);return true;}
+                }
                 if(key==KeyEvent.KEYCODE_DPAD_UP&&searchButton!=null){searchButton.requestFocus();return true;}
                 if(key==KeyEvent.KEYCODE_DPAD_LEFT&&harmonyClock!=null&&harmonyClock.getParent()!=null){
                     harmonyClock.requestFocus();return true;
