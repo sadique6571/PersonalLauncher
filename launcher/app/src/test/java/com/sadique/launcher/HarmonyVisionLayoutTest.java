@@ -10,17 +10,25 @@ public class HarmonyVisionLayoutTest {
         assertFalse(HarmonyVisionLayout.expandAppOnFocus());
         assertTrue(HarmonyVisionLayout.showNativeWeatherWidget());
         assertFalse(HarmonyVisionLayout.showSecondGreeting());
-        assertFalse(HarmonyVisionLayout.showWatchNextFooter());
+        assertTrue(HarmonyVisionLayout.showWatchNextFooter());
     }
     @Test public void sevenTwentyPixelTVKeepsClockClearOfDock(){
         // 1280x720 @ 1.33 density corresponds to about 961x540 dp.
         int height=540;
         assertEquals(8,HarmonyVisionLayout.dockColumns(913));
         assertEquals(68,HarmonyVisionLayout.dockPlateDp(height));
-        assertEquals(114,HarmonyVisionLayout.dockHeightDp(height));
+        assertEquals(127,HarmonyVisionLayout.dockHeightDp(height));
         for(int face=0;face<3;face++)
             assertTrue(HarmonyVisionLayout.clockDiameterDp(height,face)
                     +HarmonyVisionLayout.dockHeightDp(height)+70<=height);
+    }
+    @Test public void harmonyDrawerAndHeroFitCommonTVSizes(){
+        assertEquals(5,HarmonyVisionLayout.drawerColumns(800));
+        assertEquals(4,HarmonyVisionLayout.drawerColumns(650));
+        assertEquals(2,HarmonyVisionLayout.drawerColumns(300));
+        assertEquals(420,HarmonyVisionLayout.drawerHeightDp(540));
+        assertEquals(336,HarmonyVisionLayout.drawerHeightDp(420));
+        assertEquals(12,HarmonyVisionLayout.heroBottomGapDp());
     }
     @Test public void compactTVStillHasAStableNonExpandingDock(){
         assertEquals(4,HarmonyVisionLayout.dockColumns(430));
