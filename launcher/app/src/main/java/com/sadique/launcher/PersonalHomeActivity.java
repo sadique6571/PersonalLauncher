@@ -121,6 +121,10 @@ public final class PersonalHomeActivity extends Activity {
                 .putInt("tv_columns",4).putInt("tile_corners",2).putInt("tile_spacing",1)
                 .putInt("glass_alpha",58).putInt("glass_finish",0).putInt("glass_edge",1)
                 .putBoolean("panel_transparency",true).putBoolean("continue_watching",false).apply();
+        // Harmony Watch Next is now a bounded shelf; preserve subsequent user toggles.
+        if(harmony()&&!prefs.getBoolean("harmony_layout_v2",false))
+            prefs.edit().putBoolean("harmony_layout_v2",true)
+                    .putBoolean("continue_watching",true).apply();
     }
     /** Lightweight English service shortcuts with D-pad return to the app dock. */
     private View harmonyShortcuts() {
