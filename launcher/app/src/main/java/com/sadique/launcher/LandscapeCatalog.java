@@ -40,7 +40,7 @@ final class LandscapeCatalog {
         "kiss", "kissing", "make out", "making out", "romantic", "romance",
         "intimate", "intimacy", "sexual", "erotic", "nudity", "nude", "naked",
         "lingerie", "porn", "boudoir", "bedroom", "honeymoon",
-        "bride and groom kissing", "couple kissing"
+        "bride", "groom", "wedding", "couple", "lover", "embrace", "hug"
     };
     private LandscapeCatalog() {}
 
@@ -136,11 +136,12 @@ final class LandscapeCatalog {
             try {
                 String query="filetype:bitmap "+words+" -kiss -kissing -romantic -nude -intimate";
                 String endpoint="https://commons.wikimedia.org/w/api.php?action=query"
-                        +"&generator=search&gsrnamespace=6&gsrlimit=20"
+                        +"&generator=search&gsrnamespace=6&gsrlimit=12"
                         +"&gsrsearch="+URLEncoder.encode(query, StandardCharsets.UTF_8.name())
                         +"&prop=imageinfo&iiprop=url%7Csize%7Cextmetadata&iiurlwidth=1920"
                         +"&format=json&formatversion=2";
-                found.addAll(commons(OnlineContent.json(endpoint)));
+                found.addAll(commons(new String(OnlineContent.get(endpoint, 256*1024),
+                        StandardCharsets.UTF_8)));
             } catch(Exception unavailable){
                 android.util.Log.w("PersonalLandscape","Commons image catalog unavailable",unavailable);
             }
