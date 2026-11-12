@@ -693,11 +693,11 @@ final class AppLibraryDialog {
             });
             holder.itemView.setOnLongClickListener(selectionMode ? null : v -> { showActions(app, v); return true; });
             holder.itemView.setOnFocusChangeListener((v, focused) -> {
+                if(harmonyDrawer)v.setBackground(surface(focused?0x5056a9e7:(onHome.test(pkg)?0x1475BBA4:0x0CFFFFFF),18));
                 if (focused) {
                     selectedPackage = pkg;
                     instructions.setText(hint(onHome.test(pkg)));
                     if(!harmonyDrawer)v.post(() -> { if (v.hasFocus() && catalog != null) highlight(v, true); });
-                    else v.setBackground(surface(0x5056a9e7,18));
                     int index = holder.getBindingAdapterPosition();
                     if (index != RecyclerView.NO_POSITION) selectedPosition = index;
                 }
