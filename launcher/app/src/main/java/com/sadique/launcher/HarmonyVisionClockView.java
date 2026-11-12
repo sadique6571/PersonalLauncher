@@ -28,7 +28,7 @@ final class HarmonyVisionClockView extends View {
     private final Path hand=new Path();
     private final Path mechanismPath=new Path();
     private long physicsNano;
-    private double balancePosition=.34, balanceSpeed, lastBalanceSign=1;
+    private double balancePosition=.34, balanceSpeed;
     private long escrowSteps;
     private final Calendar now=Calendar.getInstance();
     private final SimpleDateFormat date=new SimpleDateFormat("EEE, MMM d",Locale.ENGLISH);
@@ -280,16 +280,15 @@ final class HarmonyVisionClockView extends View {
         while(duration>0) {
             double dt=Math.min(.005,duration);
             duration-=dt;
+            double previous=balancePosition;
             balanceSpeed+=(-Math.pow(4*Math.PI,2)*balancePosition
                     - .55*balanceSpeed)*dt;
             balancePosition+=balanceSpeed*dt;
-            if(balancePosition*lastBalanceSign<0) {
+            if((previous>0&&balancePosition<=0)||(previous<0&&balancePosition>=0)) {
                 escrowSteps++;
                 // Coarse impulse replaces the mainspring torque otherwise lost to damping.
-                balanceSpeed+=Math.signum(balanceSpeed)*.028;
+                balanceSpeed+=Math.signum(balanceSpeed)*.30;
             }
-            if(Math.abs(balancePosition)>.03)
-                lastBalanceSign=Math.signum(balancePosition);
         }
     }
 
