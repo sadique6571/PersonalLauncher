@@ -35,6 +35,8 @@ public final class LandscapeView extends FrameLayout {
     private boolean running, registered, photoBusy, weatherBusy, hasPhoto, networkOnline;
     private int generation;
     private final java.util.Random photoRandom = new java.util.Random();
+    private final java.util.List<LandscapeCatalog.Entry> candidates = new java.util.ArrayList<>();
+    private long catalogFetchedAt;
 
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
         @Override public void onAvailable(Network network) { handler.post(() -> networkChanged()); }
@@ -232,49 +234,77 @@ public final class LandscapeView extends FrameLayout {
         int seed = photoRandom.nextInt();
         worker.execute(() -> {
             Bitmap result = null;
+            String subject = "";
             try (LandscapeHistory history = new LandscapeHistory(getContext())) {
-                for (int attempt = 0; attempt < 3 && result == null && !Thread.currentThread().isInterrupted(); attempt++) {
-                    LandscapeFeed.Scene scene = LandscapeFeed.photo(seed + attempt, System.nanoTime());
+                // Metadata is fetched off the UI thread; photos themselves are never cached on disk.
+                // The pool is refreshed as it empties, and IDs + hashes survive device restarts.
+                if (candidates.isEmpty() || System.currentTimeMillis()-catalogFetchedAt > 15*60_000L) {
+                    candidates.clear();
+                    candidates.addAll(LandscapeCatalog.discover(seed));
+                    catalogFetchedAt=System.currentTimeMillis();
+                }
+                for (int attempt=0; attempt<6 && result==null
+                        && !Thread.currentThread().isInterrupted(); attempt++) {
+                    if (candidates.isEmpty()) {
+                        candidates.addAll(LandscapeCatalog.discover(seed+attempt+1));
+                        catalogFetchedAt=System.currentTimeMillis();
+                    }
+                    if (candidates.isEmpty()) break;
+                    LandscapeCatalog.Entry scene=candidates.remove(candidates.size()-1);
+                    if (!LandscapeCatalog.familySafe(scene.subject)
+                            || !LandscapeCatalog.imageUrlAllowed(scene.url)
+                            || history.contains(scene.id)) continue;
                     try {
-                        byte[] bytes = OnlineContent.get(scene.url, 6 * 1024 * 1024);
-                        BitmapFactory.Options bounds = new BitmapFactory.Options();
-                        bounds.inJustDecodeBounds = true;
-                        BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
-                        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) continue;
-                        bounds.inJustDecodeBounds = false; bounds.inSampleSize = 1;
-                        while (Math.max(bounds.outWidth, bounds.outHeight) / bounds.inSampleSize > 1920) bounds.inSampleSize *= 2;
-                        Bitmap decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
-                        if (decoded == null) continue;
-                        if (!history.remember(scene.id, bytes)) { decoded.recycle(); continue; }
-                        result = decoded;
+                        byte[] bytes = OnlineContent.get(scene.url, 6*1024*1024);
+                        BitmapFactory.Options bounds=new BitmapFactory.Options();
+                        bounds.inJustDecodeBounds=true;
+                        BitmapFactory.decodeByteArray(bytes,0,bytes.length,bounds);
+                        // Landscape means landscape, not a portrait stretched to fit a TV.
+                        if (bounds.outWidth<1100 || bounds.outHeight<600
+                                || bounds.outWidth*1.0/bounds.outHeight<1.4) continue;
+                        bounds.inJustDecodeBounds=false;
+                        bounds.inSampleSize=1;
+                        while (Math.max(bounds.outWidth,bounds.outHeight)
+                                /bounds.inSampleSize>1920) bounds.inSampleSize*=2;
+                        Bitmap decoded=BitmapFactory.decodeByteArray(bytes,0,bytes.length,bounds);
+                        if (decoded==null)continue;
+                        if (!history.remember(scene.id,bytes)) {
+                            decoded.recycle(); continue;
+                        }
+                        result=decoded;
+                        subject=scene.subject;
                     } catch (Exception unavailable) {
-                        android.util.Log.w("PersonalLandscape", "Picsum image/history failed", unavailable);
+                        android.util.Log.w("PersonalLandscape","Photo source failed",unavailable);
                     }
                 }
             } catch (Exception unavailable) {
-                android.util.Log.w("PersonalLandscape", "Photo history unavailable", unavailable);
+                android.util.Log.w("PersonalLandscape","Photo catalog/history failed",unavailable);
             }
-            Bitmap image = result;
+            Bitmap image=result;
+            String label=subject;
             handler.post(() -> {
-                if (!running || request != generation) { if (image != null) image.recycle(); return; }
-                photoBusy = false;
-                if (image != null && online()) {
-                    // Fade through: old photo out, new photo in.
+                if (!running || request!=generation) {
+                    if (image!=null) image.recycle();
+                    return;
+                }
+                photoBusy=false;
+                if (image!=null && online()) {
                     photo.animate().alpha(0f).setDuration(250).withEndAction(() -> {
-                        if (!running || request != generation || !online()) { image.recycle(); return; }
+                        if (!running || request!=generation || !online()) {
+                            image.recycle(); return;
+                        }
                         photo.setImageBitmap(image);
-                        details.setText("");
+                        details.setText(label);
                         photo.animate().alpha(1f).setDuration(500).start();
                     }).start();
-                    hasPhoto = true;
+                    hasPhoto=true;
                     status.setText("");
-                    // Wallpaper details caption at the bottom (user 2026-11-01).
                     adaptClockColors();
                 } else {
-                    if (image != null) image.recycle();
-                    status.setText("New photo unavailable · retrying automatically");
+                    if(image!=null)image.recycle();
+                    status.setText("New family-safe photo unavailable · retrying");
                     handler.removeCallbacks(photoRetry);
-                    handler.postDelayed(photoRetry, 15_000);
+                    handler.postDelayed(photoRetry,15_000);
                 }
             });
         });
