@@ -39,7 +39,10 @@ final class OnlineContent {
             connection.setUseCaches(false);
             connection.setRequestProperty("Cache-Control", "no-cache");
             connection.setRequestProperty("User-Agent", "PersonalLauncher/6.8 (https://github.com/sadique6571/PersonalLauncher)");
-            connection.setRequestProperty("Accept", imageHost(host) ? "image/jpeg,image/webp,image/png" : "application/json");
+            boolean metadataRequest = url.getPath().endsWith("/w/api.php")
+                    || url.getPath().endsWith("/HPImageArchive.aspx");
+            connection.setRequestProperty("Accept", metadataRequest || !imageHost(host)
+                    ? "application/json" : "image/jpeg,image/webp,image/png");
             try {
                 int status = connection.getResponseCode();
                 if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
