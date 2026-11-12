@@ -22,14 +22,10 @@ import java.util.Locale;
  * network request or animation service. Repaints only while Home is resumed and visible.
  */
 final class HarmonyVisionClockView extends View {
-    static final int HERITAGE=0, CHRONOGRAPH=1, SKELETON=2, MECHANICAL=3;
+    static final int HERITAGE=0, CHRONOGRAPH=1, SKELETON=2;
     private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final RectF arc=new RectF();
     private final Path hand=new Path();
-    private final Path mechanismPath=new Path();
-    private long physicsNano;
-    private double balancePosition=.34, balanceSpeed;
-    private long escrowSteps;
     private final Calendar now=Calendar.getInstance();
     private final SimpleDateFormat date=new SimpleDateFormat("EEE, MMM d",Locale.ENGLISH);
     private final Runnable clockFrame=new Runnable() {
@@ -61,7 +57,6 @@ final class HarmonyVisionClockView extends View {
         smooth=prefs.getBoolean("harmony_clock_sweep",true);
         hour24=prefs.getBoolean("time_24h",false);
         lastDisplayMinute=-1;
-        physicsNano=0L;
         light=finish==3;
         ink=light?0xff1c3046:0xfff6fbff;
         muted=light?0xff6a7d90:0xff97b1c6;
@@ -108,8 +103,7 @@ final class HarmonyVisionClockView extends View {
         }
         if(face==HERITAGE) heritage(canvas);
         else if(face==CHRONOGRAPH) chronograph(canvas);
-        else if(face==SKELETON) skeleton(canvas);
-        else mechanical(canvas);
+        else skeleton(canvas);
         int displayMinute=h*60+m;
         if(lastDisplayMinute!=displayMinute){
             lastDisplayMinute=displayMinute;
@@ -201,123 +195,6 @@ final class HarmonyVisionClockView extends View {
         }
         label(c,"SKELETON",0,-121,11,ink,true);
         label(c,shortDate,0,103,10,muted,true);
-    }
-    /**
-     * Dedicated low-overhead mechanical face for TVs. The balance oscillates as a damped
-     * spring with bounded discrete drive impulses. Escape-wheel and train angles derive
-     * from its crossings, never from unrelated spin animations. This is a watch-inspired
-     * engineering approximation, not a manufacturable escapement or a WebView.
-     */
-    private void mechanical(Canvas c) {
-        updateMechanism();
-        // Warm brushed-brass open-heart plate inside the numbered Harmony dial.
-        fill(c,0xff07131e);c.drawCircle(0,24,113,p);
-        stroke(0xff946e41,2);c.drawCircle(0,24,111,p);
-        stroke(0xffe3c68d,.9f);c.drawCircle(0,24,105,p);
-        stroke(0x779c784a,1);c.drawCircle(0,24,95,p);
-        for(int n=0;n<24;n++) {
-            float a=(float)(n*Math.PI/12);
-            stroke(0x449c8055,1);
-            c.drawLine((float)Math.cos(a)*99,(float)Math.sin(a)*99+24,
-                    (float)Math.cos(a)*104,(float)Math.sin(a)*104+24,p);
-        }
-        // Gear train. Center 1 turn/hour, third 6 turns/hour, fourth 1 turn/minute.
-        double fourth=escrowSteps*1.5;
-        double third=-fourth/10d;
-        double centre=-third/6d;
-        gear(c,-45,-3,30,36,(float)centre,0xffc49b58);
-        gear(c,20,-13,34,40,(float)third,0xffd9b16c);
-        gear(c,69,22,20,28,(float)-fourth,0xffa98c63);
-        gear(c,-57,48,21,28,(float)(-centre/6d),0xffb08249);
-        // Faster escape wheel under the pallet fork.
-        gear(c,-8,64,15,15,(float)(escrowSteps*12d),0xffaeb8bd);
-        // A restrained stainless Swiss-lever style fork with jewel pallets and horns.
-        c.save();
-        c.translate(14,64);
-        c.rotate((float)(Math.signum(balancePosition)*5.2));
-        stroke(0xffaebcc6,3.7f);
-        c.drawLine(0,0,-25,-11,p);c.drawLine(0,0,-23,13,p);
-        stroke(0xffe6eef3,1.5f);
-        c.drawLine(0,0,24,0,p);
-        c.drawLine(24,0,30,-5,p);c.drawLine(24,0,30,5,p);
-        fill(c,0xffc94757);c.drawCircle(-25,-11,3.2f,p);c.drawCircle(-23,13,3.2f,p);
-        fill(c,0xffd2a865);c.drawCircle(0,0,4.2f,p);
-        fill(c,0xff671c2b);c.drawCircle(0,0,2,p);
-        c.restore();
-        // Balance wheel: a single uninterrupted lower window with moving oscillator.
-        fill(c,0xff091824);c.drawCircle(62,67,36,p);
-        stroke(0xffab8550,1.4f);c.drawCircle(62,67,35,p);
-        c.save();c.translate(62,67);
-        c.rotate((float)Math.toDegrees(balancePosition));
-        stroke(0xffe4c18a,4.2f);c.drawCircle(0,0,27,p);
-        for(int a=0;a<4;a++){
-            c.save();c.rotate(a*90);
-            stroke(0xffb99157,3);c.drawLine(0,0,0,-27,p);
-            fill(c,0xffe8c98b);c.drawCircle(0,-25,2.7f,p);
-            c.restore();
-        }
-        fill(c,0xff802c42);c.drawCircle(0,0,5,p);
-        c.restore();
-        // Stationary gold spiral hints at the hairspring and remains cheap at 25 fps.
-        mechanismPath.reset();
-        for(int i=0;i<=60;i++){
-            double t=i/60d,rad=3+t*17,angle=t*Math.PI*7;
-            float x=62+(float)(Math.cos(angle)*rad),y=67+(float)(Math.sin(angle)*rad);
-            if(i==0)mechanismPath.moveTo(x,y);else mechanismPath.lineTo(x,y);
-        }
-        stroke(0xffdfc68c,.85f);c.drawPath(mechanismPath,p);
-        fill(c,0xffd8b47a);c.drawCircle(62,67,2.5f,p);
-        label(c,"MECHANICAL",0,-74,11,0xfff4dfb5,true);
-        label(c,"HARMONY VISION  ·  OPEN HEART",0,-61,5.7f,0xffcdb690,true);
-    }
-
-    private void updateMechanism() {
-        long t=System.nanoTime();
-        if(physicsNano==0L){physicsNano=t;return;}
-        double duration=Math.min(.08,Math.max(0,(t-physicsNano)/1e9d));
-        physicsNano=t;
-        // Semimplicit Euler; bounded substeps keep the 2 Hz balance stable after TV stalls.
-        while(duration>0) {
-            double dt=Math.min(.005,duration);
-            duration-=dt;
-            double previous=balancePosition;
-            balanceSpeed+=(-Math.pow(4*Math.PI,2)*balancePosition
-                    - .55*balanceSpeed)*dt;
-            balancePosition+=balanceSpeed*dt;
-            if((previous>0&&balancePosition<=0)||(previous<0&&balancePosition>=0)) {
-                escrowSteps++;
-                // Coarse impulse replaces the mainspring torque otherwise lost to damping.
-                balanceSpeed+=Math.signum(balanceSpeed)*.30;
-            }
-        }
-    }
-
-    private void gear(Canvas c,float x,float y,float r,int teeth,float angle,int brass){
-        c.save();c.translate(x,y);c.rotate(angle);
-        mechanismPath.reset();
-        for(int i=0;i<teeth;i++){
-            double theta=i*2*Math.PI/teeth;
-            for(int k=0;k<4;k++){
-                double a=theta+k*(Math.PI*2/teeth/4);
-                float rad=r+(k==1||k==2?2.2f:-1.9f);
-                float gx=(float)Math.cos(a)*rad,gy=(float)Math.sin(a)*rad;
-                if(i==0&&k==0)mechanismPath.moveTo(gx,gy);
-                else mechanismPath.lineTo(gx,gy);
-            }
-        }
-        mechanismPath.close();
-        fill(c,brass);c.drawPath(mechanismPath,p);
-        stroke(0xff5f4729,.9f);c.drawPath(mechanismPath,p);
-        stroke(0xfff0d4a2,1);c.drawCircle(0,0,r-3,p);
-        fill(c,0xff071925);c.drawCircle(0,0,r*.65f,p);
-        for(int i=0;i<5;i++){
-            c.save();c.rotate(i*72);
-            stroke(0xffcaa56c,3.6f);c.drawLine(0,0,0,-r+3,p);
-            c.restore();
-        }
-        fill(c,0xffe2c78e);c.drawCircle(0,0,4,p);
-        fill(c,0xff9d3248);c.drawCircle(0,0,2.1f,p);
-        c.restore();
     }
     private void drawHand(Canvas c,float angle,float length,float width,int color){
         c.save();c.rotate(angle);

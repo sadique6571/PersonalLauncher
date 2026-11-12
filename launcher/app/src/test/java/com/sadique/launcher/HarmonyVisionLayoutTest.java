@@ -5,7 +5,7 @@ import static org.junit.Assert.*;
 
 public class HarmonyVisionLayoutTest {
     @Test public void harmonyDockNeverStretchesOrMirrorsIcons(){
-        assertTrue(HarmonyVisionLayout.showDockPanel());
+        assertFalse(HarmonyVisionLayout.showDockPanel());
         assertFalse(HarmonyVisionLayout.showDockReflections());
         assertFalse(HarmonyVisionLayout.expandAppOnFocus());
         assertTrue(HarmonyVisionLayout.showNativeWeatherWidget());

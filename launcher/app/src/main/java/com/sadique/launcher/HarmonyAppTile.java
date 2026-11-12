@@ -63,9 +63,9 @@ final class HarmonyAppTile extends FrameLayout {
     }
     void appearance(boolean selected){
         plate.setBackground(HarmonyVisionSurface.app(getContext(),accent,selected,dp(19)));
-        // Native artwork remains uncropped. The tile itself gently scales on focus.
+        // Native icon remains the same size on focus. Caption only appears on focus.
         name.setVisibility(selected?VISIBLE:INVISIBLE);
-        plate.setElevation(selected?dp(9):dp(2));
+        plate.setElevation(selected?dp(7):dp(2));
         invalidate();
     }
 }

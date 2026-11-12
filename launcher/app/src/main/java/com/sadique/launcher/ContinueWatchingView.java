@@ -58,7 +58,7 @@ public final class ContinueWatchingView extends LinearLayout {
     public ContinueWatchingView(Activity host, Consumer<String> focusTitle) {
         super(host); this.host = host; this.focusTitle = focusTitle;
         prefs = ThemePreferences.get(host);
-        compact=ThemeStyle.id(prefs)==ThemeStyle.GLASS || ThemeStyle.harmony(prefs);
+        compact=ThemeStyle.id(prefs)==ThemeStyle.GLASS;
         setOrientation(VERTICAL); setPadding(0, dp(compact?8:22), 0, dp(compact?8:12));
         heading = label("Continue watching", compact?18:23);
         addView(heading);

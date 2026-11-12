@@ -68,7 +68,6 @@ public final class PersonalHomeActivity extends Activity {
     private WeatherWidgetView weatherWidget;
     private SweepAnalogClock analogClock;
     private HarmonyVisionClockView harmonyClock;
-    private HarmonyMechanicalHtmlView harmonyMechanicalClock;
     private TextView harmonyDateValue,harmonyGreetingValue,harmonyQuoteValue;
     private View harmonyWeatherCard;
     private WeatherForecastPanel forecastPanel;
@@ -121,9 +120,7 @@ public final class PersonalHomeActivity extends Activity {
                 .putBoolean("clock_shadow",true).putBoolean("focus_glow",false)
                 .putInt("tv_columns",4).putInt("tile_corners",2).putInt("tile_spacing",1)
                 .putInt("glass_alpha",58).putInt("glass_finish",0).putInt("glass_edge",1)
-                .putBoolean("panel_transparency",true).putBoolean("continue_watching",true).apply();
-        if(harmony()&&!prefs.getBoolean("harmony_continue_v2",false))
-            prefs.edit().putBoolean("harmony_continue_v2",true).putBoolean("continue_watching",true).apply();
+                .putBoolean("panel_transparency",true).putBoolean("continue_watching",false).apply();
     }
     /** Lightweight English service shortcuts with D-pad return to the app dock. */
     private View harmonyShortcuts() {
@@ -154,34 +151,11 @@ public final class PersonalHomeActivity extends Activity {
         int screenH=getResources().getConfiguration().screenHeightDp;
         int screenW=getResources().getConfiguration().screenWidthDp;
         int side=dp(HarmonyVisionLayout.clockDiameterDp(screenH,prefs.getInt("harmony_clock_size",1)));
-        // Render the original HTML only when Mechanical is selected; three native faces stay lightweight.
-        View watchFace;
-        if(prefs.getInt("harmony_clock_face",0)==3){
-            try {
-                harmonyMechanicalClock=new HarmonyMechanicalHtmlView(this);
-                watchFace=harmonyMechanicalClock;
-            }catch(RuntimeException webViewUnavailable){
-                // Some Android TV builds ship without a functioning WebView provider.
-                android.util.Log.w("HarmonyClock","HTML watch unavailable; using native face",webViewUnavailable);
-                harmonyClock=new HarmonyVisionClockView(this);
-                watchFace=harmonyClock;
-            }
-        }else{
-            harmonyClock=new HarmonyVisionClockView(this);
-            watchFace=harmonyClock;
-        }
-        watchFace.setOnClickListener(v->harmonyClockSettings());
-        watchFace.setOnKeyListener((v,key,event)->{
-            if(event.getAction()==KeyEvent.ACTION_DOWN &&
-                    (key==KeyEvent.KEYCODE_DPAD_CENTER||key==KeyEvent.KEYCODE_ENTER)){
-                harmonyClockSettings();return true;
-            }
+        harmonyClock=new HarmonyVisionClockView(this);
+        harmonyClock.setOnClickListener(v->harmonyClockSettings());
+        harmonyClock.setOnKeyListener((v,key,event)->{
             if(event.getAction()!=KeyEvent.ACTION_DOWN)return false;
-            if(key==KeyEvent.KEYCODE_DPAD_DOWN){
-                if(continueWatching!=null&&continueWatching.getVisibility()==View.VISIBLE
-                        &&continueWatching.focusEntry())return true;
-                if(grid!=null){grid.focusKey(focusedPkg);return true;}
-            }
+            if(key==KeyEvent.KEYCODE_DPAD_DOWN&&grid!=null){grid.focusKey(focusedPkg);return true;}
             if(key==KeyEvent.KEYCODE_DPAD_RIGHT&&weatherWidget!=null){weatherWidget.requestFocus();return true;}
             if(key==KeyEvent.KEYCODE_DPAD_UP&&searchButton!=null){searchButton.requestFocus();return true;}
             return false;
@@ -189,7 +163,7 @@ public final class PersonalHomeActivity extends Activity {
         if(!prefs.getBoolean("hide_clock",false)){
             LinearLayout.LayoutParams face=new LinearLayout.LayoutParams(side,side);
             face.setMarginEnd(dp(screenW<780?12:22));
-            stage.addView(watchFace,face);
+            stage.addView(harmonyClock,face);
         }
         LinearLayout thought=new LinearLayout(this);
         thought.setOrientation(LinearLayout.VERTICAL);thought.setGravity(Gravity.CENTER_VERTICAL);
@@ -214,15 +188,10 @@ public final class PersonalHomeActivity extends Activity {
             harmonyWeatherCard=weatherWidget;
             weatherWidget.setOnKeyListener((v,key,event)->{
                 if(event.getAction()!=KeyEvent.ACTION_DOWN)return false;
-                if(key==KeyEvent.KEYCODE_DPAD_DOWN){
-                    if(continueWatching!=null&&continueWatching.getVisibility()==View.VISIBLE
-                            &&continueWatching.focusEntry())return true;
-                    if(grid!=null){grid.focusKey(focusedPkg);return true;}
-                }
+                if(key==KeyEvent.KEYCODE_DPAD_DOWN&&grid!=null){grid.focusKey(focusedPkg);return true;}
                 if(key==KeyEvent.KEYCODE_DPAD_UP&&searchButton!=null){searchButton.requestFocus();return true;}
-                View face=harmonyMechanicalClock!=null?harmonyMechanicalClock:harmonyClock;
-                if(key==KeyEvent.KEYCODE_DPAD_LEFT&&face!=null&&face.getParent()!=null){
-                    face.requestFocus();return true;
+                if(key==KeyEvent.KEYCODE_DPAD_LEFT&&harmonyClock!=null&&harmonyClock.getParent()!=null){
+                    harmonyClock.requestFocus();return true;
                 }
                 return key==KeyEvent.KEYCODE_DPAD_RIGHT;
             });
@@ -236,25 +205,21 @@ public final class PersonalHomeActivity extends Activity {
                     weatherSnapshotAt,System.currentTimeMillis(),WEATHER_CACHE_MS))
                 weatherWidget.bind(weatherSnapshot,weatherCity(),prefs.getBoolean("weather_fahrenheit",false));
         }
-        if(harmonyClock!=null)harmonyClock.active(resumed&&!prefs.getBoolean("hide_clock",false));
-        if(harmonyMechanicalClock!=null)harmonyMechanicalClock.active(resumed&&!prefs.getBoolean("hide_clock",false));
+        harmonyClock.active(resumed&&!prefs.getBoolean("hide_clock",false));
         return stage;
     }
     private void harmonyClockSettings(){
         if(!harmony())return;
         String[] names={"Watch face","Metal finish","Clock accent","Second hand","Time format","Clock size","Hide clock","Daily thoughts"};
-        String[] hints={"Heritage, Chronograph, Skeleton, Mechanical","Space Blue, Obsidian, Titanium, Ceramic",
+        String[] hints={"Heritage, Chronograph, Skeleton","Space Blue, Obsidian, Titanium, Ceramic",
                 "Ice blue, Gold or Rose","Smooth sweep or Quartz tick","12-hour or 24-hour",
                 "Fit the clock on the TV","Show or hide the dial","An original thought for every day"};
         int[] icons={R.drawable.ic_clock,R.drawable.ic_palette,R.drawable.ic_palette,R.drawable.ic_clock,
                 R.drawable.ic_clock,R.drawable.ic_clock,R.drawable.ic_clock,R.drawable.ic_clock};
         GlassSettings.options(this,"Harmony Vision Clock",names,hints,icons,which->{
             switch(which){
-                case 0:chooseSetting("Watch face",new String[]{"Heritage","Chronograph","Skeleton","Mechanical (V17 TV)"},
-                        i->{int previous=prefs.getInt("harmony_clock_face",0);
-                             prefs.edit().putInt("harmony_clock_face",i).apply();
-                             if(previous==3||i==3)buildHomeSoon();
-                             else if(harmonyClock!=null)harmonyClock.configure(prefs);});break;
+                case 0:chooseSetting("Watch face",new String[]{"Heritage","Chronograph","Skeleton"},
+                        i->{prefs.edit().putInt("harmony_clock_face",i).apply();if(harmonyClock!=null)harmonyClock.configure(prefs);});break;
                 case 1:chooseSetting("Metal finish",new String[]{"Space Blue","Obsidian","Titanium","Ceramic"},
                         i->{prefs.edit().putInt("harmony_clock_finish",i).apply();if(harmonyClock!=null)harmonyClock.configure(prefs);});break;
                 case 2:chooseSetting("Clock accent",new String[]{"Ice Blue","Gold","Rose"},
@@ -425,8 +390,7 @@ public final class PersonalHomeActivity extends Activity {
      */
     private int gridWidth() {
         int pad = appBody == null ? dp(16) : appBody.getPaddingLeft() + appBody.getPaddingRight();
-        int available=Math.max(dp(120),pageWidth-pad);
-        return harmony()&&tv?Math.min(available,dp(744)):available;
+        return Math.max(dp(120), pageWidth - pad);
     }
 
     /** Logo size inside tiles from settings: small / normal / large. */
@@ -592,7 +556,6 @@ public final class PersonalHomeActivity extends Activity {
         if(weatherWidget!=null){weatherWidget.active(false);weatherWidget=null;}
         if(analogClock!=null){analogClock.active(false);analogClock=null;}
         if(harmonyClock!=null){harmonyClock.active(false);harmonyClock=null;}
-        if(harmonyMechanicalClock!=null){harmonyMechanicalClock.close();harmonyMechanicalClock=null;}
         harmonyDateValue=null;harmonyGreetingValue=null;harmonyQuoteValue=null;harmonyWeatherCard=null;
         clockDatesInline=glassOs()&&getResources().getConfiguration().screenWidthDp>=700&&!weatherWidgetEnabled()&&prefs.getInt("clock_style",0)!=1;
         islamicDate=null;bluetoothStatus=null;focusedSpotlight=null;
@@ -894,7 +857,7 @@ public final class PersonalHomeActivity extends Activity {
         boolean liquidGlass=TvGlassStyle.enabled(prefs);
         appBody.setBackground(harmony()&&HarmonyVisionLayout.showDockPanel()?HarmonyVisionSurface.status(this):null);
         // No opaque drawer behind the reflective first row in Harmony.
-        appBody.setPadding(harmony()?dp(8):0,harmony()?dp(4):0,harmony()?dp(8):0,harmony()?dp(4):0);
+        appBody.setPadding(0,0,0,0);
         appBody.setClipToOutline(false);
         if(ThemeStyle.id(prefs)==ThemeStyle.COBALT) grid.addItemDecoration(new CobaltRails(dp(1)));
         if(ThemeStyle.custom(prefs)&&tv) grid.addOnLayoutChangeListener((v,l,t,rr,bb,ol,ot,orr,obb)->placeDemoCards());
@@ -912,8 +875,6 @@ public final class PersonalHomeActivity extends Activity {
         clockParams.gravity = new int[]{Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END}[align];
         if(harmony()&&tv&&!prefs.getBoolean("apps_only",false)) {
             scrollContent.addView(harmonyHero(),new LinearLayout.LayoutParams(-1,-2));
-            if(prefs.getBoolean("continue_watching",true))
-                scrollContent.addView(continueWatching,new LinearLayout.LayoutParams(-1,-2));
         } else if(glassOs()||weatherWidgetEnabled()) {
             LinearLayout stage=new LinearLayout(this);stage.setGravity(Gravity.CENTER_VERTICAL|Gravity.END);
             boolean wide=getResources().getConfiguration().screenWidthDp>=700;
@@ -950,11 +911,7 @@ public final class PersonalHomeActivity extends Activity {
         page.addView(scroll, referenceStage?new LinearLayout.LayoutParams(-1,0,1):new LinearLayout.LayoutParams(-1,-2));
         if(harmony()||ThemeStyle.custom(prefs)||glassOs())appHeading.setVisibility(View.GONE);
         page.addView(appHeading);
-        LinearLayout.LayoutParams dockParams=referenceStage
-                ?new LinearLayout.LayoutParams(harmony()?dp(Math.min(760,getResources().getConfiguration().screenWidthDp-48)):-1,referenceDockHeight())
-                :new LinearLayout.LayoutParams(-1,0,1);
-        if(harmony())dockParams.gravity=Gravity.CENTER_HORIZONTAL;
-        page.addView(appBody,dockParams);
+        page.addView(appBody,referenceStage?new LinearLayout.LayoutParams(-1,referenceDockHeight()):new LinearLayout.LayoutParams(-1,0,1));
         // Focus-glow tracker: keep the wallpaper glow on the focused tile no matter
         // which scroller moved.
         View.OnScrollChangeListener glowTracker = (v, x, y, oldX, oldY) -> {
@@ -1009,7 +966,7 @@ public final class PersonalHomeActivity extends Activity {
         WindowManager.LayoutParams brightness = getWindow().getAttributes();
         brightness.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
         getWindow().setAttributes(brightness);
-        if (resumed && !prefs.getBoolean("apps_only", false)) continueWatching.start();
+        if (resumed && !prefs.getBoolean("apps_only", false)&&!harmony()) continueWatching.start();
         BootLog.mark("home buildHome", buildMs);
         if (firstBuild) {
             firstBuild = false;
@@ -1666,12 +1623,12 @@ public final class PersonalHomeActivity extends Activity {
             if(glassOs()&&!harmony()&&!moving)grid.expandKey(focus?app.info.activityInfo.packageName:null);
             if (!moving) {
                 // Focus zoom: gentle scale animation.
-                float scale = focus ? (harmony()?1.10f:glassOs()?1f:tvGlass() ? 1.06f : 1.05f) : 1f;
-                float sy=harmony()?scale:glassOs()?1:scale;
-                float lift=harmony()&&focus?-dp(5):0;
+                float scale = focus ? (glassOs()?1f:tvGlass() ? 1.06f : 1.05f) : 1f;
+                float sy=glassOs()?1:scale;
+                float lift=0;
                 v.animate().cancel();
                 if(harmony()){
-                    v.animate().scaleX(scale).scaleY(scale).translationY(lift).setDuration(165).start();
+                    v.setScaleX(1f);v.setScaleY(1f);v.setTranslationY(0);
                 }else if (MemoryProfile.effectiveTier(this, prefs) == MemoryProfile.TIER_LIGHT) {
                     v.setScaleX(scale); v.setScaleY(sy);v.setTranslationY(lift);
                 } else v.animate().scaleX(scale).scaleY(sy).translationY(lift).setUpdateListener(a->grid.refreshReflections()).setDuration(tvGlass() ? 180 : 150).start();
@@ -2920,7 +2877,7 @@ public final class PersonalHomeActivity extends Activity {
         super.onResume();
         resumed = true;
         if(bluetooth!=null){bluetooth.start();updateBluetooth();}
-        if(telemetry!=null)telemetry.start();if(weatherWidget!=null)weatherWidget.active(true);if(analogClock!=null)analogClock.active(true);if(harmonyClock!=null)harmonyClock.active(true);if(harmonyMechanicalClock!=null)harmonyMechanicalClock.active(true);
+        if(telemetry!=null)telemetry.start();if(weatherWidget!=null)weatherWidget.active(true);if(analogClock!=null)analogClock.active(true);if(harmonyClock!=null)harmonyClock.active(true);
         GitHubUpdates.resume(this);
         VolumeAutoStart.request(this);
         HomeAutomation.onResume(this);
@@ -2930,7 +2887,7 @@ public final class PersonalHomeActivity extends Activity {
         handler.removeCallbacks(tick);
         tick.run();
         updateNetwork();
-        if (!prefs.getBoolean("apps_only", false)) continueWatching.start();
+        if (!prefs.getBoolean("apps_only", false)&&!harmony()) continueWatching.start();
         refreshHomeWeather();
         updateOnlineWallpaper();
         armSlideshow();
@@ -2954,7 +2911,7 @@ public final class PersonalHomeActivity extends Activity {
         VolumeKeys.stop();
         VolumeSlider.hide(this);
         resumed = false;
-        if(weatherWidget!=null)weatherWidget.active(false);if(analogClock!=null)analogClock.active(false);if(harmonyClock!=null)harmonyClock.active(false);if(harmonyMechanicalClock!=null)harmonyMechanicalClock.active(false);
+        if(weatherWidget!=null)weatherWidget.active(false);if(analogClock!=null)analogClock.active(false);if(harmonyClock!=null)harmonyClock.active(false);
         if(bluetooth!=null)bluetooth.stop();if(telemetry!=null)telemetry.stop();
         if (grid != null && grid.getLayoutManager() != null) gridState = grid.getLayoutManager().onSaveInstanceState();
         if (focusedPkg != null) prefs.edit().putString("home_focus_pkg", focusedPkg).apply();
@@ -3011,7 +2968,7 @@ public final class PersonalHomeActivity extends Activity {
         if (liquidBackdrop != null) { liquidBackdrop.close(); liquidBackdrop=null; }
         if (headerBackdrop != null) { headerBackdrop.close(); headerBackdrop=null; }
         unregisterReceiver(appChanges);
-        if(weatherWidget!=null)weatherWidget.active(false);if(analogClock!=null)analogClock.active(false);if(harmonyClock!=null)harmonyClock.active(false);if(harmonyMechanicalClock!=null)harmonyMechanicalClock.close();if(forecastPanel!=null)forecastPanel.close();
+        if(weatherWidget!=null)weatherWidget.active(false);if(analogClock!=null)analogClock.active(false);if(harmonyClock!=null)harmonyClock.active(false);if(forecastPanel!=null)forecastPanel.close();
         if(bluetooth!=null)bluetooth.stop();if(telemetry!=null)telemetry.stop();
         if(appLibrary!=null)appLibrary.close();
         if (panel != null) panel.dismiss();

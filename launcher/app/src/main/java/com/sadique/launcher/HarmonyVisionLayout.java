@@ -20,7 +20,7 @@ final class HarmonyVisionLayout {
     static int dockHeightDp(int screenHeightDp){
         return dockTileHeightDp(screenHeightDp)+21;
     }
-    static boolean showDockPanel(){return true;}
+    static boolean showDockPanel(){return false;}
     static boolean showDockReflections(){return false;}
     static boolean expandAppOnFocus(){return false;}
     static boolean showNativeWeatherWidget(){return true;}

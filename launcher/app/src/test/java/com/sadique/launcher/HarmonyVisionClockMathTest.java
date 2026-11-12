@@ -19,6 +19,6 @@ public class HarmonyVisionClockMathTest {
     @Test public void faceIdsAreBounded(){
         assertEquals(0,HarmonyVisionClockMath.clampFace(-1));
         assertEquals(1,HarmonyVisionClockMath.clampFace(1));
-        assertEquals(3,HarmonyVisionClockMath.clampFace(99));
+        assertEquals(2,HarmonyVisionClockMath.clampFace(99));
     }
 }
