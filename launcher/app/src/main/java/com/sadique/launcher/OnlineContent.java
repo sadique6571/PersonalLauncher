@@ -13,13 +13,14 @@ final class OnlineContent {
         return host.equals("images.unsplash.com")
                 || host.equals("api.open-meteo.com") || host.equals("geocoding-api.open-meteo.com") || host.equals("wttr.in")
                 || host.equals("picsum.photos") || host.equals("fastly.picsum.photos")
-                || host.equals("nominatim.openstreetmap.org") || host.equals("www.bing.com");
+                || host.equals("nominatim.openstreetmap.org") || host.equals("www.bing.com")
+                || host.equals("commons.wikimedia.org") || host.equals("upload.wikimedia.org");
     }
 
     private static boolean imageHost(String host) {
         return host.equals("images.unsplash.com")
                 || host.equals("picsum.photos") || host.equals("fastly.picsum.photos")
-                || host.equals("www.bing.com");
+                || host.equals("www.bing.com") || host.equals("upload.wikimedia.org");
     }
 
     static byte[] get(String address, int limit) throws IOException {
@@ -38,7 +39,10 @@ final class OnlineContent {
             connection.setUseCaches(false);
             connection.setRequestProperty("Cache-Control", "no-cache");
             connection.setRequestProperty("User-Agent", "PersonalLauncher/6.8 (https://github.com/sadique6571/PersonalLauncher)");
-            connection.setRequestProperty("Accept", imageHost(host) ? "image/jpeg,image/webp,image/png" : "application/json");
+            boolean metadataRequest = url.getPath().endsWith("/w/api.php")
+                    || url.getPath().endsWith("/HPImageArchive.aspx");
+            connection.setRequestProperty("Accept", metadataRequest || !imageHost(host)
+                    ? "application/json" : "image/jpeg,image/webp,image/png");
             try {
                 int status = connection.getResponseCode();
                 if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
