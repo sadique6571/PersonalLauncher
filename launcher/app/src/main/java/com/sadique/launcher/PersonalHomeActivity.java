@@ -157,8 +157,15 @@ public final class PersonalHomeActivity extends Activity {
         // Render the original HTML only when Mechanical is selected; three native faces stay lightweight.
         View watchFace;
         if(prefs.getInt("harmony_clock_face",0)==3){
-            harmonyMechanicalClock=new HarmonyMechanicalHtmlView(this);
-            watchFace=harmonyMechanicalClock;
+            try {
+                harmonyMechanicalClock=new HarmonyMechanicalHtmlView(this);
+                watchFace=harmonyMechanicalClock;
+            }catch(RuntimeException webViewUnavailable){
+                // Some Android TV builds ship without a functioning WebView provider.
+                android.util.Log.w("HarmonyClock","HTML watch unavailable; using native face",webViewUnavailable);
+                harmonyClock=new HarmonyVisionClockView(this);
+                watchFace=harmonyClock;
+            }
         }else{
             harmonyClock=new HarmonyVisionClockView(this);
             watchFace=harmonyClock;
