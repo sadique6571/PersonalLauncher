@@ -85,6 +85,7 @@ final class ShellVolumePanel implements AutoCloseable {
     }
     void install() throws Exception {
         session.install();
+        channel.relayInstalled();
         System.out.println("Launcher volume panel active: stock media-popup flag suppressed; warnings forwarded.");
     }
     boolean restoreFailed() { return restoreFailed; }

@@ -36,7 +36,7 @@ final class VolumeKeys {
     }
     private static boolean canHandle(KeyEvent event) {
         // The shell helper injects these pairs through Android so its controller owns their panel.
-        return direction(event.getKeyCode()) != 0
+        return direction(event.getKeyCode()) != 0 && !VolumePanelBinder.ownsMediaKeys()
                 && !(event.getDeviceId() == KeyCharacterMap.VIRTUAL_KEYBOARD && event.getScanCode() == 0);
     }
     private static void process(Context context, KeyEvent event, boolean consume) {
