@@ -10,6 +10,13 @@ final class HomeAppearance {
         return Math.max(0, Math.min(150, Math.round(24 * (1 - daylight(mode, minute))) + Math.max(0, extra)));
     }
 
+    static float[] fitFrame(int width, int height, int imageWidth, int imageHeight) {
+        float scale = Math.min(width / (float) imageWidth, height / (float) imageHeight);
+        float photoWidth = imageWidth * scale, photoHeight = imageHeight * scale;
+        float left = (width - photoWidth) / 2f, top = (height - photoHeight) / 2f;
+        return new float[]{left, top, left + photoWidth, top + photoHeight};
+    }
+
     // Portrait uses a landscape hero instead of magnifying a 16:9 photo to phone height.
     static float[] frame(int width, int height, int imageWidth, int imageHeight, float clockY, boolean mountains) {
         boolean portrait = height > width;

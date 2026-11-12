@@ -21,6 +21,13 @@ public class HomeAppearanceTest {
         assertTrue(frame[1] + height * .49f > 140);
         assertTrue(frame[0] <= 0 && frame[2] >= 393);
     }
+    @Test public void fitAt1080pKeepsEveryEdgeAcrossAspectRatios() {
+        assertArrayEquals(new float[]{0, 0, 1920, 1080}, HomeAppearance.fitFrame(1920, 1080, 1920, 1080), .1f);
+        assertArrayEquals(new float[]{240, 0, 1680, 1080}, HomeAppearance.fitFrame(1920, 1080, 1600, 1200), .1f);
+        assertArrayEquals(new float[]{600, 0, 1320, 1080}, HomeAppearance.fitFrame(1920, 1080, 800, 1200), .1f);
+        assertArrayEquals(new float[]{0, 135, 1920, 945}, HomeAppearance.fitFrame(1920, 1080, 1920, 810), .1f);
+    }
+
     @Test public void televisionShowsFullSkyAndDoesNotZoomToAlignRidgeWithClock() {
         float[] frame = HomeAppearance.frame(960, 540, 1280, 720, 160, true);
         assertArrayEquals(new float[]{0, 0, 960, 540}, frame, .1f);
