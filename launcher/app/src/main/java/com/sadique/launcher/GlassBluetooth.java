@@ -69,5 +69,5 @@ final class GlassBluetooth {
         if(c.getMajorDeviceClass()==BluetoothClass.Device.Major.PERIPHERAL)return R.drawable.ic_input;
         return android.R.drawable.stat_sys_data_bluetooth;
     }
-    private void settings(){try{host.startActivity(SystemSettings.bluetoothAccessoriesIntent(host));}catch(RuntimeException unavailable){Toast.makeText(host,"Bluetooth settings unavailable",Toast.LENGTH_SHORT).show();}}
+    private void settings() { SystemSettings.openBluetoothAccessories(host); }
 }

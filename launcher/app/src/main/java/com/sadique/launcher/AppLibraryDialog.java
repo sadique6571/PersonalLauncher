@@ -395,7 +395,7 @@ final class AppLibraryDialog {
         shelf = new FrameLayout(activity);
         // The glass uses physical x coordinates; only the catalogue mirrors its item order.
         shelf.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
-        shelf.setClipChildren(!harmonyDrawer);
+        shelf.setClipChildren(true);
         RecyclerView list = new RecyclerView(activity);
         list.setLayoutDirection(rtl ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
         catalog = list;
@@ -405,7 +405,7 @@ final class AppLibraryDialog {
         });
         list.setItemAnimator(null);
         list.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        list.setClipToPadding(!harmonyDrawer);
+        list.setClipToPadding(true);
         list.setPadding(dp(10), dp(8), dp(10), dp(8));
         list.setAdapter(new Catalog());
         shelf.addView(list, new FrameLayout.LayoutParams(-1, -1));

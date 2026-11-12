@@ -25,7 +25,7 @@ final class ShellVolumeChannel implements AutoCloseable {
     private Class<?> activityType;
     private IBinder endpoint;
     private VolumePanelUpdates updates;
-    private boolean acquired;
+    private boolean acquired, registered;
     private volatile boolean closed;
 
     ShellVolumeChannel() throws Exception {
@@ -88,11 +88,33 @@ final class ShellVolumeChannel implements AutoCloseable {
             close();
         } finally { data.recycle(); reply.recycle(); }
     }
+    synchronized void relayInstalled() throws Exception {
+        if (closed) throw new IOException("Direct panel Binder is closed");
+        registered = relayState(VolumePanelBinder.RELAY_ACTIVE);
+    }
+    private boolean relayState(int transaction) throws Exception {
+        Parcel data = Parcel.obtain(), reply = Parcel.obtain();
+        try {
+            data.writeInterfaceToken(VolumePanelBinder.DESCRIPTOR);
+            data.writeStrongBinder(token);
+            if (!endpoint.transact(transaction, data, reply, 0)) return false;
+            reply.readException();
+            return true;
+        } finally {
+            data.recycle();
+            reply.recycle();
+        }
+    }
     void signal() { VolumePanelUpdates pending = updates; if (pending != null) pending.offer(SystemClock.uptimeMillis()); }
     boolean isOpen() { return !closed && endpoint != null && endpoint.isBinderAlive(); }
     @Override public synchronized void close() {
         if (closed) return;
         closed = true;
+        if (registered && endpoint != null && endpoint.isBinderAlive()) {
+            try { relayState(VolumePanelBinder.RELAY_STOPPED); }
+            catch (Exception unavailable) { System.err.println("Could not release panel relay: " + unavailable); }
+        }
+        registered = false;
         if (updates != null) updates.close();
         sender.shutdownNow();
         if (endpoint != null) try { endpoint.unlinkToDeath(death, 0); } catch (RuntimeException alreadyRemoved) { }

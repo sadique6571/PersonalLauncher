@@ -38,30 +38,25 @@ final class SystemSettings {
     private static final ComponentName AOSP_TV_SETTINGS =
             new ComponentName("com.android.tv.settings", "com.android.tv.settings.MainSettings");
 
-    /** Use the firmware's Bluetooth settings route: pairing-only AddAccessoryActivity skips the
-     * paired devices / remotes screen on Haier Google TV. */
-    static Intent bluetoothAccessoriesIntent(Context context) {
-        PackageManager pm = context.getPackageManager();
-        String authority = "com.android.tv.settings.accessories.sliceprovider";
-        ComponentName activity = new ComponentName("com.android.tv.settings",
-                "com.android.tv.settings.slice.SliceActivity");
-        try {
-            android.content.pm.ActivityInfo info = pm.getActivityInfo(activity, 0);
-            if (info.enabled && info.exported) {
-                // A provider visibility/metadata lookup is not proof the slice is unavailable.
-                // Use the same explicit action + string extra verified with adb on this firmware.
-                android.util.Log.d("PersonalSettings", "Bluetooth: accessories slice");
-                if (info.permission != null && context.checkSelfPermission(info.permission) != PackageManager.PERMISSION_GRANTED)
-                    android.util.Log.w("PersonalSettings", "Bluetooth slice requires existing declared grant: " + info.permission);
-                return new Intent("android.settings.SLICE_SETTINGS").setComponent(activity)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                        .putExtra("slice_uri", "content://" + authority + "/general");
-            }
-        } catch (PackageManager.NameNotFoundException unavailable) {
-            // Other firmware keeps its standard Bluetooth route.
+    /** Open the verified Haier Remotes & Accessories slice, with Bluetooth as the platform fallback. */
+    static void openBluetoothAccessories(Context context) {
+        Intent slice = new Intent("android.settings.SLICE_SETTINGS")
+                .setClassName("com.android.tv.settings", "com.android.tv.settings.slice.SliceActivity")
+                .putExtra("slice_uri", "content://com.android.tv.settings.accessories.sliceprovider/general");
+        if (open(context, slice)) return;
+        if (!open(context, new Intent(Settings.ACTION_BLUETOOTH_SETTINGS))) {
+            android.widget.Toast.makeText(context, R.string.not_available, android.widget.Toast.LENGTH_SHORT).show();
         }
-        android.util.Log.d("PersonalSettings", "Bluetooth: standard route (no accessible SliceActivity)");
-        return intent(context, Settings.ACTION_BLUETOOTH_SETTINGS);
+    }
+
+    private static boolean open(Context context, Intent intent) {
+        try {
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            return true;
+        } catch (android.content.ActivityNotFoundException | SecurityException unavailable) {
+            android.util.Log.d("PersonalSettings", "Settings route unavailable: " + intent.getAction(), unavailable);
+            return false;
+        }
     }
 
     /** The first vendor settings entry from settings_fallback_components that is installed, or null

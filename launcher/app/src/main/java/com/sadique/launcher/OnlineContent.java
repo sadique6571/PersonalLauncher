@@ -12,17 +12,22 @@ final class OnlineContent {
     private static boolean allowedHost(String host) {
         return host.equals("images.unsplash.com")
                 || host.equals("api.open-meteo.com") || host.equals("geocoding-api.open-meteo.com") || host.equals("wttr.in")
-                || host.equals("picsum.photos") || host.equals("fastly.picsum.photos")
+                || host.equals("commons.wikimedia.org") || host.equals("images-api.nasa.gov")
+                || host.equals("upload.wikimedia.org") || host.equals("thumb.wikimedia.org") || host.equals("images-assets.nasa.gov")
                 || host.equals("nominatim.openstreetmap.org") || host.equals("www.bing.com");
     }
 
     private static boolean imageHost(String host) {
         return host.equals("images.unsplash.com")
-                || host.equals("picsum.photos") || host.equals("fastly.picsum.photos")
+                || host.equals("upload.wikimedia.org") || host.equals("thumb.wikimedia.org") || host.equals("images-assets.nasa.gov")
                 || host.equals("www.bing.com");
     }
 
     static byte[] get(String address, int limit) throws IOException {
+        return get(address, limit, 8_000, 10_000);
+    }
+
+    static byte[] get(String address, int limit, int connectTimeout, int readTimeout) throws IOException {
         // Follow redirects manually (max 3 hops) so every hop is re-validated
         // against the allowlist — never blindly follow off-host redirects.
         String current = address;
@@ -32,13 +37,13 @@ final class OnlineContent {
             if (!"https".equals(url.getProtocol()) || !allowedHost(host))
                 throw new IOException("Unsupported content source");
             HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
-            connection.setConnectTimeout(8_000);
-            connection.setReadTimeout(10_000);
+            connection.setConnectTimeout(connectTimeout);
+            connection.setReadTimeout(readTimeout);
             connection.setInstanceFollowRedirects(false);
             connection.setUseCaches(false);
             connection.setRequestProperty("Cache-Control", "no-cache");
             connection.setRequestProperty("User-Agent", "PersonalLauncher/6.8 (https://github.com/sadique6571/PersonalLauncher)");
-            connection.setRequestProperty("Accept", imageHost(host) ? "image/jpeg,image/webp,image/png" : "application/json");
+            connection.setRequestProperty("Accept", imageHost(host) && !url.getPath().equals("/HPImageArchive.aspx") ? "image/jpeg,image/webp,image/png" : "application/json");
             try {
                 int status = connection.getResponseCode();
                 if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {

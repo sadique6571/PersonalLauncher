@@ -21,6 +21,11 @@ final class HomeDashboard {
         LinearLayout rows = HomeLibraryUi.rows(host);
         AlertDialog panel = GlassSettings.panel(host, TvGlassStyle.enabled(ThemePreferences.get(host)) ? "Control Center" : host.getString(R.string.h_dashboard), rows, true);
         android.content.SharedPreferences prefs=ThemePreferences.get(host);
+        View systemGear = floating ? GlassSettings.row(host, host.getString(R.string.tv_settings),
+                null, R.drawable.ic_settings, GlassSettings.themeAccent(host), () -> {
+                    panel.dismiss();
+                    actions.open(SYSTEM);
+                }) : null;
         // Harmony keeps its own Control Center hierarchy instead of inheriting
         // the long Glass-OS dashboard with duplicated rows and headers.
         if(ThemeStyle.harmony(prefs)) {
@@ -29,6 +34,7 @@ final class HomeDashboard {
             heading.setLetterSpacing(.08f);
             heading.setPadding(GlassSettings.dp(host,6),GlassSettings.dp(host,8),0,GlassSettings.dp(host,4));
             rows.addView(heading);
+            if (systemGear != null) rows.addView(systemGear);
             rows.addView(GlassSettings.label(host,network,12,0xffa9ccdf));
             section(host,rows,R.string.h_quick_settings);
             rows.addView(new ControlCenterGrid(host,action->{
@@ -49,13 +55,16 @@ final class HomeDashboard {
                 pair(host,rows,panel,actions,R.string.h_search,R.drawable.ic_search,SEARCH,
                         R.string.h_store,R.drawable.ic_apps,STORE);
             }
-            panel.show();return panel;
+            panel.show();
+            if (systemGear != null) systemGear.requestFocus();
+            return panel;
         }
         if(ThemeStyle.id(prefs)==ThemeStyle.GLASS || ThemeStyle.harmony(prefs)) {
             rows.setId(R.id.controlCenterPanel);
             rows.addView(GlassSettings.label(host,ThemeStyle.harmony(prefs)?"Harmony Vision • Android TV":prefs.getString("name","Profile")+" • Android TV",12,0xffa5b4cf));
-            rows.addView(GlassSettings.row(host,"Close",null,android.R.drawable.ic_menu_close_clear_cancel,GlassSettings.themeAccent(host),panel::dismiss));
+            if (!floating) rows.addView(GlassSettings.row(host,"Close",null,android.R.drawable.ic_menu_close_clear_cancel,GlassSettings.themeAccent(host),panel::dismiss));
         }
+        if (systemGear != null) rows.addView(systemGear);
         rows.addView(GlassSettings.label(host, network, 12, 0xffb5cadd));
         section(host, rows, R.string.h_quick_settings);
         rows.addView(new ControlCenterGrid(host, action -> {
@@ -76,7 +85,9 @@ final class HomeDashboard {
         if (!floating) pair(host, rows, panel, actions, R.string.h_search, R.drawable.ic_search, SEARCH,
                 R.string.h_store, R.drawable.ic_apps, STORE);
         else row(host,rows,R.string.h_store,0,R.drawable.ic_apps,()-> { panel.dismiss(); actions.open(STORE); });
-        panel.show(); return panel;
+        panel.show();
+        if (systemGear != null) systemGear.requestFocus();
+        return panel;
     }
     private static void pair(Activity host, LinearLayout rows, AlertDialog panel, Actions actions,
             int first, int firstIcon, int firstAction, int second, int secondIcon, int secondAction) {
