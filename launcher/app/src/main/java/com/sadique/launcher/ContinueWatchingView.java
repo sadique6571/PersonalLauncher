@@ -73,10 +73,12 @@ public final class ContinueWatchingView extends LinearLayout {
         addView(scroll, new LayoutParams(-1, -2));
         explanation = label("Only resume entries shared by supported TV apps appear here.", compact?11:14);
         explanation.setFocusable(true);
+        explanation.setOnKeyListener((v,key,event)->harmony&&routeHarmonyKey(key,event));
         addView(explanation);
         allow = new Button(host);
         allow.setText("Allow TV Watch Next access"); allow.setAllCaps(false);
         allow.setOnClickListener(v -> requestAccess());
+        allow.setOnKeyListener((v,key,event)->harmony&&routeHarmonyKey(key,event));
         addView(allow, new LayoutParams(-2, -2));
     }
 
