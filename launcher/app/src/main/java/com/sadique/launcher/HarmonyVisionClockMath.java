@@ -3,7 +3,7 @@ package com.sadique.launcher;
 /** Pure clock geometry and angular continuity for the three Harmony watch faces. */
 final class HarmonyVisionClockMath {
     private HarmonyVisionClockMath() {}
-    static int clampFace(int face){return Math.max(0,Math.min(2,face));}
+    static int clampFace(int face){return Math.max(0,Math.min(3,face));}
     static double secondAngle(int second,int millis,boolean smooth){
         return ((second+(smooth?Math.max(0,Math.min(999,millis))/1000d:0))%60)*6;
     }
