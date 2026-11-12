@@ -589,13 +589,14 @@ public final class PersonalHomeActivity extends Activity {
             root.addView(tint,new ViewGroup.LayoutParams(-1,-1));
         }
         ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(glassOs());
+        // Harmony's hero follows the header naturally; fill+centering introduced a huge void.
+        scroll.setFillViewport(glassOs()&&!harmony());
         scroll.setClipToPadding(false);
         page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
         int inset = dp(tv ? (harmony()?24:32) : 16);
         page.setPadding(inset, dp(harmony()?8:14), inset, dp(harmony()?4:12));
-        if(harmony()){page.setClipChildren(false);page.setClipToPadding(false);}
+        if(harmony()){page.setClipChildren(true);page.setClipToPadding(true);}
         root.addView(page, new ViewGroup.LayoutParams(-1, -1));
         // Cinematic shade: subtle dark gradients top and bottom for a film-like frame.
         GradientDrawable topShade = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
@@ -843,13 +844,15 @@ public final class PersonalHomeActivity extends Activity {
         grid = new HomeAppGrid<>(this, app -> app.info.activityInfo.packageName,
                 (app, width) -> createAppTile(app, width, carriedApp != null && app.info.activityInfo.packageName.equals(carriedApp.info.activityInfo.packageName)));
         grid.setReferenceExpansion(glassOs()&&(!harmony()||HarmonyVisionLayout.expandAppOnFocus()));
-        grid.setUpFromApps(() -> { if(weatherWidget!=null&&weatherWidget.isShown())weatherWidget.requestFocus();else if(searchButton!=null)searchButton.requestFocus(); });
+        grid.setUpFromApps(() -> { if(harmony()&&harmonyClock!=null&&harmonyClock.isShown())harmonyClock.requestFocus();else if(weatherWidget!=null&&weatherWidget.isShown())weatherWidget.requestFocus();else if(searchButton!=null)searchButton.requestFocus(); });
         grid.setClipChildren(false);
         if(glassOs()) {
             grid.setId(R.id.grid);grid.setPadding(0,dp(harmony()?5:16),0,dp(harmony()?4:18));
             if(!harmony()||HarmonyVisionLayout.showDockReflections())grid.addItemDecoration(new DockDecoration.Reflections());
         }
+        // Focus ring belongs inside a strictly bounded RecyclerView; never draw over the hero.
         grid.setClipToPadding(glassOs()&&!harmony());
+        if(harmony())grid.setClipChildren(true);
         appBody = new LinearLayout(this);
         appBody.setOrientation(LinearLayout.VERTICAL);
         if(glassOs()){appBody.setClipChildren(!harmony());appBody.setClipToPadding(!harmony());}
@@ -868,13 +871,15 @@ public final class PersonalHomeActivity extends Activity {
         // drawer panel stay fixed below; tiles scroll inside the panel.
         LinearLayout scrollContent = new LinearLayout(this);
         scrollContent.setOrientation(LinearLayout.VERTICAL);
-        if(glassOs())scrollContent.setGravity(Gravity.CENTER_VERTICAL);
+        if(glassOs()&&!harmony())scrollContent.setGravity(Gravity.CENTER_VERTICAL);
         if ((!weatherWidgetEnabled()&&prefs.getBoolean("hide_clock",false)) || prefs.getBoolean("apps_only",false)) clock.setVisibility(View.GONE);
         int align = clockAlignment();
         LinearLayout.LayoutParams clockParams = new LinearLayout.LayoutParams(-1, -2);
         clockParams.gravity = new int[]{Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END}[align];
         if(harmony()&&tv&&!prefs.getBoolean("apps_only",false)) {
-            scrollContent.addView(harmonyHero(),new LinearLayout.LayoutParams(-1,-2));
+            LinearLayout.LayoutParams heroParams=new LinearLayout.LayoutParams(-1,-2);
+            heroParams.bottomMargin=dp(HarmonyVisionLayout.heroBottomGapDp());
+            scrollContent.addView(harmonyHero(),heroParams);
         } else if(glassOs()||weatherWidgetEnabled()) {
             LinearLayout stage=new LinearLayout(this);stage.setGravity(Gravity.CENTER_VERTICAL|Gravity.END);
             boolean wide=getResources().getConfiguration().screenWidthDp>=700;
@@ -966,7 +971,7 @@ public final class PersonalHomeActivity extends Activity {
         WindowManager.LayoutParams brightness = getWindow().getAttributes();
         brightness.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
         getWindow().setAttributes(brightness);
-        if (resumed && !prefs.getBoolean("apps_only", false)&&!harmony()) continueWatching.start();
+        if (resumed && !prefs.getBoolean("apps_only", false)&&(!harmony()||HarmonyVisionLayout.showWatchNextFooter())) continueWatching.start();
         BootLog.mark("home buildHome", buildMs);
         if (firstBuild) {
             firstBuild = false;
@@ -2887,7 +2892,7 @@ public final class PersonalHomeActivity extends Activity {
         handler.removeCallbacks(tick);
         tick.run();
         updateNetwork();
-        if (!prefs.getBoolean("apps_only", false)&&!harmony()) continueWatching.start();
+        if (!prefs.getBoolean("apps_only", false)&&(!harmony()||HarmonyVisionLayout.showWatchNextFooter())) continueWatching.start();
         refreshHomeWeather();
         updateOnlineWallpaper();
         armSlideshow();
