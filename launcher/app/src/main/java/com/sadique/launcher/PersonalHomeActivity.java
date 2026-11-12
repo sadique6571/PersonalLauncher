@@ -68,6 +68,7 @@ public final class PersonalHomeActivity extends Activity {
     private WeatherWidgetView weatherWidget;
     private SweepAnalogClock analogClock;
     private HarmonyVisionClockView harmonyClock;
+    private HarmonyMechanicalHtmlView harmonyMechanicalClock;
     private TextView harmonyDateValue,harmonyGreetingValue,harmonyQuoteValue;
     private View harmonyWeatherCard;
     private WeatherForecastPanel forecastPanel;
@@ -153,9 +154,28 @@ public final class PersonalHomeActivity extends Activity {
         int screenH=getResources().getConfiguration().screenHeightDp;
         int screenW=getResources().getConfiguration().screenWidthDp;
         int side=dp(HarmonyVisionLayout.clockDiameterDp(screenH,prefs.getInt("harmony_clock_size",1)));
-        harmonyClock=new HarmonyVisionClockView(this);
-        harmonyClock.setOnClickListener(v->harmonyClockSettings());
-        harmonyClock.setOnKeyListener((v,key,event)->{
+        // Render the original HTML only when Mechanical is selected; three native faces stay lightweight.
+        View watchFace;
+        if(prefs.getInt("harmony_clock_face",0)==3){
+            try {
+                harmonyMechanicalClock=new HarmonyMechanicalHtmlView(this);
+                watchFace=harmonyMechanicalClock;
+            }catch(RuntimeException webViewUnavailable){
+                // Some Android TV builds ship without a functioning WebView provider.
+                android.util.Log.w("HarmonyClock","HTML watch unavailable; using native face",webViewUnavailable);
+                harmonyClock=new HarmonyVisionClockView(this);
+                watchFace=harmonyClock;
+            }
+        }else{
+            harmonyClock=new HarmonyVisionClockView(this);
+            watchFace=harmonyClock;
+        }
+        watchFace.setOnClickListener(v->harmonyClockSettings());
+        watchFace.setOnKeyListener((v,key,event)->{
+            if(event.getAction()==KeyEvent.ACTION_DOWN &&
+                    (key==KeyEvent.KEYCODE_DPAD_CENTER||key==KeyEvent.KEYCODE_ENTER)){
+                harmonyClockSettings();return true;
+            }
             if(event.getAction()!=KeyEvent.ACTION_DOWN)return false;
             if(key==KeyEvent.KEYCODE_DPAD_DOWN){
                 if(continueWatching!=null&&continueWatching.getVisibility()==View.VISIBLE
@@ -169,7 +189,7 @@ public final class PersonalHomeActivity extends Activity {
         if(!prefs.getBoolean("hide_clock",false)){
             LinearLayout.LayoutParams face=new LinearLayout.LayoutParams(side,side);
             face.setMarginEnd(dp(screenW<780?12:22));
-            stage.addView(harmonyClock,face);
+            stage.addView(watchFace,face);
         }
         LinearLayout thought=new LinearLayout(this);
         thought.setOrientation(LinearLayout.VERTICAL);thought.setGravity(Gravity.CENTER_VERTICAL);
@@ -200,8 +220,9 @@ public final class PersonalHomeActivity extends Activity {
                     if(grid!=null){grid.focusKey(focusedPkg);return true;}
                 }
                 if(key==KeyEvent.KEYCODE_DPAD_UP&&searchButton!=null){searchButton.requestFocus();return true;}
-                if(key==KeyEvent.KEYCODE_DPAD_LEFT&&harmonyClock!=null&&harmonyClock.getParent()!=null){
-                    harmonyClock.requestFocus();return true;
+                View face=harmonyMechanicalClock!=null?harmonyMechanicalClock:harmonyClock;
+                if(key==KeyEvent.KEYCODE_DPAD_LEFT&&face!=null&&face.getParent()!=null){
+                    face.requestFocus();return true;
                 }
                 return key==KeyEvent.KEYCODE_DPAD_RIGHT;
             });
@@ -215,7 +236,8 @@ public final class PersonalHomeActivity extends Activity {
                     weatherSnapshotAt,System.currentTimeMillis(),WEATHER_CACHE_MS))
                 weatherWidget.bind(weatherSnapshot,weatherCity(),prefs.getBoolean("weather_fahrenheit",false));
         }
-        harmonyClock.active(resumed&&!prefs.getBoolean("hide_clock",false));
+        if(harmonyClock!=null)harmonyClock.active(resumed&&!prefs.getBoolean("hide_clock",false));
+        if(harmonyMechanicalClock!=null)harmonyMechanicalClock.active(resumed&&!prefs.getBoolean("hide_clock",false));
         return stage;
     }
     private void harmonyClockSettings(){
@@ -229,7 +251,10 @@ public final class PersonalHomeActivity extends Activity {
         GlassSettings.options(this,"Harmony Vision Clock",names,hints,icons,which->{
             switch(which){
                 case 0:chooseSetting("Watch face",new String[]{"Heritage","Chronograph","Skeleton","Mechanical (V17 TV)"},
-                        i->{prefs.edit().putInt("harmony_clock_face",i).apply();if(harmonyClock!=null)harmonyClock.configure(prefs);});break;
+                        i->{int previous=prefs.getInt("harmony_clock_face",0);
+                             prefs.edit().putInt("harmony_clock_face",i).apply();
+                             if(previous==3||i==3)buildHomeSoon();
+                             else if(harmonyClock!=null)harmonyClock.configure(prefs);});break;
                 case 1:chooseSetting("Metal finish",new String[]{"Space Blue","Obsidian","Titanium","Ceramic"},
                         i->{prefs.edit().putInt("harmony_clock_finish",i).apply();if(harmonyClock!=null)harmonyClock.configure(prefs);});break;
                 case 2:chooseSetting("Clock accent",new String[]{"Ice Blue","Gold","Rose"},
@@ -567,6 +592,7 @@ public final class PersonalHomeActivity extends Activity {
         if(weatherWidget!=null){weatherWidget.active(false);weatherWidget=null;}
         if(analogClock!=null){analogClock.active(false);analogClock=null;}
         if(harmonyClock!=null){harmonyClock.active(false);harmonyClock=null;}
+        if(harmonyMechanicalClock!=null){harmonyMechanicalClock.close();harmonyMechanicalClock=null;}
         harmonyDateValue=null;harmonyGreetingValue=null;harmonyQuoteValue=null;harmonyWeatherCard=null;
         clockDatesInline=glassOs()&&getResources().getConfiguration().screenWidthDp>=700&&!weatherWidgetEnabled()&&prefs.getInt("clock_style",0)!=1;
         islamicDate=null;bluetoothStatus=null;focusedSpotlight=null;
@@ -2894,7 +2920,7 @@ public final class PersonalHomeActivity extends Activity {
         super.onResume();
         resumed = true;
         if(bluetooth!=null){bluetooth.start();updateBluetooth();}
-        if(telemetry!=null)telemetry.start();if(weatherWidget!=null)weatherWidget.active(true);if(analogClock!=null)analogClock.active(true);if(harmonyClock!=null)harmonyClock.active(true);
+        if(telemetry!=null)telemetry.start();if(weatherWidget!=null)weatherWidget.active(true);if(analogClock!=null)analogClock.active(true);if(harmonyClock!=null)harmonyClock.active(true);if(harmonyMechanicalClock!=null)harmonyMechanicalClock.active(true);
         GitHubUpdates.resume(this);
         VolumeAutoStart.request(this);
         HomeAutomation.onResume(this);
@@ -2928,7 +2954,7 @@ public final class PersonalHomeActivity extends Activity {
         VolumeKeys.stop();
         VolumeSlider.hide(this);
         resumed = false;
-        if(weatherWidget!=null)weatherWidget.active(false);if(analogClock!=null)analogClock.active(false);if(harmonyClock!=null)harmonyClock.active(false);
+        if(weatherWidget!=null)weatherWidget.active(false);if(analogClock!=null)analogClock.active(false);if(harmonyClock!=null)harmonyClock.active(false);if(harmonyMechanicalClock!=null)harmonyMechanicalClock.active(false);
         if(bluetooth!=null)bluetooth.stop();if(telemetry!=null)telemetry.stop();
         if (grid != null && grid.getLayoutManager() != null) gridState = grid.getLayoutManager().onSaveInstanceState();
         if (focusedPkg != null) prefs.edit().putString("home_focus_pkg", focusedPkg).apply();
@@ -2985,7 +3011,7 @@ public final class PersonalHomeActivity extends Activity {
         if (liquidBackdrop != null) { liquidBackdrop.close(); liquidBackdrop=null; }
         if (headerBackdrop != null) { headerBackdrop.close(); headerBackdrop=null; }
         unregisterReceiver(appChanges);
-        if(weatherWidget!=null)weatherWidget.active(false);if(analogClock!=null)analogClock.active(false);if(harmonyClock!=null)harmonyClock.active(false);if(forecastPanel!=null)forecastPanel.close();
+        if(weatherWidget!=null)weatherWidget.active(false);if(analogClock!=null)analogClock.active(false);if(harmonyClock!=null)harmonyClock.active(false);if(harmonyMechanicalClock!=null)harmonyMechanicalClock.close();if(forecastPanel!=null)forecastPanel.close();
         if(bluetooth!=null)bluetooth.stop();if(telemetry!=null)telemetry.stop();
         if(appLibrary!=null)appLibrary.close();
         if (panel != null) panel.dismiss();
