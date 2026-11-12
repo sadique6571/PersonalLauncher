@@ -18,12 +18,16 @@ final class HarmonyVisionLayout {
         return dockPlateDp(screenHeightDp)+25;
     }
     static int dockHeightDp(int screenHeightDp){
-        return dockTileHeightDp(screenHeightDp)+21;
+        return dockTileHeightDp(screenHeightDp)+34;
     }
     static boolean showDockPanel(){return false;}
     static boolean showDockReflections(){return false;}
     static boolean expandAppOnFocus(){return false;}
     static boolean showNativeWeatherWidget(){return true;}
     static boolean showSecondGreeting(){return false;}
-    static boolean showWatchNextFooter(){return false;}
+    static boolean showWatchNextFooter(){return true;}
+    /** Keep the app-library as a bounded, focusable grid instead of one long horizontal strip. */
+    static int drawerColumns(int availableWidthDp){return Math.max(2,Math.min(5,availableWidthDp/152));}
+    static int drawerHeightDp(int screenHeightDp){return Math.max(230,Math.min(420,screenHeightDp-84));}
+    static int heroBottomGapDp(){return 12;}
 }

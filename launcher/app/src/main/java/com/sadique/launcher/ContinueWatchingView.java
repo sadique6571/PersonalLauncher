@@ -16,6 +16,7 @@ import android.os.CancellationSignal;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.widget.Button;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
@@ -48,6 +49,7 @@ public final class ContinueWatchingView extends LinearLayout {
     private CancellationSignal query;
     private boolean running, observing;
     private final boolean compact;
+    private final boolean harmony;
     private String focusedEntry;
     private int generation;
     private final Runnable refresh = this::reload;
@@ -58,22 +60,25 @@ public final class ContinueWatchingView extends LinearLayout {
     public ContinueWatchingView(Activity host, Consumer<String> focusTitle) {
         super(host); this.host = host; this.focusTitle = focusTitle;
         prefs = ThemePreferences.get(host);
-        compact=ThemeStyle.id(prefs)==ThemeStyle.GLASS;
-        setOrientation(VERTICAL); setPadding(0, dp(compact?8:22), 0, dp(compact?8:12));
-        heading = label("Continue watching", compact?18:23);
+        harmony=ThemeStyle.harmony(prefs);
+        compact=harmony||ThemeStyle.id(prefs)==ThemeStyle.GLASS;
+        setOrientation(VERTICAL); setPadding(0, dp(harmony?2:compact?8:22), 0, dp(harmony?2:compact?8:12));
+        heading = label("Continue watching", harmony?14:compact?18:23);
         addView(heading);
         TvHorizontalShelf scroll = new TvHorizontalShelf(host);
         scroll.setHorizontalScrollBarEnabled(false);
         cards = new LinearLayout(host);
-        cards.setPadding(0, dp(compact?6:10), 0, dp(compact?6:10));
+        cards.setPadding(0, dp(harmony?3:compact?6:10), 0, dp(harmony?3:compact?6:10));
         scroll.addView(cards, new LayoutParams(-2, -2));
         addView(scroll, new LayoutParams(-1, -2));
-        explanation = label("Only resume entries shared by supported TV apps appear here.", compact?12:14);
+        explanation = label("Only resume entries shared by supported TV apps appear here.", compact?11:14);
         explanation.setFocusable(true);
+        explanation.setOnKeyListener((v,key,event)->harmony&&routeHarmonyKey(key,event));
         addView(explanation);
         allow = new Button(host);
         allow.setText("Allow TV Watch Next access"); allow.setAllCaps(false);
         allow.setOnClickListener(v -> requestAccess());
+        allow.setOnKeyListener((v,key,event)->harmony&&routeHarmonyKey(key,event));
         addView(allow, new LayoutParams(-2, -2));
     }
 
@@ -179,13 +184,14 @@ public final class ContinueWatchingView extends LinearLayout {
     }
     private void addCard(Item item) {
         LinearLayout card = new LinearLayout(host); card.setOrientation(VERTICAL);
-        card.setPadding(dp(compact?10:16), dp(compact?10:16), dp(compact?10:16), dp(compact?10:16)); card.setFocusable(true); card.setClickable(true);
+        card.setPadding(dp(harmony?5:compact?10:16), dp(harmony?5:compact?10:16),
+                dp(harmony?5:compact?10:16), dp(harmony?5:compact?10:16)); card.setFocusable(true); card.setClickable(true);
         card.setBackground(background(false)); card.setContentDescription("Resume " + item.title + " in " + item.owner + ". " + host.getString(R.string.h_save_hold));
         ImageView poster = new ImageView(host);
         poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
         poster.setBackground(background(false)); poster.setClipToOutline(true);
         poster.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
-        card.addView(poster, new LayoutParams(-1, dp(compact?68:106)));
+        card.addView(poster, new LayoutParams(-1, dp(harmony?51:compact?68:106)));
         try { poster.setImageDrawable(host.getPackageManager().getApplicationIcon(item.pkg)); }
         catch (PackageManager.NameNotFoundException ignored) { }
         int request = generation;
@@ -196,16 +202,22 @@ public final class ContinueWatchingView extends LinearLayout {
                 if (running && request == generation) poster.setImageBitmap(bitmap);
             });
         });
-        TextView title = label(item.title, compact?14:19); title.setPadding(0, dp(compact?6:10), 0, 0); title.setMaxLines(2); title.setMinLines(2); title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        TextView title = label(item.title, harmony?12:compact?14:19);
+        title.setPadding(0, dp(harmony?3:compact?6:10), 0, 0);
+        title.setMaxLines(harmony?1:2); title.setMinLines(harmony?1:2);
+        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
         card.addView(title, new LayoutParams(-1, -2));
-        TextView owner = label(item.owner, compact?11:13); owner.setPadding(0, dp(compact?4:6), 0, dp(compact?4:8)); card.addView(owner);
+        TextView owner = label(item.owner, compact?11:13);
+        owner.setPadding(0, dp(compact?4:6), 0, dp(compact?4:8));
+        owner.setVisibility(harmony?GONE:VISIBLE);card.addView(owner);
         if (item.duration > 0) {
             ProgressBar progress = new ProgressBar(host, null, android.R.attr.progressBarStyleHorizontal);
             progress.setMax(1000); progress.setProgress(WatchNextModel.progress(item.position, item.duration));
-            card.addView(progress, new LayoutParams(-1, dp(6)));
+            card.addView(progress, new LayoutParams(-1, dp(harmony?3:6)));
         }
         card.setTag(item.pkg+"|"+item.intent);
         card.setOnFocusChangeListener((v, focused) -> { card.setBackground(background(focused)); if (focused) {focusedEntry=(String)card.getTag();focusTitle.accept(item.owner);} });
+        card.setOnKeyListener((v,key,event)->harmony&&routeHarmonyKey(key,event));
         card.setOnClickListener(v -> {
             try {
                 Intent intent = Intent.parseUri(item.intent, Intent.URI_INTENT_SCHEME);
@@ -216,8 +228,14 @@ public final class ContinueWatchingView extends LinearLayout {
                 host.startActivity(intent);
             } catch (Exception unavailable) { Toast.makeText(host, "This app cannot resume the item now", Toast.LENGTH_LONG).show(); }
         });
-        LayoutParams position = new LayoutParams(dp(220), -2); position.setMargins(dp(6), 0, dp(6), 0);
+        LayoutParams position = new LayoutParams(dp(harmony?160:220), -2); position.setMargins(dp(6), 0, dp(6), 0);
         cards.addView(card, position);
+    }
+    private boolean routeHarmonyKey(int key, KeyEvent event) {
+        if(event.getAction()!=KeyEvent.ACTION_DOWN)return false;
+        if(key!=KeyEvent.KEYCODE_DPAD_UP&&key!=KeyEvent.KEYCODE_DPAD_DOWN)return false;
+        if(!(host instanceof PersonalHomeActivity))return false;
+        return ((PersonalHomeActivity)host).onHarmonyContinueKey(key);
     }
     private GradientDrawable background(boolean focused) {
         if(compact)return GlassAppCard.surface(host,GlassSettings.themeAccent(host),focused,dp(16));
