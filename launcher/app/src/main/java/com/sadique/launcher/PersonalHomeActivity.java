@@ -157,9 +157,11 @@ public final class PersonalHomeActivity extends Activity {
         harmonyClock.setOnClickListener(v->harmonyClockSettings());
         harmonyClock.setOnKeyListener((v,key,event)->{
             if(event.getAction()!=KeyEvent.ACTION_DOWN)return false;
-            if(key==KeyEvent.KEYCODE_DPAD_DOWN&&continueWatching!=null&&continueWatching.getVisibility()==View.VISIBLE)
-                    return continueWatching.focusEntry();
-                if(key==KeyEvent.KEYCODE_DPAD_DOWN&&grid!=null){grid.focusKey(focusedPkg);return true;}
+            if(key==KeyEvent.KEYCODE_DPAD_DOWN){
+                if(continueWatching!=null&&continueWatching.getVisibility()==View.VISIBLE
+                        &&continueWatching.focusEntry())return true;
+                if(grid!=null){grid.focusKey(focusedPkg);return true;}
+            }
             if(key==KeyEvent.KEYCODE_DPAD_RIGHT&&weatherWidget!=null){weatherWidget.requestFocus();return true;}
             if(key==KeyEvent.KEYCODE_DPAD_UP&&searchButton!=null){searchButton.requestFocus();return true;}
             return false;
@@ -192,9 +194,11 @@ public final class PersonalHomeActivity extends Activity {
             harmonyWeatherCard=weatherWidget;
             weatherWidget.setOnKeyListener((v,key,event)->{
                 if(event.getAction()!=KeyEvent.ACTION_DOWN)return false;
-                if(key==KeyEvent.KEYCODE_DPAD_DOWN&&continueWatching!=null&&continueWatching.getVisibility()==View.VISIBLE)
-                    return continueWatching.focusEntry();
-                if(key==KeyEvent.KEYCODE_DPAD_DOWN&&grid!=null){grid.focusKey(focusedPkg);return true;}
+                if(key==KeyEvent.KEYCODE_DPAD_DOWN){
+                if(continueWatching!=null&&continueWatching.getVisibility()==View.VISIBLE
+                        &&continueWatching.focusEntry())return true;
+                if(grid!=null){grid.focusKey(focusedPkg);return true;}
+            }
                 if(key==KeyEvent.KEYCODE_DPAD_UP&&searchButton!=null){searchButton.requestFocus();return true;}
                 if(key==KeyEvent.KEYCODE_DPAD_LEFT&&harmonyClock!=null&&harmonyClock.getParent()!=null){
                     harmonyClock.requestFocus();return true;
