@@ -608,9 +608,10 @@ public final class PersonalHomeActivity extends Activity {
         // must never flash the default wallpaper before the online photo
         // re-fetches. (User 2026-11-01.)
         if (oldSky != null) sky.adoptWallpapers(oldSky);
-        // Slight overscan so parallax shifts never reveal edges.
-        sky.setScaleX(1.06f);
-        sky.setScaleY(1.06f);
+        if (!tv) {
+            sky.setScaleX(1.06f);
+            sky.setScaleY(1.06f);
+        }
         root.addView(sky, new ViewGroup.LayoutParams(-1, -1));
         if(harmony()&&tv){
             View tint=new View(this);
@@ -1705,14 +1706,16 @@ public final class PersonalHomeActivity extends Activity {
                 sky.focusX = position[0] - origin[0] + tile.getWidth() / 2f;
                 sky.focusY = position[1] - origin[1] + tile.getHeight() / 2f;
                 sky.focusRadius = tile.getWidth(); sky.focusAccent = prefs.getBoolean("focus_glow", true) ? app.accent : 0;
-                // Parallax: wallpaper drifts slightly opposite to the focused tile,
-                // vertical only — never sideways. (User 2026-11-01.)
-                float cy = position[1] + tile.getHeight() / 2f;
-                android.graphics.Point size = new android.graphics.Point();
-                getWindowManager().getDefaultDisplay().getSize(size);
-                sky.animate().translationX(0)
-                        .translationY(perfAllows("parallax") ? (size.y / 2f - cy) / size.y * dp(36) : 0)
-                        .setDuration(350).start();
+                if (!tv) {
+                    // Parallax: wallpaper drifts slightly opposite to the focused tile,
+                    // vertical only — never sideways. (User 2026-11-01.)
+                    float cy = position[1] + tile.getHeight() / 2f;
+                    android.graphics.Point size = new android.graphics.Point();
+                    getWindowManager().getDefaultDisplay().getSize(size);
+                    sky.animate().translationX(0)
+                            .translationY(perfAllows("parallax") ? (size.y / 2f - cy) / size.y * dp(36) : 0)
+                            .setDuration(350).start();
+                }
             } else sky.focusAccent = 0;
             sky.invalidate();
         });
@@ -2456,7 +2459,13 @@ public final class PersonalHomeActivity extends Activity {
         }
         if(sky.getWidth()<=0 || sky.getHeight()<=0) return false;
         float y=sky.clockY>=0?sky.clockY:dp(150),x=sky.clockX>=0?sky.clockX:sky.getWidth()/2f;
-        float[] frame=HomeAppearance.frame(sky.getWidth(),sky.getHeight(),photo.getWidth(),photo.getHeight(),y,photo==sky.backdrop);
+        float[] frame = sky.wallpaperFrame(photo, y, photo == sky.backdrop);
+        if (tv && (x < frame[0] || x >= frame[2] || y < frame[1] || y >= frame[3])) {
+            contrastKey = null;
+            boolean changed = wallpaperClockInk != Color.WHITE;
+            wallpaperClockInk = Color.WHITE;
+            return changed;
+        }
         int px=Math.max(0,Math.min(photo.getWidth()-1,Math.round((x-frame[0])/(frame[2]-frame[0])*photo.getWidth())));
         int py=Math.max(0,Math.min(photo.getHeight()-1,Math.round((y-frame[1])/(frame[3]-frame[1])*photo.getHeight())));
         int shade=HomeAppearance.shade(prefs.getString("theme_mode","light"),sky.minute,prefs.getInt("background_dim",0));
@@ -2548,7 +2557,6 @@ public final class PersonalHomeActivity extends Activity {
             case "Performance": return prefs.getInt("perf_mode", 0);
             case "Home wallpaper": return "custom".equals(prefs.getString("wallpaper_mode", "mountains")) ? 1 : -1;
             case "Temperature unit": return prefs.getBoolean("weather_fahrenheit", false) ? 1 : 0;
-            case "Clock position": return prefs.getInt("ss_clock_pos", 1);
             case "Start screensaver after idle": return indexOf(new int[]{0, 2, 5, 10, 15}, prefs.getInt("idle_screensaver_minutes", 0));
             default: return -1;
         }
@@ -2602,12 +2610,11 @@ public final class PersonalHomeActivity extends Activity {
             });
     }
     private void screensaverSettings() {
-        chooseSetting("Online landscape screensaver", new String[]{"Preview", "Weather city", "Temperature unit", "Clock position", "Start after idle", "Set automatic screensaver"}, which -> {
+        chooseSetting("Online landscape screensaver", new String[]{"Preview", "Weather city", "Temperature unit", "Start after idle", "Set automatic screensaver"}, which -> {
             if (which == 0) launch(new Intent(this, LandscapeActivity.class));
             else if (which == 1) WeatherSettings.show(this);
             else if (which == 2) chooseSetting("Temperature unit", new String[]{"Celsius", "Fahrenheit"}, value -> prefs.edit().putBoolean("weather_fahrenheit", value == 1).apply());
-            else if (which == 3) chooseSetting("Clock position", new String[]{"Top", "Center", "Bottom"}, value -> prefs.edit().putInt("ss_clock_pos", value).apply());
-            else if (which == 4) chooseSetting("Start screensaver after idle", new String[]{"Off", "2 minutes", "5 minutes", "10 minutes", "15 minutes"}, value -> {
+            else if (which == 3) chooseSetting("Start screensaver after idle", new String[]{"Off", "2 minutes", "5 minutes", "10 minutes", "15 minutes"}, value -> {
                 prefs.edit().putInt("idle_screensaver_minutes", new int[]{0,2,5,10,15}[value]).apply(); armIdleScreensaver();
             });
             else launch(new Intent(this, ScreensaverSetupActivity.class));
@@ -3293,6 +3300,11 @@ public final class PersonalHomeActivity extends Activity {
                 invalidate();
             }
         };
+        private float[] wallpaperFrame(Bitmap image, float clockY, boolean mountains) {
+            return tv ? HomeAppearance.fitFrame(getWidth(), getHeight(), image.getWidth(), image.getHeight())
+                    : HomeAppearance.frame(getWidth(), getHeight(), image.getWidth(), image.getHeight(), clockY, mountains);
+        }
+
         @Override protected void onDraw(Canvas canvas) {
             if(glassOs() && "solid".equals(prefs.getString("wallpaper_mode","solid"))) {
                 glassBackdrop.draw(canvas,getWidth(),getHeight(),glassAccent,Math.max(0,Math.min(100,prefs.getInt("ambient_strength",100))));
@@ -3330,12 +3342,12 @@ public final class PersonalHomeActivity extends Activity {
             float y = clockY >= 0 ? clockY : dp(150);
             if (!mode.equals("solid") && picture != null) {
                 boolean mountains = picture == backdrop;
-                float[] frame = HomeAppearance.frame(getWidth(), getHeight(), picture.getWidth(), picture.getHeight(), y, mountains);
+                float[] frame = wallpaperFrame(picture, y, mountains);
                 canvas.drawBitmap(picture, null, new android.graphics.RectF(frame[0], frame[1], frame[2], frame[3]), wallpaperPaint);
                 // Crossfade: incoming photo fades in over the current one.
                 if (onlineSource && onlineNext != null && crossfade < 1f) {
                     wallpaperPaint.setAlpha((int) (crossfade * 255));
-                    float[] nextFrame = HomeAppearance.frame(getWidth(), getHeight(), onlineNext.getWidth(), onlineNext.getHeight(), y, false);
+                    float[] nextFrame = wallpaperFrame(onlineNext, y, false);
                     canvas.drawBitmap(onlineNext, null, new android.graphics.RectF(nextFrame[0], nextFrame[1], nextFrame[2], nextFrame[3]), wallpaperPaint);
                     wallpaperPaint.setAlpha(255);
                 }

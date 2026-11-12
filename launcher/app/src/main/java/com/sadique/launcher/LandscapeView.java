@@ -76,24 +76,21 @@ public final class LandscapeView extends FrameLayout {
         previousPhoto = photoLayer(context, photos);
         addView(photos, new LayoutParams(-1, -1));
         View shade = new View(context);
-        shade.setBackgroundColor(0x60000000);
+        shade.setBackgroundColor(0x24000000);
         addView(shade, new LayoutParams(-1, -1));
-        LinearLayout center = new LinearLayout(context);
-        center.setGravity(Gravity.CENTER);
-        center.setOrientation(LinearLayout.VERTICAL);
-        clock = label(88);
-        clock.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+        LinearLayout timeBlock = new LinearLayout(context);
+        timeBlock.setOrientation(LinearLayout.VERTICAL);
+        clock = label(getResources().getConfiguration().screenHeightDp >= 650 ? 52 : 44);
+        clock.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        clock.setGravity(Gravity.LEFT);
         clock.setSingleLine(true);
-        // Bigger screensaver clock (user 2026-11-01).
-        clock.setAutoSizeTextTypeUniformWithConfiguration(44, 132, 2, android.util.TypedValue.COMPLEX_UNIT_SP);
-        center.addView(clock, new LinearLayout.LayoutParams(-1, dp(168)));
-        date = label(20);
-        center.addView(date);
-        int ssPos = Math.max(0, Math.min(2, prefs.getInt("ss_clock_pos", 1)));
-        LayoutParams centered = new LayoutParams(-1, -2,
-                new int[]{Gravity.TOP | Gravity.CENTER_HORIZONTAL, Gravity.CENTER, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL}[ssPos]);
-        centered.setMargins(dp(24), ssPos == 0 ? dp(60) : 0, dp(24), ssPos == 2 ? dp(120) : 0);
-        addView(center, centered);
+        timeBlock.addView(clock, new LinearLayout.LayoutParams(-2, -2));
+        date = label(15);
+        date.setGravity(Gravity.LEFT);
+        timeBlock.addView(date);
+        LayoutParams clockPosition = new LayoutParams(-2, -2, Gravity.TOP | Gravity.LEFT);
+        clockPosition.setMargins(dp(24), dp(18), 0, 0);
+        addView(timeBlock, clockPosition);
         wifi = label(14);
         wifi.setPadding(dp(10), dp(8), dp(10), dp(8));
         LayoutParams networkPosition = new LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
@@ -115,10 +112,10 @@ public final class LandscapeView extends FrameLayout {
         weatherPosition.setMargins(dp(24), 0, 0, dp(24));
         addView(conditions, weatherPosition);
         status = label(12);
-        status.setText("Connecting to online landscapes…");
-        status.setGravity(Gravity.START);
-        LayoutParams statusPosition = new LayoutParams(weatherWidth, -2, Gravity.TOP | Gravity.START);
-        statusPosition.setMargins(dp(24), dp(24), 0, 0);
+        status.setText("Connecting to online photos…");
+        status.setGravity(Gravity.END);
+        LayoutParams statusPosition = new LayoutParams(weatherWidth, -2, Gravity.TOP | Gravity.END);
+        statusPosition.setMargins(0, dp(60), dp(24), 0);
         addView(status, statusPosition);
         // Wallpaper details caption at the bottom (user 2026-11-01).
         details = label(13);
@@ -130,7 +127,7 @@ public final class LandscapeView extends FrameLayout {
 
     private static ImageView photoLayer(Context context, FrameLayout parent) {
         ImageView layer = new ImageView(context);
-        layer.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        layer.setScaleType(ImageView.ScaleType.FIT_CENTER);
         layer.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         parent.addView(layer, new LayoutParams(-1, -1));
         return layer;
@@ -163,12 +160,12 @@ public final class LandscapeView extends FrameLayout {
             float vertical = getHeight() * .10f;
             float scale = 1f;
             switch (photoEffect++ % 7) {
-                case 1: scale = 1.14f; break;             // Pull back.
-                case 2: scale = .91f; break;              // Push in.
-                case 3: incoming.setTranslationX(horizontal); break;
-                case 4: incoming.setTranslationX(-horizontal); break;
-                case 5: incoming.setTranslationY(vertical); break;
-                case 6: incoming.setTranslationY(-vertical); break;
+                case 1: outgoing.animate().scaleX(.87f).scaleY(.87f).setDuration(620).start(); break;
+                case 2: scale = .87f; break;
+                case 3: scale = .80f; incoming.setTranslationX(horizontal); break;
+                case 4: scale = .80f; incoming.setTranslationX(-horizontal); break;
+                case 5: scale = .76f; incoming.setTranslationY(vertical); break;
+                case 6: scale = .76f; incoming.setTranslationY(-vertical); break;
                 default: break;                          // Crossfade.
             }
             incoming.setScaleX(scale);
@@ -289,7 +286,7 @@ public final class LandscapeView extends FrameLayout {
             Bitmap result = null;
             String subject = "";
             try (LandscapeHistory history = new LandscapeHistory(getContext())) {
-                for (int attempt = 0; attempt < 3 && result == null && !Thread.currentThread().isInterrupted(); attempt++) {
+                for (int attempt = 0; attempt < 6 && result == null && !Thread.currentThread().isInterrupted(); attempt++) {
                     LandscapeFeed.Scene scene = feed.next(history::contains);
                     if (scene == null) break;
                     try {
@@ -297,12 +294,12 @@ public final class LandscapeView extends FrameLayout {
                         BitmapFactory.Options bounds = new BitmapFactory.Options();
                         bounds.inJustDecodeBounds = true;
                         BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
-                        if (!LandscapeFeed.wide(bounds.outWidth, bounds.outHeight)) continue;
+                        if (!LandscapeFeed.usableDimensions(bounds.outWidth, bounds.outHeight, scene.reviewed)) continue;
                         bounds.inJustDecodeBounds = false; bounds.inSampleSize = 1;
                         while (Math.max(bounds.outWidth, bounds.outHeight) / bounds.inSampleSize > 1920) bounds.inSampleSize *= 2;
                         Bitmap decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
                         if (decoded == null) continue;
-                        if ((!scene.reviewedPortrait && !clearLandscape(decoded)) || !history.remember(scene.id, bytes, visualFingerprint(decoded))) {
+                        if ((!scene.reviewed && !clearLandscape(decoded)) || !history.remember(scene.id, bytes, visualFingerprint(decoded))) {
                             decoded.recycle();
                             continue;
                         }
@@ -331,7 +328,7 @@ public final class LandscapeView extends FrameLayout {
                     details.setText("");
                     status.setText(online() ? "New photo unavailable · retrying automatically" : "Offline · photos unavailable");
                     handler.removeCallbacks(photoRetry);
-                    handler.postDelayed(photoRetry, 15_000);
+                    handler.postDelayed(photoRetry, 5_000);
                 }
             });
         });

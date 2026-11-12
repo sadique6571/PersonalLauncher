@@ -12,14 +12,16 @@ final class OnlineContent {
     private static boolean allowedHost(String host) {
         return host.equals("images.unsplash.com")
                 || host.equals("api.open-meteo.com") || host.equals("geocoding-api.open-meteo.com") || host.equals("wttr.in")
-                || host.equals("commons.wikimedia.org") || host.equals("images-api.nasa.gov")
-                || host.equals("upload.wikimedia.org") || host.equals("thumb.wikimedia.org") || host.equals("images-assets.nasa.gov")
+                || host.equals("commons.wikimedia.org")
+                || host.equals("upload.wikimedia.org") || host.equals("thumb.wikimedia.org")
+                || host.equals("www.fws.gov") || host.equals("d9-wret.s3.us-west-2.amazonaws.com")
                 || host.equals("nominatim.openstreetmap.org") || host.equals("www.bing.com");
     }
 
     private static boolean imageHost(String host) {
         return host.equals("images.unsplash.com")
-                || host.equals("upload.wikimedia.org") || host.equals("thumb.wikimedia.org") || host.equals("images-assets.nasa.gov")
+                || host.equals("upload.wikimedia.org") || host.equals("thumb.wikimedia.org")
+                || host.equals("www.fws.gov") || host.equals("d9-wret.s3.us-west-2.amazonaws.com")
                 || host.equals("www.bing.com");
     }
 
