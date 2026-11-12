@@ -294,7 +294,7 @@ public final class LandscapeView extends FrameLayout {
                         BitmapFactory.Options bounds = new BitmapFactory.Options();
                         bounds.inJustDecodeBounds = true;
                         BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
-                        if (!LandscapeFeed.usableDimensions(bounds.outWidth, bounds.outHeight, scene.reviewed)) continue;
+                        if (!LandscapeFeed.fitsWidescreen(bounds.outWidth, bounds.outHeight)) continue;
                         bounds.inJustDecodeBounds = false; bounds.inSampleSize = 1;
                         while (Math.max(bounds.outWidth, bounds.outHeight) / bounds.inSampleSize > 1920) bounds.inSampleSize *= 2;
                         Bitmap decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);

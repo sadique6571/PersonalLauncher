@@ -5,7 +5,7 @@
 - **Version:** 7.0 · **Android version code:** 82 · Release build numbers increase independently.
 - **Package:** `com.sadique.launcher` · **Minimum Android:** 8.0 / API 26
 - Plain Java and Android Views, with performance profiles for low-memory TVs.
-- Internet access is used for daily Bing wallpaper, Picsum screensaver photos, weather and city lookup.
+- Internet access is used for daily Bing wallpaper, online screensaver photos, weather and city lookup.
 
 ## Download
 
@@ -192,16 +192,15 @@ The protected shell diagnostic is:
 
 ## Online landscape screensaver
 
-Every 30 seconds the screensaver requests a fresh seed from the original Picsum image endpoint.
-All photo subjects and original orientations are accepted; the provider returns a screen-filling
-1920×1080 crop. Downloaded image hashes are recorded privately to reject exact repeats across
-sessions/reboots. The provider has a finite collection, so a fresh seed cannot guarantee a never-seen
-photo on every request; up to three attempts are made before retaining the current image and retrying.
-Screensaver images are not stored on disk.
+Every 30 seconds the screensaver looks for a fresh 16:9 photo with more than 480 pixels of
+height. It checks the downloaded dimensions and displays the full approved frame. Previously
+shown images are skipped across sessions and reboots. If no eligible photo is available, the
+screensaver retries after five seconds. Screensaver images are not stored on disk.
 
-Photographer, resolution and provider labels are hidden. Picsum does not supply scene descriptions,
-so the app does not invent them. Weather sits at bottom-left and shows “Unavailable” on failure or
-offline, without refresh timestamps. The screensaver clock is bold; clock/date placement is configurable.
+Live landscape photos come from Bing and Wikimedia Commons. Unsplash portraits are
+visually reviewed, including their widescreen renditions. Underwater wallpapers are credited
+to NOAA Ocean Exploration. The clock and date sit at the top left and weather sits at the
+bottom left, where it shows “Unavailable” on failure or when offline.
 
 Home uses Bing's daily image and retains one private, atomic snapshot for the first frame after an
 activity/process restart. The cached image is restored before drawing; an online Home never draws the
@@ -213,7 +212,7 @@ Set automatic screensaver** and select **Online Landscapes · Personal Launcher*
 units and Home idle startup are in the same menu. Weather defaults to **Okara, Pakistan**.
 The Home idle timeout defaults to Off and does not cover another app's playback.
 
-Online sources: `picsum.photos`, `fastly.picsum.photos`, `www.bing.com`,
+Online sources: `www.bing.com`, `commons.wikimedia.org`, `images.unsplash.com`, `oceanexplorer.noaa.gov`,
 `api.open-meteo.com`, `geocoding-api.open-meteo.com`, `wttr.in`.
 
 ## Continue Watching and notifications
