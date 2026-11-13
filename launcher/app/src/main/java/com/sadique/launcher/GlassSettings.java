@@ -202,8 +202,11 @@ final class GlassSettings {
             this.scrollY = scroll.getScrollY();
         }
         void restore() {
-            if (focus != null) focus.requestFocus();
-            scroll.post(() -> scroll.scrollTo(0, scrollY));
+            if (focus != null && focus.isShown() && focus.requestFocus()) {
+                scroll.post(() -> scroll.scrollTo(0, scrollY));
+            } else {
+                focusRows((LinearLayout) scroll.getChildAt(0));
+            }
         }
     }
     static AlertDialog panel(Activity host, String title, LinearLayout rows) {
@@ -291,9 +294,14 @@ final class GlassSettings {
         return current.dialog;
     }
     private static void focusRows(LinearLayout rows) {
-        for (int i = 0; i < rows.getChildCount(); i++)
-            if (rows.getChildAt(i).isSelected() && rows.getChildAt(i).isFocusable()) { rows.getChildAt(i).requestFocus(); return; }
-        for (int i = 0; i < rows.getChildCount(); i++) if (rows.getChildAt(i).isFocusable()) { rows.getChildAt(i).requestFocus(); break; }
+        for (int i = 0; i < rows.getChildCount(); i++) {
+            View row = rows.getChildAt(i);
+            if (row.getVisibility() == View.VISIBLE && row.isSelected() && row.requestFocus()) return;
+        }
+        for (int i = 0; i < rows.getChildCount(); i++) {
+            View row = rows.getChildAt(i);
+            if (row.getVisibility() == View.VISIBLE && row.requestFocus()) return;
+        }
     }
     private static void back(Panel current) {
         if (current.pages.isEmpty()) { current.dialog.dismiss(); return; }
@@ -307,7 +315,7 @@ final class GlassSettings {
 
     static void choices(Activity host, String title, String[] names, java.util.function.IntSupplier current,
             java.util.function.IntConsumer selected) {
-        options(host, title, names, null, null, selected, current);
+        options(host, title, names, null, null, selected, current, null);
     }
 
     /** Retheme the visible page and saved parent pages without losing focus or scroll position. */
@@ -392,10 +400,16 @@ final class GlassSettings {
     }
 
     static void options(Activity host, String title, String[] names, String[] hints, int[] icons, java.util.function.IntConsumer selected) {
-        options(host, title, names, hints, icons, selected, null);
+        options(host, title, names, hints, icons, selected, null, null);
     }
+    static void options(Activity host, String title, String[] names, String[] hints, int[] icons,
+            java.util.function.IntConsumer selected, java.util.function.IntPredicate visible) {
+        options(host, title, names, hints, icons, selected, null, visible);
+    }
+
     private static void options(Activity host, String title, String[] names, String[] hints, int[] icons,
-            java.util.function.IntConsumer selected, java.util.function.IntSupplier current) {
+            java.util.function.IntConsumer selected, java.util.function.IntSupplier current,
+            java.util.function.IntPredicate visible) {
         LinearLayout rows = new LinearLayout(host); rows.setOrientation(LinearLayout.VERTICAL);
         AlertDialog dialog = panel(host, title, rows);
         boolean navigation = hints != null || title.equals("Online landscape screensaver");
@@ -421,6 +435,18 @@ final class GlassSettings {
                 }
             });
             rows.addView(option);
+        }
+        if (visible != null) {
+            Runnable updateRows = () -> {
+                for (int i = 0; i < rows.getChildCount(); i++) {
+                    rows.getChildAt(i).setVisibility(visible.test(i) ? View.VISIBLE : View.GONE);
+                }
+            };
+            updateRows.run();
+            rows.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                @Override public void onViewAttachedToWindow(View view) { updateRows.run(); }
+                @Override public void onViewDetachedFromWindow(View view) { }
+            });
         }
         applyBlur(dialog);
         dialog.show();
