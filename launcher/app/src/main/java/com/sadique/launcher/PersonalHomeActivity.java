@@ -153,13 +153,7 @@ public final class PersonalHomeActivity extends Activity {
         int side=dp(HarmonyVisionLayout.clockDiameterDp(screenH,prefs.getInt("harmony_clock_size",1)));
         harmonyClock=new HarmonyVisionClockView(this);
         harmonyClock.setOnClickListener(v->harmonyClockSettings());
-        harmonyClock.setOnKeyListener((v,key,event)->{
-            if(event.getAction()!=KeyEvent.ACTION_DOWN)return false;
-            if(key==KeyEvent.KEYCODE_DPAD_DOWN)return focusHarmonyBelowHero();
-            if(key==KeyEvent.KEYCODE_DPAD_RIGHT&&weatherWidget!=null){weatherWidget.requestFocus();return true;}
-            if(key==KeyEvent.KEYCODE_DPAD_UP&&searchButton!=null){searchButton.requestFocus();return true;}
-            return false;
-        });
+        harmonyClock.setOnKeyListener((v, key, event) -> harmonyHeroKey(key, event));
         if(!prefs.getBoolean("hide_clock",false)){
             LinearLayout.LayoutParams face=new LinearLayout.LayoutParams(side,side);
             face.setMarginEnd(dp(screenW<780?12:22));
@@ -186,15 +180,7 @@ public final class PersonalHomeActivity extends Activity {
         if(HarmonyVisionLayout.showNativeWeatherWidget()){
             weatherWidget=new WeatherWidgetView(this,this::showWeatherForecast);
             harmonyWeatherCard=weatherWidget;
-            weatherWidget.setOnKeyListener((v,key,event)->{
-                if(event.getAction()!=KeyEvent.ACTION_DOWN)return false;
-                if(key==KeyEvent.KEYCODE_DPAD_DOWN)return focusHarmonyBelowHero();
-                if(key==KeyEvent.KEYCODE_DPAD_UP&&searchButton!=null){searchButton.requestFocus();return true;}
-                if(key==KeyEvent.KEYCODE_DPAD_LEFT&&harmonyClock!=null&&harmonyClock.getParent()!=null){
-                    harmonyClock.requestFocus();return true;
-                }
-                return key==KeyEvent.KEYCODE_DPAD_RIGHT;
-            });
+            weatherWidget.setOnKeyListener((v, key, event) -> harmonyHeroKey(key, event));
             int weatherWidth=Math.max(210,Math.min(285,Math.round(screenW*.29f)));
             LinearLayout.LayoutParams wp=new LinearLayout.LayoutParams(dp(weatherWidth),-2);
             wp.setMarginStart(dp(screenW<780?8:24));
@@ -208,6 +194,22 @@ public final class PersonalHomeActivity extends Activity {
         harmonyClock.active(resumed&&!prefs.getBoolean("hide_clock",false));
         return stage;
     }
+    private boolean harmonyHeroKey(int key, KeyEvent event) {
+        boolean horizontal = key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT;
+        if (!horizontal && key != KeyEvent.KEYCODE_DPAD_UP && key != KeyEvent.KEYCODE_DPAD_DOWN) return false;
+        if (event.getAction() != KeyEvent.ACTION_DOWN || event.isCanceled()) return true;
+        if (key == KeyEvent.KEYCODE_DPAD_UP) {
+            if (searchButton != null) searchButton.requestFocus();
+        } else if (key == KeyEvent.KEYCODE_DPAD_DOWN) {
+            focusHarmonyBelowHero();
+        } else {
+            boolean rtl = page.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
+            View target = (key == KeyEvent.KEYCODE_DPAD_RIGHT) != rtl ? weatherWidget : harmonyClock;
+            if (target != null && target.isShown()) target.requestFocus();
+        }
+        return true;
+    }
+
     private boolean focusHarmonyHero() {
         if (harmonyClock != null && harmonyClock.isShown() && harmonyClock.requestFocus()) return true;
         return weatherWidget != null && weatherWidget.isShown() && weatherWidget.requestFocus();

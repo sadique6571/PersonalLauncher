@@ -15,8 +15,9 @@ final class HarmonyVisionLayout {
         return screenHeightDp < 450 ? 58 : screenHeightDp < 660 ? 68 : 82;
     }
     static int dockTileHeightDp(int screenHeightDp){
-        return dockPlateDp(screenHeightDp)+25;
+        return dockPlateDp(screenHeightDp) + DOCK_CAPTION_HEIGHT_DP + 4;
     }
+    static final int DOCK_CAPTION_HEIGHT_DP = 24;
     static final float DOCK_FOCUS_SCALE = 1.16f;
     static final int DOCK_FOCUS_LIFT_DP = 10;
     static final int DOCK_HEADROOM_DP = 22;
