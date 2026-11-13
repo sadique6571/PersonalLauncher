@@ -7,6 +7,8 @@ public class HarmonyVisionLayoutTest {
     @Test public void dockKeepsTheFocusedPlateInsideItsCellAtCommonTvDensities() {
         for (int height : new int[]{420, 540, 720, 1080}) {
             int plate = HarmonyVisionLayout.dockPlateDp(height);
+            assertTrue(HarmonyVisionLayout.dockTileHeightDp(height) - plate
+                    > HarmonyVisionLayout.DOCK_CAPTION_HEIGHT_DP);
             float focused = plate * HarmonyVisionLayout.DOCK_FOCUS_SCALE;
             assertTrue(focused < HarmonyVisionLayout.dockCellWidthDp(height) - 6);
             assertTrue(HarmonyVisionLayout.DOCK_FOCUS_LIFT_DP + (focused - plate) / 2

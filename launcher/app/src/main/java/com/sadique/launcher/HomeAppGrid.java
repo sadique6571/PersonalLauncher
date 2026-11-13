@@ -148,7 +148,14 @@ final class HomeAppGrid<T> extends RecyclerView {
                 returnFromFooter();
             return true;
         }
-        if (position < 0 || position >= items.size()) return false;
+        if (position < 0 || position >= items.size()) {
+            if (!horizontalDock) return false;
+            if (event.getAction() == android.view.KeyEvent.ACTION_DOWN && !event.isCanceled()) {
+                if (code == android.view.KeyEvent.KEYCODE_DPAD_UP && upFromApps != null) upFromApps.run();
+                else if (horizontal && !items.isEmpty()) focusKey(lastAppKey);
+            }
+            return true;
+        }
         if (event.getAction() != android.view.KeyEvent.ACTION_DOWN || event.isCanceled()) return true;
         if (horizontalDock && vertical) {
             pendingFocus = null;
