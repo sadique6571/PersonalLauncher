@@ -6,7 +6,7 @@ object HomeSetupCommand {
     const val FAILED = "PL_HOME_AUTO_FAILED"
     @JvmStatic
     fun build(pkg: String, user: Int, sdk: Int): String {
-        if (!pkg.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*) + ")) || user < 0 || sdk < 26)
+        if (!pkg.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+")) || user < 0 || sdk < 26)
             throw IllegalArgumentException("Invalid local Home target")
         val component = pkg + "/com.sadique.launcher.MainActivity"
         val resolve = "cmd package resolve-activity --brief --user " + user +
