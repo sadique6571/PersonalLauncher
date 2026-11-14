@@ -308,7 +308,7 @@ public final class LandscapeView extends FrameLayout {
                 for (int i = 0; result == null && i < LandscapeHistory.RESERVE_SIZE && !Thread.currentThread().isInterrupted(); i++) {
                     selected = history.takeOffline();
                     if (selected == null) break;
-                    result = rememberPhoto(history, selected);
+                    result = ScreensaverPrefetch.decode(selected.bytes);
                     if (result != null) subject = selected.subject;
                 }
                 if (result == null) {

@@ -12,6 +12,8 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
 import android.media.FaceDetector
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import java.io.ByteArrayOutputStream
@@ -20,6 +22,7 @@ import java.util.concurrent.Future
 
 /** Downloads ahead independently of slideshow rendering. */
 class ScreensaverPrefetch : JobService() {
+    private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
     private var task: Future<*>? = null
     private var active: JobParameters? = null
@@ -33,7 +36,7 @@ class ScreensaverPrefetch : JobService() {
                 Log.w(TAG, "Photo queue refill failed", failure)
                 true
             }
-            mainExecutorCompat {
+            main.post {
                 if (active === params) {
                     active = null
                     task = null
@@ -42,10 +45,6 @@ class ScreensaverPrefetch : JobService() {
             }
         }
         return true
-    }
-
-    private fun mainExecutorCompat(action: Runnable) {
-        android.os.Handler(mainLooper).post(action)
     }
 
     override fun onStopJob(params: JobParameters): Boolean {
@@ -111,10 +110,13 @@ class ScreensaverPrefetch : JobService() {
         fun schedule(context: Context) {
             val scheduler = context.getSystemService(JobScheduler::class.java) ?: return
             if (scheduler.getPendingJob(JOB) != null) return
-            scheduler.schedule(JobInfo.Builder(JOB, ComponentName(context, ScreensaverPrefetch::class.java))
+            val job = JobInfo.Builder(JOB, ComponentName(context, ScreensaverPrefetch::class.java))
                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
                 .setBackoffCriteria(10_000L, JobInfo.BACKOFF_POLICY_LINEAR)
-                .build())
+                .build()
+            if (scheduler.schedule(job) != JobScheduler.RESULT_SUCCESS) {
+                Log.w(TAG, "Android did not schedule the photo queue refill")
+            }
         }
 
         @JvmStatic
