@@ -64,11 +64,16 @@ final class LandscapeFeed {
     static final class Scene {
         final String id, url, subject;
         final boolean reviewed;
+        final int cropOffsetPercent;
         Scene(String id, String url, String subject, boolean reviewed) {
+            this(id, url, subject, reviewed, -1);
+        }
+        Scene(String id, String url, String subject, boolean reviewed, int cropOffsetPercent) {
             this.id = id;
             this.url = url;
             this.subject = subject;
             this.reviewed = reviewed;
+            this.cropOffsetPercent = cropOffsetPercent;
         }
     }
 
@@ -86,6 +91,7 @@ final class LandscapeFeed {
         commonsTopic = random.nextInt(COMMONS_TOPICS.length);
         for (Source source : Source.values()) queues.put(source, new ArrayDeque<>());
         addReviewed(Source.PORTRAITS, portraits());
+        addReviewed(Source.FLICKR, flickrPeople());
         addReviewed(Source.OCEAN_EXPLORATION, oceanPhotos());
         addReviewed(Source.WALLSPAPERS, wallspapersPhotos());
         addReviewed(Source.PUBLIC_DOMAIN_PICTURES, publicDomainPicturesPhotos());
@@ -334,6 +340,28 @@ final class LandscapeFeed {
         portrait(result, "1770564512661-eb2e142c26fd", "Women outdoors", 0.46);
         portrait(result, "1764740146693-4955d02c98f9", "Outdoor portrait · South Asia", 0.55);
         return result;
+    }
+
+    /** Public-domain/CC0 people photos, with each 16:9 framing visually reviewed. */
+    private static List<Scene> flickrPeople() {
+        List<Scene> photos = new ArrayList<>();
+        // flickr.com/photos/wendelinjacober/29941887810
+        flickrPortrait(photos, "5684", "29941887810_b3316581e3", "City balcony · Wendelin Jacober", 0);
+        // flickr.com/photos/106274066@N07/54275237479
+        flickrPortrait(photos, "65535", "54275237479_6194e5949e", "Friends in the grass · snelson951", 50);
+        // flickr.com/photos/wwward0/51676150106
+        flickrPortrait(photos, "65535", "51676150106_73b559de61", "Painters in East River Park · wwward0", 50);
+        // flickr.com/photos/mussikatz/55595101640
+        flickrPortrait(photos, "65535", "55595101640_6d5cc4db13", "Weekend market in Bangkok · mussikatz", 35);
+        // flickr.com/photos/mussikatz/52769851516
+        flickrPortrait(photos, "65535", "52769851516_86d01c2b9c", "Village life in Colombia · mussikatz", 35);
+        return photos;
+    }
+
+    private static void flickrPortrait(List<Scene> photos, String server, String file, String subject, int cropOffsetPercent) {
+        String id = file.substring(0, file.indexOf('_'));
+        photos.add(new Scene("flickr:" + id, "https://live.staticflickr.com/" + server + "/" + file + "_b.jpg",
+                subject, true, cropOffsetPercent));
     }
 
     private static void portrait(List<Scene> list, String id, String subject, Double focusY) {

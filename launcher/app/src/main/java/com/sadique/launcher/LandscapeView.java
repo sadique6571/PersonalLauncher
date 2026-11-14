@@ -380,6 +380,10 @@ public final class LandscapeView extends FrameLayout {
             if (scene == null) break;
             try {
                 byte[] bytes = OnlineContent.get(scene.url, 6 * 1024 * 1024, 3500, 5000);
+                if (scene.cropOffsetPercent >= 0) {
+                    bytes = frameReviewedPortrait(bytes, scene.cropOffsetPercent);
+                    if (bytes == null) continue;
+                }
                 Bitmap decoded = decodePhoto(bytes);
                 if (decoded == null) continue;
                 try {
@@ -393,6 +397,29 @@ public final class LandscapeView extends FrameLayout {
             }
         }
         return null;
+    }
+
+    private static byte[] frameReviewedPortrait(byte[] bytes, int offsetPercent) {
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
+        int width = bounds.outWidth;
+        int height = bounds.outHeight;
+        int frameHeight = width / 16 * 9;
+        // Only frame the reviewed horizontal previews. If a CDN rendition changes, skip it.
+        if (width != 1024 || height < frameHeight || height > width) return null;
+        Bitmap original = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+        if (original == null) return null;
+        Bitmap framed = original;
+        try {
+            int top = Math.round((height - frameHeight) * offsetPercent / 100f);
+            framed = Bitmap.createBitmap(original, 0, top, width, frameHeight);
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            return framed.compress(Bitmap.CompressFormat.JPEG, 90, output) ? output.toByteArray() : null;
+        } finally {
+            if (framed != original) framed.recycle();
+            original.recycle();
+        }
     }
 
     private static Bitmap rememberPhoto(LandscapeHistory history, LandscapeHistory.SavedPhoto photo) {
