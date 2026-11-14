@@ -117,11 +117,12 @@ internal class ClockScene(root: View) {
         if (cfg.wallpapers.isEmpty()) {
             wallpaperFile = null
         } else {
-            rotation = ArrayList(cfg.wallpapers)
+            val wallpapers = ArrayList(cfg.wallpapers)
+            rotation = wallpapers
             val shown = ctx.getSharedPreferences("wallpaper_rotation", Context.MODE_PRIVATE)
                 .getString("image", "")
-            val current = WallpaperRotation.find(rotation, shown)
-            wallpaperFile = current ?: rotation!![0]
+            val current = WallpaperRotation.find(wallpapers, shown)
+            wallpaperFile = current ?: wallpapers[0]
             rotationMs = cfg.wallpaperRotationMinutes * 60_000L
             order = cfg.wallpaperOrder
             moods = cfg.wallpaperMoods

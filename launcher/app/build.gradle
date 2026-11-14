@@ -12,7 +12,12 @@ android {
         applicationId providers.gradleProperty('launcherApplicationId').getOrElse('com.sadique.launcher')
         minSdk 26
         targetSdk 34
-        versionCode 95
+        versionCode 96
+        // Use the exact GitHub release build identifier for published APKs.
+        def runNumber = providers.environmentVariable('GITHUB_RUN_NUMBER').orNull
+        def releaseWorkflow = providers.environmentVariable('GITHUB_WORKFLOW').orNull == 'Build Personal Launcher APK'
+        def buildNumber = releaseWorkflow && (runNumber ==~ /[0-9]+/) ? runNumber : versionCode.toString()
+        resValue 'string', 'launcher_build_number', buildNumber
         versionName '7.0'
     }
 

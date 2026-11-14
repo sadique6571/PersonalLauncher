@@ -160,4 +160,5 @@
     <string name="compose_apps_empty">No apps available</string>
     <string name="compose_apps_menu">Compose app drawer</string>
     <string name="compose_apps_hint">Open the Kotlin app grid</string>
+    <string name="h_installed_version">Version %1$s · Build %2$s</string>
 </resources>
