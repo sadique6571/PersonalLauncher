@@ -12,11 +12,11 @@ final class OnlineContent {
     private static boolean allowedHost(String host) {
         return imageHost(host)
                 || host.equals("api.open-meteo.com") || host.equals("geocoding-api.open-meteo.com") || host.equals("wttr.in")
-                || host.equals("commons.wikimedia.org") || host.equals("nominatim.openstreetmap.org");
+                || host.equals("www.flickr.com") || host.equals("commons.wikimedia.org") || host.equals("nominatim.openstreetmap.org");
     }
 
     private static boolean imageHost(String host) {
-        return host.equals("images.unsplash.com")
+        return host.equals("images.unsplash.com") || host.equals("live.staticflickr.com")
                 || host.equals("upload.wikimedia.org") || host.equals("thumb.wikimedia.org")
                 || host.equals("oceanexplorer.noaa.gov") || host.equals("wallspapers.org")
                 || host.equals("www.publicdomainpictures.net") || host.equals("npgallery.nps.gov")
@@ -45,7 +45,7 @@ final class OnlineContent {
             connection.setRequestProperty("User-Agent", "PersonalLauncher/6.8 (https://github.com/sadique6571/PersonalLauncher)");
             String path = url.getPath();
             boolean wallpaperMetadata = host.equals("wallspapers.org") && !path.startsWith("/download/");
-            String accept = wallpaperMetadata ? "application/rss+xml,text/html"
+            String accept = wallpaperMetadata || host.equals("www.flickr.com") ? "application/rss+xml,text/html"
                     : imageHost(host) && !path.equals("/HPImageArchive.aspx") ? "image/jpeg,image/webp,image/png" : "application/json";
             connection.setRequestProperty("Accept", accept);
             try {

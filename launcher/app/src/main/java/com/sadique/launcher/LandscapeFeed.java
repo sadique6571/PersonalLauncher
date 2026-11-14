@@ -22,11 +22,23 @@ import java.util.regex.Pattern;
 /** Independent online sources for the preview and Android TV dream. */
 final class LandscapeFeed {
     private enum Source {
-        BING, PORTRAITS, WALLSPAPERS, COMMONS, PUBLIC_DOMAIN_PICTURES, OCEAN_EXPLORATION, NATIONAL_PARK_SERVICE, PXHERE;
+        FLICKR, BING, PORTRAITS, WALLSPAPERS, COMMONS, PUBLIC_DOMAIN_PICTURES, OCEAN_EXPLORATION, NATIONAL_PARK_SERVICE, PXHERE;
 
-        boolean live() { return this == BING || this == COMMONS || this == WALLSPAPERS; }
+        boolean live() { return this == FLICKR || this == BING || this == COMMONS || this == WALLSPAPERS; }
     }
-    private static final Source[] SOURCES = Source.values();
+    // Give Flickr the first attempt and two additional turns in each rotation.
+    private static final Source[] SOURCES = {Source.FLICKR, Source.BING, Source.PORTRAITS, Source.FLICKR,
+            Source.WALLSPAPERS, Source.COMMONS, Source.PUBLIC_DOMAIN_PICTURES, Source.FLICKR,
+            Source.OCEAN_EXPLORATION, Source.NATIONAL_PARK_SERVICE, Source.PXHERE};
+    private static final String[] FLICKR_TAGS = {
+            "lake,cc0", "landscape,publicdomain", "mountains,cc0", "nature,cc0", "forest,cc0",
+            "coast,cc0", "waterfall,cc0", "sunset,cc0", "glacier,cc0", "river,cc0", "ocean,cc0",
+            "landscape,cc0", "nationalpark,landscape", "nature,widescreen", "landscape,widescreen"
+    };
+    private static final Pattern FLICKR_IMAGE = Pattern.compile("/[0-9]+/([0-9]+)_[a-f0-9]+_b\\.jpg");
+    private static final String MEDIA_RSS = "http://search.yahoo.com/mrss/";
+    private static final String CC_RSS = "http://cyber.law.harvard.edu/rss/creativeCommonsRssModule.html";
+
     private static final String WALLSPAPERS_HOST = "https://wallspapers.org";
     private static final Pattern WALLPAPER_LINK = Pattern.compile(
             "<link>(https://wallspapers\\.org/wallpaper/[a-z0-9-]{1,160})</link>");
@@ -66,13 +78,13 @@ final class LandscapeFeed {
     private final ArrayDeque<String> wallpaperPages = new ArrayDeque<>();
     private final Set<String> examinedWallpaperPages = new LinkedHashSet<>();
     private long nextWallpaperRefresh;
-    private int nextSource, bingBatch, commonsTopic;
+    private int nextSource, flickrTopic, bingBatch, commonsTopic;
     private final int bingMarket;
 
     LandscapeFeed() {
         bingMarket = random.nextInt(MARKETS.length);
         commonsTopic = random.nextInt(COMMONS_TOPICS.length);
-        for (Source source : SOURCES) queues.put(source, new ArrayDeque<>());
+        for (Source source : Source.values()) queues.put(source, new ArrayDeque<>());
         addReviewed(Source.PORTRAITS, portraits());
         addReviewed(Source.OCEAN_EXPLORATION, oceanPhotos());
         addReviewed(Source.WALLSPAPERS, wallspapersPhotos());
@@ -124,6 +136,10 @@ final class LandscapeFeed {
 
     private List<Scene> fetch(Source source, Predicate<String> alreadyShown) throws Exception {
         switch (source) {
+            case FLICKR:
+                String tags = FLICKR_TAGS[flickrTopic++ % FLICKR_TAGS.length];
+                return flickrScenes(OnlineContent.get("https://www.flickr.com/services/feeds/photos_public.gne"
+                        + "?format=rss_200&tagmode=all&tags=" + encode(tags), 192 * 1024, 2200, 3500));
             case BING:
                 int batchIndex = bingBatch++ % (MARKETS.length * 2);
                 return bing(MARKETS[(bingMarket + batchIndex % MARKETS.length) % MARKETS.length],
@@ -136,6 +152,58 @@ final class LandscapeFeed {
                         COMMONS_SIZES[(batch / 2) % COMMONS_SIZES.length], (batch / (2 * COMMONS_SIZES.length)) % 8);
             default: throw new AssertionError(source);
         }
+    }
+
+    static List<Scene> flickrScenes(byte[] feed) throws Exception {
+        javax.xml.parsers.DocumentBuilderFactory factory = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        // Flickr publishes UTF-8 RSS. Reject DTDs before parsing so the parser cannot resolve entities.
+        String rss = new String(feed, java.nio.charset.StandardCharsets.UTF_8);
+        if (rss.contains("<!DOCTYPE")) return Collections.emptyList();
+        org.w3c.dom.Document xml = factory.newDocumentBuilder().parse(
+                new org.xml.sax.InputSource(new java.io.StringReader(rss)));
+        org.w3c.dom.NodeList items = xml.getElementsByTagName("item");
+        List<Scene> photos = new ArrayList<>();
+        for (int i = 0; i < Math.min(items.getLength(), 20); i++) {
+            org.w3c.dom.Element item = (org.w3c.dom.Element) items.item(i);
+            if (!publicDomainPhotoLicense(xmlText(item, CC_RSS, "license"))) continue;
+            org.w3c.dom.Node content = item.getElementsByTagNameNS(MEDIA_RSS, "content").item(0);
+            if (!(content instanceof org.w3c.dom.Element)) continue;
+            org.w3c.dom.Element image = (org.w3c.dom.Element) content;
+            if (!"image/jpeg".equals(image.getAttribute("type"))
+                    || !fitsWidescreen(xmlDimension(image, "width"), xmlDimension(image, "height"))) continue;
+            String title = xmlText(item, MEDIA_RSS, "title");
+            String description = xmlText(item, null, "description").replaceAll("<[^>]*>", " ");
+            String tags = xmlText(item, MEDIA_RSS, "category");
+            String text = title + " " + description + " " + tags;
+            if (!landscapeSubject(title, description + " " + tags)
+                    || WALLPAPER_PEOPLE.matcher(text).find()
+                    || FLICKR_NON_SCENERY.matcher(text).find()) continue;
+            String url = image.getAttribute("url");
+            if (!imageUrlAllowed(url)) continue;
+            URI uri = URI.create(url);
+            if (!"live.staticflickr.com".equals(uri.getHost())) continue;
+            Matcher id = FLICKR_IMAGE.matcher(uri.getPath());
+            if (id.matches()) photos.add(new Scene("flickr:" + id.group(1), url, title, false));
+        }
+        return photos;
+    }
+
+    private static final Pattern FLICKR_NON_SCENERY = Pattern.compile(
+            "\\b(?:cosplay\\w*|anime|burlesque|conventions?|screenshots?|videogames?|video games?|"
+                    + "second life|power station|industrial|military|navy|patrol boats?)\\b", Pattern.CASE_INSENSITIVE);
+
+    private static int xmlDimension(org.w3c.dom.Element element, String attribute) {
+        try {
+            return Integer.parseInt(element.getAttribute(attribute));
+        } catch (NumberFormatException invalid) {
+            return 0;
+        }
+    }
+
+    private static String xmlText(org.w3c.dom.Element item, String namespace, String name) {
+        org.w3c.dom.Node node = item.getElementsByTagNameNS(namespace, name).item(0);
+        return node == null ? "" : node.getTextContent().trim();
     }
 
     private List<Scene> liveWallpapers(Predicate<String> alreadyShown) throws Exception {
@@ -198,8 +266,11 @@ final class LandscapeFeed {
     }
 
     private static boolean publicDomainWallpaperLicense(String license) {
-        return license.matches("https?://creativecommons\\.org/publicdomain/(?:zero|mark)/1\\.0(?:/[^?#]*)?")
-                || license.equals("https://www.nps.gov/aboutus/disclaimer.htm");
+        return publicDomainPhotoLicense(license) || license.equals("https://www.nps.gov/aboutus/disclaimer.htm");
+    }
+
+    private static boolean publicDomainPhotoLicense(String license) {
+        return license.matches("https?://creativecommons\\.org/publicdomain/(?:zero|mark)/1\\.0(?:/[^?#]*)?");
     }
 
     private static List<Scene> bing(String market, int archiveStart) throws Exception {
@@ -364,6 +435,7 @@ final class LandscapeFeed {
                     || (uri.getPort() != -1 && uri.getPort() != 443)) return false;
             String path = uri.getPath();
             switch (uri.getHost()) {
+                case "live.staticflickr.com": return uri.getRawQuery() == null && FLICKR_IMAGE.matcher(path).matches();
                 case "images.unsplash.com": return path.matches("/photo-[0-9]+-[a-f0-9]+");
                 case "www.bing.com": return "/th".equals(path) && uri.getQuery() != null
                         && uri.getQuery().matches("id=OHR\\.[A-Za-z0-9_.-]+_1920x1080\\.jpg");

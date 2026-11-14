@@ -50,6 +50,27 @@ public class LandscapeFeedTest {
         assertNull(LandscapeFeed.wallpaperScene(page.replace("/fhd", "/phone")));
     }
 
+    @Test public void flickrRssRequiresLicensedWidescreenNature() throws Exception {
+        String feed = "<rss xmlns:m='http://search.yahoo.com/mrss/' "
+                + "xmlns:c='http://cyber.law.harvard.edu/rss/creativeCommonsRssModule.html'><channel><item>"
+                + "<m:title>Wedgemount Lake</m:title><description>A quiet alpine lake</description>"
+                + "<m:category>lake mountain canada</m:category>"
+                + "<m:content type='image/jpeg' width='1024' height='576' "
+                + "url='https://live.staticflickr.com/65535/53147294188_feebe50604_b.jpg'/>"
+                + "<c:license>https://creativecommons.org/publicdomain/zero/1.0/deed.en</c:license>"
+                + "</item></channel></rss>";
+        assertEquals("flickr:53147294188", LandscapeFeed.flickrScenes(utf8(feed)).get(0).id);
+        assertTrue(LandscapeFeed.flickrScenes(utf8(feed.replace("576", "640"))).isEmpty());
+        assertTrue(LandscapeFeed.flickrScenes(utf8(feed.replace("publicdomain/zero/1.0", "licenses/by/4.0"))).isEmpty());
+        assertTrue(LandscapeFeed.flickrScenes(utf8(feed.replace("quiet alpine lake", "couple kissing by the lake"))).isEmpty());
+        assertTrue(LandscapeFeed.flickrScenes(utf8(feed.replace("quiet alpine lake", "cosplay in front of a lake"))).isEmpty());
+        assertTrue(LandscapeFeed.flickrScenes(utf8("<!DOCTYPE rss SYSTEM 'https://example.com/x'>" + feed)).isEmpty());
+    }
+
+    private static byte[] utf8(String value) {
+        return value.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
     @Test public void imageRoutesStayOnTheExpectedHttpsHosts() {
         assertTrue(LandscapeFeed.imageUrlAllowed("https://www.bing.com/th?id=OHR.NorthWindow_EN-US1170338293_1920x1080.jpg"));
         assertTrue(LandscapeFeed.imageUrlAllowed("https://images.unsplash.com/photo-1745690720220-24e337e571c7?w=1600"));
