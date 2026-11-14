@@ -1,5 +1,6 @@
 plugins {
     id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
 }
 
 android {
@@ -11,7 +12,7 @@ android {
         applicationId providers.gradleProperty('launcherApplicationId').getOrElse('com.sadique.launcher')
         minSdk 26
         targetSdk 34
-        versionCode 92
+        versionCode 94
         versionName '7.0'
     }
 
@@ -40,11 +41,13 @@ android {
 
     packagingOptions {
         resources {
-            // Kotlin metadata pulled in by AndroidX's dependencies. This launcher is plain Java and never reads it;
-            // leaving it out saves about 14 KB of every install.
-            excludes += ['kotlin/**', 'META-INF/*.version', 'META-INF/*.kotlin_module', 'DebugProbesKt.bin']
+            excludes += ['META-INF/*.version', 'DebugProbesKt.bin']
         }
     }
+
+    buildFeatures { compose true }
+    composeOptions { kotlinCompilerExtensionVersion = '1.5.15' }
+    kotlinOptions { jvmTarget = '17' }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -53,6 +56,9 @@ android {
 }
 
 dependencies {
+    implementation 'androidx.activity:activity-compose:1.9.3'
+    implementation 'androidx.compose.foundation:foundation:1.7.5'
+    implementation 'androidx.tv:tv-material:1.0.0'
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
     implementation 'androidx.dynamicanimation:dynamicanimation:1.0.0'
     // Optional local ADB boot recovery; dependency rationale and boundaries: issue #16.
@@ -73,7 +79,5 @@ tasks.register('prepareVolumeAssets', Copy) {
 }
 android.sourceSets.main.assets.srcDir(volumeAssets)
 tasks.named('preBuild').configure { dependsOn('prepareVolumeAssets') }
-
-
 
 

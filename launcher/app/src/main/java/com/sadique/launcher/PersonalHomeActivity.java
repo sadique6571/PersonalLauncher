@@ -2403,9 +2403,9 @@ public final class PersonalHomeActivity extends Activity {
     }
 
     private void systemMenu() {
-        String[] labels = {"Screensaver & weather", "Profile name & photo", "Performance", "Updates", "Export settings", "Import settings", "Reset layout & unhide apps"};
-        String[] hints = {"Photos, weather & idle timer", "Name and local profile picture", "Light, Balanced or Full", "Automatic GitHub updates", "Save to a file", "Restore from a file", "Restore the default layout"};
-        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_settings, R.drawable.ic_internet, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_settings};
+        String[] labels = {"Screensaver & weather", "Profile name & photo", "Performance", "Updates", "Export settings", "Import settings", "Reset layout & unhide apps", getString(R.string.compose_apps_menu)};
+        String[] hints = {"Photos, weather & idle timer", "Name and local profile picture", "Light, Balanced or Full", "Automatic GitHub updates", "Save to a file", "Restore from a file", "Restore the default layout", getString(R.string.compose_apps_hint)};
+        int[] icons = {R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_settings, R.drawable.ic_internet, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_apps};
         Runnable[] choices = {
             this::screensaverSettings,
             this::editProfile,
@@ -2423,6 +2423,7 @@ public final class PersonalHomeActivity extends Activity {
                         .remove("wallpaper_mode").remove("focus_glow").remove("continue_watching")
                         .remove("header_bg_mode").remove("header_bg").remove("header_blur").apply(); buildHomeSoon();
             }).setNegativeButton(android.R.string.cancel, null).show(),
+            () -> startActivity(new Intent(this, ComposeAppsActivity.class)),
         };
         subMenu("System", labels, hints, icons, choices);
     }
