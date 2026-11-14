@@ -64,6 +64,7 @@ internal class GamepadPassthrough(private val service: AccessibilityService) : I
          * the firmware's virtual-search keyboard, which isVirtual() misses, reports a gamepad (0x00000701). An Xbox
          * controller reports both (0x01000511).
          */
+        @JvmStatic
         fun isGamepad(sources: Int): Boolean {
             return (sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
                     && (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
