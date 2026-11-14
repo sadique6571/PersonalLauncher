@@ -3,6 +3,7 @@ package com.sadique.launcher;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.net.URLEncoder;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -17,7 +18,11 @@ import java.util.regex.Pattern;
 
 /** Independent online sources for the preview and Android TV dream. */
 final class LandscapeFeed {
-    private enum Source { BING, PORTRAITS, COMMONS, OCEAN_EXPLORATION }
+    private enum Source {
+        BING, PORTRAITS, WALLSPAPERS, COMMONS, PUBLIC_DOMAIN_PICTURES, OCEAN_EXPLORATION, NATIONAL_PARK_SERVICE, PXHERE;
+
+        boolean live() { return this == BING || this == COMMONS; }
+    }
     private static final Source[] SOURCES = Source.values();
     private static final String[] MARKETS = {"en-US", "en-GB", "en-AU", "en-CA", "de-DE", "ja-JP"};
     private static final String[] COMMONS_TOPICS = {"mountain", "lake", "waterfall", "coast", "desert", "forest", "beach", "river"};
@@ -53,6 +58,12 @@ final class LandscapeFeed {
         for (Source source : SOURCES) queues.put(source, new ArrayDeque<>());
         addReviewed(Source.PORTRAITS, portraits());
         addReviewed(Source.OCEAN_EXPLORATION, oceanPhotos());
+        addReviewed(Source.WALLSPAPERS, wallspapersPhotos());
+        addReviewed(Source.PUBLIC_DOMAIN_PICTURES, publicDomainPicturesPhotos());
+        addReviewed(Source.NATIONAL_PARK_SERVICE, nationalParkPhotos());
+        addReviewed(Source.PXHERE, Collections.singletonList(new Scene("pxhere:668634",
+                "https://c.pxhere.com/photos/00/95/lake_landscape_reflection_scenic_calm_outdoors_nature_trees-668634.jpg!d",
+                "Reflections on a mountain lake", true)));
     }
 
     private void addReviewed(Source source, List<Scene> photos) {
@@ -66,7 +77,7 @@ final class LandscapeFeed {
             ArrayDeque<Scene> queue = queues.get(source);
             Scene candidate = unseen(queue, alreadyShown);
             if (candidate != null) return candidate;
-            if (source == Source.PORTRAITS || source == Source.OCEAN_EXPLORATION) continue;
+            if (!source.live()) continue;
             if (System.nanoTime() < retryAfter.getOrDefault(source, Long.MIN_VALUE)) continue;
             try {
                 List<Scene> fetched = fetch(source);
@@ -75,6 +86,10 @@ final class LandscapeFeed {
                 candidate = unseen(queue, alreadyShown);
                 retryAfter.put(source, System.nanoTime() + TimeUnit.SECONDS.toNanos(candidate == null ? 5 : 8));
                 if (candidate != null) return candidate;
+            } catch (UnknownHostException dnsUnavailable) {
+                // A missing DNS record should not delay the independent photo sources each rotation.
+                retryAfter.put(source, System.nanoTime() + TimeUnit.MINUTES.toNanos(2));
+                android.util.Log.w("PersonalLandscape", source + " hostname could not be resolved", dnsUnavailable);
             } catch (Exception unavailable) {
                 retryAfter.put(source, System.nanoTime() + TimeUnit.SECONDS.toNanos(45));
             }
@@ -187,6 +202,49 @@ final class LandscapeFeed {
                 subject + " · NOAA Ocean Exploration", true));
     }
 
+    /** Selected public domain and CC0 Full HD downloads. */
+    private static List<Scene> wallspapersPhotos() {
+        String[][] photos = {
+                {"6a69283189", "Grand Canyon sandstone"},
+                {"cbeb40bf8c", "Yellowstone geyser basin"},
+                {"24b32f771f", "Autumn hills above a blue lake"},
+                {"c4b06d8c7e", "Snow-covered bog and forest"},
+                {"0e97187bef", "Grand Canyon from the Rim Trail"},
+                {"9a39052f96", "Trail through a tundra valley"},
+                {"85e372d5ff", "Spruce forest and moss-covered rocks"},
+                {"92cb432c51", "Aurora above Lofoten Bay"},
+                {"680f4bba3b", "Terrace Mountain"}
+        };
+        List<Scene> result = new ArrayList<>();
+        for (String[] photo : photos) {
+            result.add(new Scene("wallspapers:" + photo[0], "https://wallspapers.org/download/" + photo[0] + "/fhd",
+                    photo[1], true));
+        }
+        return result;
+    }
+
+    private static List<Scene> publicDomainPicturesPhotos() {
+        String[][] photos = {
+                {"200000/velka/fall-by-the-lake-14767797082J2.jpg", "Autumn by the lake"},
+                {"470000/velka/landschap-bergweg-haarspeldbocht-1665124155qIR.jpg", "Winding mountain road"},
+                {"240000/velka/forest-landscape-1509002460MBr.jpg", "Sunlight in a birch forest"}
+        };
+        List<Scene> result = new ArrayList<>();
+        for (String[] photo : photos) {
+            result.add(new Scene("publicdomainpictures:" + photo[0],
+                    "https://www.publicdomainpictures.net/pictures/" + photo[0], photo[1], true));
+        }
+        return result;
+    }
+
+    private static List<Scene> nationalParkPhotos() {
+        // Public domain. Photographer: National Trails Office, U.S. National Park Service.
+        String id = "29fc4bc2-b103-4b1b-939f-19d4b91ce209";
+        return Collections.singletonList(new Scene("nps:" + id,
+                "https://npgallery.nps.gov/GetAsset/" + id + "/original.jpg",
+                "Mississippi River · U.S. National Park Service", true));
+    }
+
     private static JSONObject json(String url) throws Exception {
         return new JSONObject(new String(OnlineContent.get(url, 256 * 1024, 3500, 5000), java.nio.charset.StandardCharsets.UTF_8));
     }
@@ -227,6 +285,11 @@ final class LandscapeFeed {
                 case "thumb.wikimedia.org":
                 case "upload.wikimedia.org": return path.startsWith("/wikipedia/commons/")
                         && path.toLowerCase(Locale.ROOT).matches(".+\\.jpe?g");
+                case "wallspapers.org": return path.matches("/download/[a-f0-9]{10}/fhd");
+                case "www.publicdomainpictures.net":
+                    return path.matches("/pictures/[0-9]+/velka/[A-Za-z0-9_-]+\\.jpg");
+                case "npgallery.nps.gov": return path.matches("/GetAsset/[a-f0-9-]{36}/original\\.jpg");
+                case "c.pxhere.com": return path.matches("/photos/[a-f0-9]{2}/[a-f0-9]{2}/[a-z0-9_-]+\\.jpg!d");
                 case "oceanexplorer.noaa.gov": return path.startsWith("/wp-content/uploads/")
                         && path.toLowerCase(Locale.ROOT).endsWith(".jpg");
                 default: return false;

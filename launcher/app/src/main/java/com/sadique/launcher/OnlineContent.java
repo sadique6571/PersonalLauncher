@@ -10,19 +10,17 @@ import javax.net.ssl.HttpsURLConnection;
 /** Bounded HTTPS reads; no disk photo cache and no credentials or telemetry. */
 final class OnlineContent {
     private static boolean allowedHost(String host) {
-        return host.equals("images.unsplash.com")
+        return imageHost(host)
                 || host.equals("api.open-meteo.com") || host.equals("geocoding-api.open-meteo.com") || host.equals("wttr.in")
-                || host.equals("commons.wikimedia.org")
-                || host.equals("upload.wikimedia.org") || host.equals("thumb.wikimedia.org")
-                || host.equals("oceanexplorer.noaa.gov")
-                || host.equals("nominatim.openstreetmap.org") || host.equals("www.bing.com");
+                || host.equals("commons.wikimedia.org") || host.equals("nominatim.openstreetmap.org");
     }
 
     private static boolean imageHost(String host) {
         return host.equals("images.unsplash.com")
                 || host.equals("upload.wikimedia.org") || host.equals("thumb.wikimedia.org")
-                || host.equals("oceanexplorer.noaa.gov")
-                || host.equals("www.bing.com");
+                || host.equals("oceanexplorer.noaa.gov") || host.equals("wallspapers.org")
+                || host.equals("www.publicdomainpictures.net") || host.equals("npgallery.nps.gov")
+                || host.equals("c.pxhere.com") || host.equals("www.bing.com");
     }
 
     static byte[] get(String address, int limit) throws IOException {
