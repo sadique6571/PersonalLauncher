@@ -17,13 +17,15 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** The activity preview and Android Dream use the same online-only landscape screen. */
+/** The activity preview and Android Dream use the same landscape screen. */
 public final class LandscapeView extends FrameLayout {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final SharedPreferences prefs;
@@ -37,6 +39,18 @@ public final class LandscapeView extends FrameLayout {
     private boolean running, registered, photoBusy, weatherBusy, hasPhoto, networkOnline;
     private int generation;
     private LandscapeFeed photoFeed;
+    private static final int[] OFFLINE_RESOURCES = {
+            R.drawable.offline_autumn, R.drawable.offline_mountain_road, R.drawable.offline_mississippi
+    };
+    private static final String[] OFFLINE_IDS = {
+            "publicdomainpictures:200000/velka/fall-by-the-lake-14767797082J2.jpg",
+            "publicdomainpictures:470000/velka/landschap-bergweg-haarspeldbocht-1665124155qIR.jpg",
+            "nps:29fc4bc2-b103-4b1b-939f-19d4b91ce209"
+    };
+    private static final String[] OFFLINE_SUBJECTS = {
+            "Autumn by the lake", "Winding mountain road", "Mississippi River · U.S. National Park Service"
+    };
+
 
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
         @Override public void onAvailable(Network network) { handler.post(() -> networkChanged()); }
@@ -198,7 +212,7 @@ public final class LandscapeView extends FrameLayout {
         worker = Executors.newSingleThreadExecutor();
         photoFeed = new LandscapeFeed();
         weatherWorker = Executors.newSingleThreadExecutor();
-        networkOnline = false;
+        networkOnline = online();
         city.setText(prefs.getString("weather_city", LandscapeModel.CITY));
         if (connectivity != null) {
             try { connectivity.registerDefaultNetworkCallback(networkCallback); registered = true; }
@@ -241,12 +255,7 @@ public final class LandscapeView extends FrameLayout {
         wifi.setCompoundDrawablePadding(dp(8));
         wifi.setText(connected ? "Online" : "No internet");
         wifi.setTextColor(color);
-        if (!connected) {
-            clearPhotos();
-            details.setText("");
-            status.setText("Offline · photos need internet");
-            weather.setText("Unavailable");
-        }
+        if (!connected) weather.setText("Unavailable");
     }
 
     private void networkChanged() {
@@ -255,7 +264,7 @@ public final class LandscapeView extends FrameLayout {
         boolean connected = online();
         boolean recovered = connected && !networkOnline;
         networkOnline = connected;
-        if (connected && !hasPhoto) requestPhoto();
+        if (!hasPhoto || recovered) requestPhoto();
         // Weather recovery must not depend on whether a landscape has already loaded.
         if (recovered) requestWeather();
     }
@@ -278,7 +287,7 @@ public final class LandscapeView extends FrameLayout {
     }
 
     private void requestPhoto() {
-        if (!running || photoBusy || !online()) return;
+        if (!running || photoBusy) return;
         photoBusy = true;
         int request = generation;
         LandscapeFeed feed = photoFeed;
@@ -286,28 +295,34 @@ public final class LandscapeView extends FrameLayout {
             Bitmap result = null;
             String subject = "";
             try (LandscapeHistory history = new LandscapeHistory(getContext())) {
-                for (int attempt = 0; attempt < 6 && result == null && !Thread.currentThread().isInterrupted(); attempt++) {
-                    LandscapeFeed.Scene scene = feed.next(history::contains);
-                    if (scene == null) break;
-                    try {
-                        byte[] bytes = OnlineContent.get(scene.url, 6 * 1024 * 1024, 5000, 8000);
-                        BitmapFactory.Options bounds = new BitmapFactory.Options();
-                        bounds.inJustDecodeBounds = true;
-                        BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
-                        if (!LandscapeFeed.fitsWidescreen(bounds.outWidth, bounds.outHeight)) continue;
-                        bounds.inJustDecodeBounds = false; bounds.inSampleSize = 1;
-                        while (Math.max(bounds.outWidth, bounds.outHeight) / bounds.inSampleSize > 1920) bounds.inSampleSize *= 2;
-                        Bitmap decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
-                        if (decoded == null) continue;
-                        if ((!scene.reviewed && !clearLandscape(decoded)) || !history.remember(scene.id, bytes, visualFingerprint(decoded))) {
-                            decoded.recycle();
-                            continue;
+                LandscapeHistory.SavedPhoto selected;
+                for (int i = 0; result == null && i < 3 && online() && !Thread.currentThread().isInterrupted(); i++) {
+                    selected = downloadPhoto(feed, history);
+                    if (selected == null) break;
+                    result = rememberPhoto(history, selected);
+                    if (result != null) subject = selected.subject;
+                }
+                for (int i = 0; result == null && i < LandscapeHistory.RESERVE_SIZE && !Thread.currentThread().isInterrupted(); i++) {
+                    selected = history.takeOffline();
+                    if (selected == null) break;
+                    result = rememberPhoto(history, selected);
+                    if (result != null) subject = selected.subject;
+                }
+                if (result == null) {
+                    for (int i = 0; i < OFFLINE_RESOURCES.length && result == null && !Thread.currentThread().isInterrupted(); i++) {
+                        if (history.contains(OFFLINE_IDS[i])) continue;
+                        try (InputStream in = getResources().openRawResource(OFFLINE_RESOURCES[i])) {
+                            selected = new LandscapeHistory.SavedPhoto(OFFLINE_IDS[i], OFFLINE_SUBJECTS[i],
+                                    OnlineContent.readBounded(in, LandscapeHistory.RESERVE_PHOTO_LIMIT));
+                            result = rememberPhoto(history, selected);
+                            if (result != null) subject = selected.subject;
                         }
-                        result = decoded;
-                        subject = scene.subject;
-                    } catch (Exception unavailable) {
-                        android.util.Log.w("PersonalLandscape", "Scenery photo unavailable", unavailable);
                     }
+                }
+                if (result != null && online() && !history.reserveFull()) {
+                    handler.post(() -> {
+                        if (running && request == generation) worker.execute(() -> fillReserve(feed));
+                    });
                 }
             } catch (Exception unavailable) {
                 android.util.Log.w("PersonalLandscape", "Photo history unavailable", unavailable);
@@ -317,21 +332,93 @@ public final class LandscapeView extends FrameLayout {
             handler.post(() -> {
                 if (!running || request != generation) { if (image != null) image.recycle(); return; }
                 photoBusy = false;
-                if (image != null && online()) {
+                handler.removeCallbacks(photoRetry);
+                if (image != null) {
                     showPhoto(image, caption);
                     status.setText("");
-                    // Wallpaper details caption at the bottom (user 2026-11-01).
                     adaptClockColors();
                 } else {
-                    if (image != null) image.recycle();
                     clearPhotos();
                     details.setText("");
-                    status.setText(online() ? "New photo unavailable · retrying automatically" : "Offline · photos unavailable");
-                    handler.removeCallbacks(photoRetry);
-                    handler.postDelayed(photoRetry, 5_000);
+                    status.setText(online() ? "New photo unavailable · retrying automatically" : "Offline · no unseen photos left");
+                    if (online()) handler.postDelayed(photoRetry, 5_000);
                 }
             });
         });
+    }
+
+    private void fillReserve(LandscapeFeed feed) {
+        try (LandscapeHistory history = new LandscapeHistory(getContext())) {
+            // Keep the current image on screen while a couple of unseen photos download.
+            for (int i = 0; i < 2 && online() && !history.reserveFull() && !Thread.currentThread().isInterrupted(); i++) {
+                LandscapeHistory.SavedPhoto photo = downloadPhoto(feed, history);
+                if (photo == null) return;
+                byte[] bytes = photo.bytes;
+                Bitmap image = decodePhoto(bytes);
+                if (image == null) continue;
+                try {
+                    long[] visual = visualFingerprint(image);
+                    if (bytes.length > LandscapeHistory.RESERVE_PHOTO_LIMIT) {
+                        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                            if (!image.compress(Bitmap.CompressFormat.JPEG, 82, out)) continue;
+                            bytes = out.toByteArray();
+                        }
+                    }
+                    if (!Thread.currentThread().isInterrupted()) history.saveForOffline(photo.id, photo.subject, bytes, visual);
+                } finally {
+                    image.recycle();
+                }
+            }
+        } catch (Exception unavailable) {
+            android.util.Log.w("PersonalLandscape", "Could not prepare offline photos", unavailable);
+        }
+    }
+
+    private LandscapeHistory.SavedPhoto downloadPhoto(LandscapeFeed feed, LandscapeHistory history) {
+        for (int attempt = 0; attempt < 6 && online() && !Thread.currentThread().isInterrupted(); attempt++) {
+            LandscapeFeed.Scene scene = feed.next(id -> history.contains(id) || history.reserved(id));
+            if (scene == null) break;
+            try {
+                byte[] bytes = OnlineContent.get(scene.url, 6 * 1024 * 1024, 3500, 5000);
+                Bitmap decoded = decodePhoto(bytes);
+                if (decoded == null) continue;
+                try {
+                    if (scene.reviewed || clearLandscape(decoded))
+                        return new LandscapeHistory.SavedPhoto(scene.id, scene.subject, bytes);
+                } finally {
+                    decoded.recycle();
+                }
+            } catch (Exception unavailable) {
+                android.util.Log.w("PersonalLandscape", "Scenery photo unavailable", unavailable);
+            }
+        }
+        return null;
+    }
+
+    private static Bitmap rememberPhoto(LandscapeHistory history, LandscapeHistory.SavedPhoto photo) {
+        if (photo == null || history.contains(photo.id) || Thread.currentThread().isInterrupted()) return null;
+        Bitmap image = decodePhoto(photo.bytes);
+        if (image == null) return null;
+        boolean accepted = false;
+        try {
+            accepted = history.remember(photo.id, photo.bytes, visualFingerprint(image));
+            return accepted ? image : null;
+        } finally {
+            if (!accepted) image.recycle();
+        }
+    }
+
+    private static Bitmap decodePhoto(byte[] bytes) {
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
+        if (!LandscapeFeed.fitsWidescreen(bounds.outWidth, bounds.outHeight)) return null;
+        bounds.inJustDecodeBounds = false;
+        bounds.inSampleSize = 1;
+        while (bounds.outWidth / bounds.inSampleSize > 1920 && bounds.outHeight / bounds.inSampleSize / 2 > 480) {
+            bounds.inSampleSize *= 2;
+        }
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
     }
 
     private static long[] visualFingerprint(Bitmap image) {
