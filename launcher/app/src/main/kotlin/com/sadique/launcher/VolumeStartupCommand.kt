@@ -6,8 +6,8 @@ object VolumeStartupCommand {
     fun quote(text: String): String = "'" + text.replace("'","'\\''") + "'"
     @JvmStatic
     fun build(scriptBase64: String, sourceApk: String?): String {
-        if (!scriptBase64.matches(Regex("[A-Za-z0-9+/=]+"))) throw new IllegalArgumentException("Invalid wrapper encoding")
-        if (sourceApk == null || !sourceApk.startsWith("/data/app/") || !sourceApk.endsWith(".apk")) throw new IllegalArgumentException("Unexpected installed APK path")
+        if (!scriptBase64.matches(Regex("[A-Za-z0-9+/=]+"))) throw IllegalArgumentException("Invalid wrapper encoding")
+        if (sourceApk == null || !sourceApk.startsWith("/data/app/") || !sourceApk.endsWith(".apk")) throw IllegalArgumentException("Unexpected installed APK path")
         val script = "/data/local/tmp/fast-volume-bridge.sh"
         val next = script + ".new"
         val payload = "/data/local/tmp/personal-launcher-volume-fast.apk"

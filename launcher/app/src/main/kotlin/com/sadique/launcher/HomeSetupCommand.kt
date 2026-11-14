@@ -7,7 +7,7 @@ object HomeSetupCommand {
     @JvmStatic
     fun build(pkg: String, user: Int, sdk: Int): String {
         if (!pkg.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*) + ")) || user < 0 || sdk < 26)
-            throw new IllegalArgumentException("Invalid local Home target")
+            throw IllegalArgumentException("Invalid local Home target")
         val component = pkg + "/com.sadique.launcher.MainActivity"
         val resolve = "cmd package resolve-activity --brief --user " + user +
                 " -a android.intent.action.MAIN -c android.intent.category.HOME | tail -n 1"
