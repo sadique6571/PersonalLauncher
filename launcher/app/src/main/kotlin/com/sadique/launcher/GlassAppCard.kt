@@ -5,6 +5,7 @@ import android.graphics.drawable.GradientDrawable
 
 /** App-tinted reference card. App logos are separate, so resizing never stretches a bitmap plate. */
 internal object GlassAppCard {
+    @JvmStatic
     fun surface(context: Context, accent: Int, focused: Boolean, radius: Int): GradientDrawable {
         val prefs = ThemePreferences.get(context)
         if (ThemeStyle.harmony(prefs)) return HarmonyVisionSurface.app(context, accent, focused, radius)

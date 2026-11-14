@@ -2,6 +2,7 @@ package com.sadique.launcher
 
 /** Three separable box passes on a bounded thumbnail; never run for each rendered frame. */
 internal object GlassBlur {
+    @JvmStatic
     fun blur(pixels: IntArray, width: Int, height: Int, radius: Int) {
         if (width <= 0 || height <= 0 || width.toLong() * height != pixels.size.toLong() || radius < 0 || radius > 32)
             throw IllegalArgumentException("Invalid blur bounds")
