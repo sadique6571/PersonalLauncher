@@ -66,7 +66,8 @@ final class LandscapeFeed {
     private final ArrayDeque<String> wallpaperPages = new ArrayDeque<>();
     private final Set<String> examinedWallpaperPages = new LinkedHashSet<>();
     private long nextWallpaperRefresh;
-    private int nextSource, bingMarket, commonsTopic;
+    private int nextSource, bingBatch, commonsTopic;
+    private final int bingMarket;
 
     LandscapeFeed() {
         bingMarket = random.nextInt(MARKETS.length);
@@ -123,7 +124,10 @@ final class LandscapeFeed {
 
     private List<Scene> fetch(Source source, Predicate<String> alreadyShown) throws Exception {
         switch (source) {
-            case BING: return bing(MARKETS[bingMarket++ % MARKETS.length]);
+            case BING:
+                int batchIndex = bingBatch++ % (MARKETS.length * 2);
+                return bing(MARKETS[(bingMarket + batchIndex % MARKETS.length) % MARKETS.length],
+                        batchIndex < MARKETS.length ? 0 : 7);
             case WALLSPAPERS: return liveWallpapers(alreadyShown);
             case COMMONS:
                 int topicIndex = commonsTopic++;
@@ -198,9 +202,9 @@ final class LandscapeFeed {
                 || license.equals("https://www.nps.gov/aboutus/disclaimer.htm");
     }
 
-    private static List<Scene> bing(String market) throws Exception {
+    private static List<Scene> bing(String market, int archiveStart) throws Exception {
         String host = "https://www.bing.com";
-        JSONArray images = json(host + "/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=" + market).getJSONArray("images");
+        JSONArray images = json(host + "/HPImageArchive.aspx?format=js&idx=" + archiveStart + "&n=8&mkt=" + market).getJSONArray("images");
         List<Scene> result = new ArrayList<>();
         for (int i = 0; i < images.length(); i++) {
             JSONObject item = images.getJSONObject(i);

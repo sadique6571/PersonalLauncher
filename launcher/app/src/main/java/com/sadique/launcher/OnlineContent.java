@@ -7,7 +7,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import javax.net.ssl.HttpsURLConnection;
 
-/** Bounded HTTPS reads; no disk photo cache and no credentials or telemetry. */
+/** Bounded HTTPS reads; no credentials or telemetry. */
 final class OnlineContent {
     private static boolean allowedHost(String host) {
         return imageHost(host)
