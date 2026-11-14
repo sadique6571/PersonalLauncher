@@ -42,14 +42,14 @@ object HomeDashboard {
         val prefs = ThemePreferences.get(host)
         val title = if (TvGlassStyle.enabled(prefs)) "Control Center" else host.getString(R.string.h_dashboard)
         val panel = GlassSettings.panel(host, title, rows, true)
-        val systemGear = if (floating) {
+        val harmony = ThemeStyle.harmony(prefs)
+        val systemGear = if (floating && !harmony) {
             GlassSettings.row(host, host.getString(R.string.tv_settings), null,
                 R.drawable.ic_settings, GlassSettings.themeAccent(host)) {
                 panel.dismiss()
                 actions.open(SYSTEM)
             }
         } else null
-        val harmony = ThemeStyle.harmony(prefs)
 
         if (harmony) {
             rows.id = R.id.controlCenterPanel
