@@ -23,16 +23,16 @@ class Festival private constructor(
 ) {
 
     /** Whether the skin shows today. */
-    fun active(today: LocalDate): Boolean {
-        return name.isNotEmpty() && (until == null || !today.isAfter(until))
+    fun active(today: LocalDate?): Boolean {
+        return name.isNotEmpty() && (until == null || !today!!.isAfter(until))
     }
 
     /** The greeting to show while active, or "" to keep the normal time-of-day greeting. */
-    fun greetingText(res: Resources): String {
+    fun greetingText(res: Resources?): String {
         if (greeting.isNotEmpty()) return greeting
         return when (name) {
-            "dussehra" -> res.getString(R.string.festival_dussehra_greeting)
-            "diwali" -> res.getString(R.string.festival_diwali_greeting)
+            "dussehra" -> res!!.getString(R.string.festival_dussehra_greeting)
+            "diwali" -> res!!.getString(R.string.festival_diwali_greeting)
             else -> ""
         }
     }
@@ -54,12 +54,12 @@ class Festival private constructor(
          */
         @JvmStatic
         fun parse(name: String?, until: String?, greeting: String?, accent: String?): Festival {
-            val n = name?.trim()?.lowercase(Locale.ROOT) ?: ""
+            val n = name?.trim { it <= ' ' }?.lowercase(Locale.ROOT) ?: ""
             if (n.isEmpty() || n.length > 40) return NONE
             var end: LocalDate? = null
-            if (!until.isNullOrBlank()) {
+            if (until != null && until.trim { it <= ' ' }.isNotEmpty()) {
                 try {
-                    end = LocalDate.parse(until.trim())
+                    end = LocalDate.parse(until.trim { it <= ' ' })
                 } catch (e: DateTimeParseException) {
                     return NONE
                 }
@@ -72,7 +72,7 @@ class Festival private constructor(
         @JvmStatic
         fun parseColor(s: String?): Int {
             if (s == null) return 0
-            val t = s.trim()
+            val t = s.trim { it <= ' ' }
             if (!t.matches("#[0-9A-Fa-f]{6}".toRegex())) return 0
             return 0xFF000000.toInt() or t.substring(1).toInt(16)
         }
