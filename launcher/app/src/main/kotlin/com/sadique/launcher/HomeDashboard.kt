@@ -145,6 +145,7 @@ object HomeDashboard {
         val label = GlassSettings.label(host, host.getString(R.string.h_installed_version, version, build), 12,
             ThemeStyle.muted(ThemePreferences.get(host)))
         label.setPadding(GlassSettings.dp(host, 6f), GlassSettings.dp(host, 16f), 0, GlassSettings.dp(host, 8f))
+        label.isFocusable = true
         rows.addView(label)
     }
 
