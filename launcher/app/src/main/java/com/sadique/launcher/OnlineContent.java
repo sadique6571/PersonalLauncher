@@ -43,7 +43,11 @@ final class OnlineContent {
             connection.setUseCaches(false);
             connection.setRequestProperty("Cache-Control", "no-cache");
             connection.setRequestProperty("User-Agent", "PersonalLauncher/6.8 (https://github.com/sadique6571/PersonalLauncher)");
-            connection.setRequestProperty("Accept", imageHost(host) && !url.getPath().equals("/HPImageArchive.aspx") ? "image/jpeg,image/webp,image/png" : "application/json");
+            String path = url.getPath();
+            boolean wallpaperMetadata = host.equals("wallspapers.org") && !path.startsWith("/download/");
+            String accept = wallpaperMetadata ? "application/rss+xml,text/html"
+                    : imageHost(host) && !path.equals("/HPImageArchive.aspx") ? "image/jpeg,image/webp,image/png" : "application/json";
+            connection.setRequestProperty("Accept", accept);
             try {
                 int status = connection.getResponseCode();
                 if (status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {

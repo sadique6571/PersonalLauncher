@@ -10,10 +10,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.Locale;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /** Independent online sources for the preview and Android TV dream. */
@@ -21,9 +24,19 @@ final class LandscapeFeed {
     private enum Source {
         BING, PORTRAITS, WALLSPAPERS, COMMONS, PUBLIC_DOMAIN_PICTURES, OCEAN_EXPLORATION, NATIONAL_PARK_SERVICE, PXHERE;
 
-        boolean live() { return this == BING || this == COMMONS; }
+        boolean live() { return this == BING || this == COMMONS || this == WALLSPAPERS; }
     }
     private static final Source[] SOURCES = Source.values();
+    private static final String WALLSPAPERS_HOST = "https://wallspapers.org";
+    private static final Pattern WALLPAPER_LINK = Pattern.compile(
+            "<link>(https://wallspapers\\.org/wallpaper/[a-z0-9-]{1,160})</link>");
+    private static final Pattern IMAGE_METADATA = Pattern.compile(
+            "<script type=\"application/ld\\+json\">([^<]+)</script>");
+    private static final Pattern FHD_DOWNLOAD = Pattern.compile(
+            "href=\"(/download/[a-f0-9]{10}/fhd)\"");
+    private static final Pattern WALLPAPER_PEOPLE = Pattern.compile(
+            "\\b(?:visitors?|tourists?|walkers?|pedestrians?|men|man|boys?|girls?|human\\w*|"
+            + "groups? of|stands? at a lookout)\\b", Pattern.CASE_INSENSITIVE);
     private static final String[] MARKETS = {"en-US", "en-GB", "en-AU", "en-CA", "de-DE", "ja-JP"};
     private static final String[] COMMONS_TOPICS = {"mountain", "lake", "waterfall", "coast", "desert", "forest", "beach", "river"};
     private static final int[][] COMMONS_SIZES = {{1920, 1080}, {1280, 720}, {1600, 900}, {2560, 1440}, {3840, 2160}};
@@ -50,6 +63,9 @@ final class LandscapeFeed {
     private final Random random = new Random();
     private final EnumMap<Source, ArrayDeque<Scene>> queues = new EnumMap<>(Source.class);
     private final EnumMap<Source, Long> retryAfter = new EnumMap<>(Source.class);
+    private final ArrayDeque<String> wallpaperPages = new ArrayDeque<>();
+    private final Set<String> examinedWallpaperPages = new LinkedHashSet<>();
+    private long nextWallpaperRefresh;
     private int nextSource, bingMarket, commonsTopic;
 
     LandscapeFeed() {
@@ -80,7 +96,7 @@ final class LandscapeFeed {
             if (!source.live()) continue;
             if (System.nanoTime() < retryAfter.getOrDefault(source, Long.MIN_VALUE)) continue;
             try {
-                List<Scene> fetched = fetch(source);
+                List<Scene> fetched = fetch(source, alreadyShown);
                 Collections.shuffle(fetched, random);
                 queue.addAll(fetched);
                 candidate = unseen(queue, alreadyShown);
@@ -105,9 +121,10 @@ final class LandscapeFeed {
         return null;
     }
 
-    private List<Scene> fetch(Source source) throws Exception {
+    private List<Scene> fetch(Source source, Predicate<String> alreadyShown) throws Exception {
         switch (source) {
             case BING: return bing(MARKETS[bingMarket++ % MARKETS.length]);
+            case WALLSPAPERS: return liveWallpapers(alreadyShown);
             case COMMONS:
                 int topicIndex = commonsTopic++;
                 int batch = topicIndex / COMMONS_TOPICS.length;
@@ -115,6 +132,70 @@ final class LandscapeFeed {
                         COMMONS_SIZES[(batch / 2) % COMMONS_SIZES.length], (batch / (2 * COMMONS_SIZES.length)) % 8);
             default: throw new AssertionError(source);
         }
+    }
+
+    private List<Scene> liveWallpapers(Predicate<String> alreadyShown) throws Exception {
+        long now = System.nanoTime();
+        if (wallpaperPages.isEmpty() && (nextWallpaperRefresh == 0 || now >= nextWallpaperRefresh)) {
+            String feed = wallpaperText(WALLSPAPERS_HOST + "/feed.xml", 96 * 1024);
+            Set<String> links = wallpaperLinks(feed);
+            examinedWallpaperPages.retainAll(links);
+            for (String link : links) {
+                if (!examinedWallpaperPages.contains(link)) wallpaperPages.add(link);
+            }
+            nextWallpaperRefresh = now + TimeUnit.MINUTES.toNanos(3);
+        }
+        for (int i = 0; i < 2 && !wallpaperPages.isEmpty() && !Thread.currentThread().isInterrupted(); i++) {
+            String link = wallpaperPages.peek();
+            Scene scene;
+            try {
+                scene = wallpaperScene(wallpaperText(link, 96 * 1024));
+            } finally {
+                wallpaperPages.remove();
+            }
+            examinedWallpaperPages.add(link);
+            if (scene != null && !alreadyShown.test(scene.id)) return Collections.singletonList(scene);
+        }
+        return Collections.emptyList();
+    }
+
+    private static String wallpaperText(String url, int limit) throws java.io.IOException {
+        return new String(OnlineContent.get(url, limit, 2000, 3000), java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    static Set<String> wallpaperLinks(String feed) {
+        Set<String> links = new LinkedHashSet<>();
+        Matcher items = WALLPAPER_LINK.matcher(feed);
+        while (links.size() < 50 && items.find()) links.add(items.group(1));
+        return links;
+    }
+
+    static Scene wallpaperScene(String page) throws org.json.JSONException {
+        Matcher downloads = FHD_DOWNLOAD.matcher(page);
+        if (!downloads.find()) return null;
+        String path = downloads.group(1);
+        Matcher metadata = IMAGE_METADATA.matcher(page);
+        while (metadata.find()) {
+            JSONObject image = new JSONObject(metadata.group(1));
+            if (!"ImageObject".equals(image.optString("@type"))) continue;
+            String title = image.optString("name").trim();
+            String description = image.optString("description").trim();
+            String keywords = image.optString("keywords");
+            String text = title + " " + description + " " + keywords;
+            String license = image.optString("license");
+            if (!commonsLicense(image.optString("copyrightNotice"))
+                    || !publicDomainWallpaperLicense(license)
+                    || description.isEmpty() || !landscapeSubject(title, description + " " + keywords)
+                    || WALLPAPER_PEOPLE.matcher(text).find()) return null;
+            return new Scene("wallspapers:" + path.substring("/download/".length(), path.length() - "/fhd".length()),
+                    WALLSPAPERS_HOST + path, title, false);
+        }
+        return null;
+    }
+
+    private static boolean publicDomainWallpaperLicense(String license) {
+        return license.matches("https?://creativecommons\\.org/publicdomain/(?:zero|mark)/1\\.0(?:/[^?#]*)?")
+                || license.equals("https://www.nps.gov/aboutus/disclaimer.htm");
     }
 
     private static List<Scene> bing(String market) throws Exception {
