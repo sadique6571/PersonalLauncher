@@ -33,6 +33,7 @@ public final class LandscapeView extends FrameLayout {
     private final boolean reducedMotion;
     private ImageView photo, previousPhoto;
     private int photoEffect;
+    private int startupPhotoIndex;
     private final TextView clock, date, wifi, weather, city, status, details;
     private ExecutorService worker;
     private ExecutorService weatherWorker;
@@ -283,7 +284,8 @@ public final class LandscapeView extends FrameLayout {
     private void showStartupPhoto() {
         // Use a bundled photo as a placeholder while the worker checks the history and feeds.
         // It is not added to the unseen queue or used to reset photo history.
-        int index = (int) Math.floorMod(android.os.SystemClock.elapsedRealtime(), (long) OFFLINE_RESOURCES.length);
+        int index = new java.util.Random().nextInt(OFFLINE_RESOURCES.length);
+        startupPhotoIndex = index;
         photo.setImageResource(OFFLINE_RESOURCES[index]);
         photo.setAlpha(1f);
         photo.setTranslationX(0f);
@@ -301,13 +303,16 @@ public final class LandscapeView extends FrameLayout {
         photoBusy = true;
         int request = generation;
         LandscapeFeed feed = photoFeed;
+        int placeholder = startupPhotoIndex;
         worker.execute(() -> {
             Bitmap result = null;
             String subject = "";
             try (LandscapeHistory history = new LandscapeHistory(getContext())) {
                 LandscapeHistory.SavedPhoto selected;
-                for (int i = 0; result == null && i < 3 && online() && !Thread.currentThread().isInterrupted(); i++) {
-                    selected = downloadPhoto(feed, history, 6);
+                long deadline = android.os.SystemClock.elapsedRealtime() + 12_000L;
+                for (int i = 0; result == null && i < 3 && online()
+                        && android.os.SystemClock.elapsedRealtime() < deadline && !Thread.currentThread().isInterrupted(); i++) {
+                    selected = downloadPhoto(feed, history, 6, deadline);
                     if (selected == null) break;
                     result = rememberPhoto(history, selected);
                     if (result != null) subject = selected.subject;
@@ -320,7 +325,7 @@ public final class LandscapeView extends FrameLayout {
                 }
                 if (result == null) {
                     for (int i = 0; i < OFFLINE_RESOURCES.length && result == null && !Thread.currentThread().isInterrupted(); i++) {
-                        if (history.contains(OFFLINE_IDS[i])) continue;
+                        if (i == placeholder || history.contains(OFFLINE_IDS[i])) continue;
                         try (InputStream in = getResources().openRawResource(OFFLINE_RESOURCES[i])) {
                             selected = new LandscapeHistory.SavedPhoto(OFFLINE_IDS[i], OFFLINE_SUBJECTS[i],
                                     OnlineContent.readBounded(in, LandscapeHistory.RESERVE_PHOTO_LIMIT));
@@ -343,6 +348,7 @@ public final class LandscapeView extends FrameLayout {
                 if (!running || request != generation) { if (image != null) image.recycle(); return; }
                 photoBusy = false;
                 if (image != null) {
+                    startupPhotoIndex = -1;
                     showPhoto(image, caption);
                     status.setText("");
                     adaptClockColors();
@@ -360,7 +366,7 @@ public final class LandscapeView extends FrameLayout {
         try (LandscapeHistory history = new LandscapeHistory(getContext())) {
             // Limit prefetch work so a slow feed cannot hold up the next foreground request.
             if (online() && !history.reserveFull() && !Thread.currentThread().isInterrupted()) {
-                LandscapeHistory.SavedPhoto photo = downloadPhoto(feed, history, 2);
+                LandscapeHistory.SavedPhoto photo = downloadPhoto(feed, history, 2, android.os.SystemClock.elapsedRealtime() + 8_000L);
                 if (photo == null) return;
                 byte[] bytes = photo.bytes;
                 Bitmap image = decodePhoto(bytes);
@@ -383,9 +389,10 @@ public final class LandscapeView extends FrameLayout {
         }
     }
 
-    private LandscapeHistory.SavedPhoto downloadPhoto(LandscapeFeed feed, LandscapeHistory history, int attempts) {
-        for (int attempt = 0; attempt < attempts && online() && !Thread.currentThread().isInterrupted(); attempt++) {
-            LandscapeFeed.Scene scene = feed.next(id -> history.contains(id) || history.reserved(id));
+    private LandscapeHistory.SavedPhoto downloadPhoto(LandscapeFeed feed, LandscapeHistory history, int attempts, long deadline) {
+        for (int attempt = 0; attempt < attempts && online()
+                && android.os.SystemClock.elapsedRealtime() < deadline && !Thread.currentThread().isInterrupted(); attempt++) {
+            LandscapeFeed.Scene scene = feed.next(id -> history.contains(id) || history.reserved(id), deadline);
             if (scene == null) break;
             try {
                 byte[] bytes = OnlineContent.get(scene.url, 6 * 1024 * 1024, 3500, 5000);

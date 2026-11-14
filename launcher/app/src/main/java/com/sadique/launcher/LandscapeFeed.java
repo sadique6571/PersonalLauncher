@@ -59,7 +59,7 @@ final class LandscapeFeed {
             + "nasa|astronaut\\w*|space station|from space|satellite|cira|orbital|artwork\\w*|composites?|people|persons?|families|family|women|woman|children|hikers?|crowds?|portraits?|lovers?|hugging|embracing|group photo)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern NATURE = Pattern.compile(
             "\\b(?:mountains?|lakes?|waterfalls?|forests?|parks?|glaciers?|islands?|coasts?|"
-            + "canyons?|deserts?|valleys?|rivers?|reefs?|oceans?|cliffs?|dunes?|peaks?|beaches|"
+            + "canyons?|deserts?|valleys?|rivers?|reefs?|oceans?|cliffs?|dunes?|peaks?|beach(?:es)?|harbou?rs?|grasslands?|"
             + "volcano\\w*|waterways?|aurora\\w*|meadows?|wetlands?|landscapes?)\\b", Pattern.CASE_INSENSITIVE);
 
     static final class Scene {
@@ -101,8 +101,9 @@ final class LandscapeFeed {
         queues.get(source).addAll(photos);
     }
 
-    Scene next(Predicate<String> alreadyShown) {
-        for (int i = 0; i < SOURCES.length && !Thread.currentThread().isInterrupted(); i++) {
+    Scene next(Predicate<String> alreadyShown, long deadline) {
+        for (int i = 0; i < SOURCES.length && android.os.SystemClock.elapsedRealtime() < deadline
+                && !Thread.currentThread().isInterrupted(); i++) {
             Source source = SOURCES[nextSource];
             nextSource = (nextSource + 1) % SOURCES.length;
             ArrayDeque<Scene> queue = queues.get(source);
