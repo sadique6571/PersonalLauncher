@@ -138,7 +138,7 @@ class ControlCenterGrid(private val host: Activity, private val open: IntConsume
                 setStroke(dp(if (focused) 2 else 1), if (focused) 0xccffffff.toInt() else edge)
             }
         }
-        if (ThemeStyle.custom(prefs)) return DemoCardSurface(radius, dp(1), focused, prefs, false)
+        if (ThemeStyle.custom(prefs)) return DemoCardSurface(radius, dp(1).toFloat(), focused, prefs, false)
         return GlassSettings.background(host, focused).apply { cornerRadius = radius.toFloat() }
     }
 
