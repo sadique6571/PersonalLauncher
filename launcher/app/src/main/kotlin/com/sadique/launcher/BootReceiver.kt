@@ -15,6 +15,7 @@ class BootReceiver : BroadcastReceiver() {
         val action = intent?.action
         if (action != Intent.ACTION_BOOT_COMPLETED && action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         VolumeAutoStart.request(context)
+        ScreensaverPrefetch.schedule(context)
         if (action != Intent.ACTION_BOOT_COMPLETED) return
 
         val result = goAsync()

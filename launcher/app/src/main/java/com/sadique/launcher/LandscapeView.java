@@ -3,7 +3,6 @@ package com.sadique.launcher;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.net.ConnectivityManager;
@@ -17,7 +16,6 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
@@ -39,7 +37,6 @@ public final class LandscapeView extends FrameLayout {
     private ExecutorService weatherWorker;
     private boolean running, registered, photoBusy, weatherBusy, hasPhoto, networkOnline;
     private int generation;
-    private LandscapeFeed photoFeed;
     private static final int[] OFFLINE_RESOURCES = {
             R.drawable.offline_autumn, R.drawable.offline_mountain_road, R.drawable.offline_mississippi
     };
@@ -204,7 +201,7 @@ public final class LandscapeView extends FrameLayout {
         generation++;
         photoBusy = weatherBusy = false;
         worker = Executors.newSingleThreadExecutor();
-        photoFeed = new LandscapeFeed();
+        ScreensaverPrefetch.schedule(getContext());
         weatherWorker = Executors.newSingleThreadExecutor();
         networkOnline = online();
         city.setText(prefs.getString("weather_city", LandscapeModel.CITY));
@@ -302,25 +299,16 @@ public final class LandscapeView extends FrameLayout {
         handler.removeCallbacks(nextPhoto);
         photoBusy = true;
         int request = generation;
-        LandscapeFeed feed = photoFeed;
         int placeholder = startupPhotoIndex;
         worker.execute(() -> {
             Bitmap result = null;
             String subject = "";
             try (LandscapeHistory history = new LandscapeHistory(getContext())) {
                 LandscapeHistory.SavedPhoto selected;
-                long deadline = android.os.SystemClock.elapsedRealtime() + 12_000L;
-                for (int i = 0; result == null && i < 3 && online()
-                        && android.os.SystemClock.elapsedRealtime() < deadline && !Thread.currentThread().isInterrupted(); i++) {
-                    selected = downloadPhoto(feed, history, 6, deadline);
-                    if (selected == null) break;
-                    result = rememberPhoto(history, selected);
-                    if (result != null) subject = selected.subject;
-                }
                 for (int i = 0; result == null && i < LandscapeHistory.RESERVE_SIZE && !Thread.currentThread().isInterrupted(); i++) {
                     selected = history.takeOffline();
                     if (selected == null) break;
-                    result = rememberPhoto(history, selected);
+                    result = ScreensaverPrefetch.decode(selected.bytes);
                     if (result != null) subject = selected.subject;
                 }
                 if (result == null) {
@@ -334,11 +322,6 @@ public final class LandscapeView extends FrameLayout {
                         }
                     }
                 }
-                if (result != null && online() && !history.reserveFull()) {
-                    handler.post(() -> {
-                        if (running && request == generation) worker.execute(() -> fillReserve(feed));
-                    });
-                }
             } catch (Exception unavailable) {
                 android.util.Log.w("PersonalLandscape", "Photo history unavailable", unavailable);
             }
@@ -347,6 +330,7 @@ public final class LandscapeView extends FrameLayout {
             handler.post(() -> {
                 if (!running || request != generation) { if (image != null) image.recycle(); return; }
                 photoBusy = false;
+                ScreensaverPrefetch.schedule(getContext());
                 if (image != null) {
                     startupPhotoIndex = -1;
                     showPhoto(image, caption);
@@ -356,119 +340,22 @@ public final class LandscapeView extends FrameLayout {
                 } else {
                     boolean connected = online();
                     status.setText(connected ? "Looking for a new photo…" : "Offline");
-                    if (connected) handler.postDelayed(nextPhoto, 5_000L);
+                    handler.postDelayed(nextPhoto, connected ? 5_000L : 30_000L);
                 }
             });
         });
     }
 
-    private void fillReserve(LandscapeFeed feed) {
-        try (LandscapeHistory history = new LandscapeHistory(getContext())) {
-            // Limit prefetch work so a slow feed cannot hold up the next foreground request.
-            if (online() && !history.reserveFull() && !Thread.currentThread().isInterrupted()) {
-                LandscapeHistory.SavedPhoto photo = downloadPhoto(feed, history, 2, android.os.SystemClock.elapsedRealtime() + 8_000L);
-                if (photo == null) return;
-                byte[] bytes = photo.bytes;
-                Bitmap image = decodePhoto(bytes);
-                if (image == null) return;
-                try {
-                    long[] visual = visualFingerprint(image);
-                    if (bytes.length > LandscapeHistory.RESERVE_PHOTO_LIMIT) {
-                        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-                            if (!image.compress(Bitmap.CompressFormat.JPEG, 82, out)) return;
-                            bytes = out.toByteArray();
-                        }
-                    }
-                    if (!Thread.currentThread().isInterrupted()) history.saveForOffline(photo.id, photo.subject, bytes, visual);
-                } finally {
-                    image.recycle();
-                }
-            }
-        } catch (Exception unavailable) {
-            android.util.Log.w("PersonalLandscape", "Could not prepare offline photos", unavailable);
-        }
-    }
-
-    private LandscapeHistory.SavedPhoto downloadPhoto(LandscapeFeed feed, LandscapeHistory history, int attempts, long deadline) {
-        for (int attempt = 0; attempt < attempts && online()
-                && android.os.SystemClock.elapsedRealtime() < deadline && !Thread.currentThread().isInterrupted(); attempt++) {
-            LandscapeFeed.Scene scene = feed.next(id -> history.contains(id) || history.reserved(id), deadline);
-            if (scene == null) break;
-            try {
-                byte[] bytes = OnlineContent.get(scene.url, 6 * 1024 * 1024, 3500, 5000);
-                Bitmap decoded = decodePhoto(bytes);
-                if (decoded == null) continue;
-                try {
-                    if (scene.reviewed || clearLandscape(decoded))
-                        return new LandscapeHistory.SavedPhoto(scene.id, scene.subject, bytes);
-                } finally {
-                    decoded.recycle();
-                }
-            } catch (Exception unavailable) {
-                android.util.Log.w("PersonalLandscape", "Scenery photo unavailable", unavailable);
-            }
-        }
-        return null;
-    }
-
     private static Bitmap rememberPhoto(LandscapeHistory history, LandscapeHistory.SavedPhoto photo) {
         if (photo == null || history.contains(photo.id) || Thread.currentThread().isInterrupted()) return null;
-        Bitmap image = decodePhoto(photo.bytes);
+        Bitmap image = ScreensaverPrefetch.decode(photo.bytes);
         if (image == null) return null;
         boolean accepted = false;
         try {
-            accepted = history.remember(photo.id, photo.bytes, visualFingerprint(image));
+            accepted = history.remember(photo.id, photo.bytes, ScreensaverPrefetch.fingerprint(image));
             return accepted ? image : null;
         } finally {
             if (!accepted) image.recycle();
-        }
-    }
-
-    private static Bitmap decodePhoto(byte[] bytes) {
-        BitmapFactory.Options bounds = new BitmapFactory.Options();
-        bounds.inJustDecodeBounds = true;
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
-        if (!LandscapeFeed.fitsWidescreen(bounds.outWidth, bounds.outHeight)) return null;
-        bounds.inJustDecodeBounds = false;
-        bounds.inSampleSize = 1;
-        while (bounds.outWidth / bounds.inSampleSize > 1920 && bounds.outHeight / bounds.inSampleSize / 2 > 480) {
-            bounds.inSampleSize *= 2;
-        }
-        return BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
-    }
-
-    private static long[] visualFingerprint(Bitmap image) {
-        int width = Math.min(image.getWidth(), Math.round(image.getHeight() * 16f / 9));
-        int height = Math.min(image.getHeight(), Math.round(image.getWidth() * 9f / 16));
-        int left = (image.getWidth() - width) / 2;
-        int top = (image.getHeight() - height) / 2;
-        int size = LandscapeFingerprint.SIZE;
-        Bitmap sample = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
-        try {
-            android.graphics.Canvas canvas = new android.graphics.Canvas(sample);
-            canvas.drawBitmap(image, new android.graphics.Rect(left, top, left + width, top + height),
-                    new android.graphics.Rect(0, 0, size, size), new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG));
-            int[] pixels = new int[size * size];
-            sample.getPixels(pixels, 0, size, 0, 0, size, size);
-            return LandscapeFingerprint.of(pixels);
-        } finally {
-            sample.recycle();
-        }
-    }
-
-    /** Supplement source filters with a lightweight on-device face check for live landscapes. */
-    private static boolean clearLandscape(Bitmap image) {
-        int width = 480;
-        int height = Math.max(1, Math.round((float) width * image.getHeight() / image.getWidth()));
-        Bitmap sample = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565);
-        try {
-            android.graphics.Canvas canvas = new android.graphics.Canvas(sample);
-            canvas.drawBitmap(image, null, new android.graphics.Rect(0, 0, width, height),
-                    new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG));
-            android.media.FaceDetector detector = new android.media.FaceDetector(width, height, 1);
-            return detector.findFaces(sample, new android.media.FaceDetector.Face[1]) == 0;
-        } finally {
-            sample.recycle();
         }
     }
 

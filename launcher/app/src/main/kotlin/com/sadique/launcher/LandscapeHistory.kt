@@ -67,12 +67,21 @@ class LandscapeHistory(context: Context) : SQLiteOpenHelper(context.applicationC
         val db = writableDatabase
         db.beginTransaction()
         try {
-            return db.rawQuery("SELECT id, subject, photo FROM photo_reserve ORDER BY rowid LIMIT 1", null).use { rows ->
-                val photo = if (rows.moveToFirst()) SavedPhoto(rows.getString(0), rows.getString(1), rows.getBlob(2)) else null
-                if (photo != null) db.delete("photo_reserve", "id=?", arrayOf(photo.id))
-                db.setTransactionSuccessful()
-                photo
+            var next: SavedPhoto? = null
+            while (next == null) {
+                val entry = db.rawQuery(
+                    "SELECT id, subject, photo, visual_x, visual_y FROM photo_reserve ORDER BY rowid LIMIT 1", null
+                ).use { rows ->
+                    if (!rows.moveToFirst()) return@use null
+                    SavedPhoto(rows.getString(0), rows.getString(1), rows.getBlob(2)) to
+                        longArrayOf(rows.getLong(3), rows.getLong(4))
+                } ?: break
+                val (photo, visual) = entry
+                db.delete("photo_reserve", "id=?", arrayOf(photo.id))
+                if (record(db, photo.id, photo.bytes, visual)) next = photo
             }
+            db.setTransactionSuccessful()
+            return next
         } finally {
             db.endTransaction()
         }
@@ -82,19 +91,23 @@ class LandscapeHistory(context: Context) : SQLiteOpenHelper(context.applicationC
         val db = writableDatabase
         db.beginTransaction()
         try {
-            if (matchesVisual(db, "shown", visual)) return false
-            val row = ContentValues().apply {
-                put("id", id)
-                put("fingerprint", fingerprint(bytes))
-                put("visual_x", visual[0])
-                put("visual_y", visual[1])
-            }
-            val added = db.insertWithOnConflict("shown", null, row, SQLiteDatabase.CONFLICT_IGNORE) != -1L
+            val added = record(db, id, bytes, visual)
             db.setTransactionSuccessful()
             return added
         } finally {
             db.endTransaction()
         }
+    }
+
+    private fun record(db: SQLiteDatabase, id: String, bytes: ByteArray, visual: LongArray): Boolean {
+        if (matchesVisual(db, "shown", visual)) return false
+        val row = ContentValues().apply {
+            put("id", id)
+            put("fingerprint", fingerprint(bytes))
+            put("visual_x", visual[0])
+            put("visual_y", visual[1])
+        }
+        return db.insertWithOnConflict("shown", null, row, SQLiteDatabase.CONFLICT_IGNORE) != -1L
     }
 
     private fun matchesVisual(db: SQLiteDatabase, table: String, visual: LongArray): Boolean {
@@ -122,7 +135,7 @@ class LandscapeHistory(context: Context) : SQLiteOpenHelper(context.applicationC
     }
 
     companion object {
-        const val RESERVE_SIZE = 6
+        const val RESERVE_SIZE = 12
         const val RESERVE_PHOTO_LIMIT = 900 * 1024
     }
 }

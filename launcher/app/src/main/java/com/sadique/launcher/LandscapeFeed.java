@@ -153,7 +153,7 @@ final class LandscapeFeed {
                 int topicIndex = commonsTopic++;
                 int batch = topicIndex / COMMONS_TOPICS.length;
                 return commons(COMMONS_TOPICS[topicIndex % COMMONS_TOPICS.length], batch % 2 == 0,
-                        COMMONS_SIZES[(batch / 2) % COMMONS_SIZES.length], (batch / (2 * COMMONS_SIZES.length)) % 8);
+                        COMMONS_SIZES[(batch / 2) % COMMONS_SIZES.length], (batch / 2) % 8);
             default: throw new AssertionError(source);
         }
     }
@@ -296,7 +296,8 @@ final class LandscapeFeed {
     }
 
     private static List<Scene> commons(String topic, boolean cc0, int[] size, int pageIndex) throws Exception {
-        String query = "filetype:bitmap filew:" + size[0] + " fileh:" + size[1] + " intitle:" + topic + (cc0 ? " hastemplate:CC-Zero"
+        String dimensions = pageIndex % 2 == 0 ? " filew:" + size[0] + " fileh:" + size[1] : "";
+        String query = "filetype:bitmap" + dimensions + " intitle:" + topic + (cc0 ? " hastemplate:CC-Zero"
                 : " hastemplate:PD-USGov-NPS");
         JSONObject response = json("https://commons.wikimedia.org/w/api.php?action=query&format=json&formatversion=2"
                 + "&generator=search&gsrnamespace=6&gsrlimit=16&gsroffset=" + pageIndex * 16 + "&gsrsearch=" + encode(query)
@@ -435,7 +436,10 @@ final class LandscapeFeed {
     }
 
     static boolean fitsWidescreen(int width, int height) {
-        return height > 480 && (long) width * 9 == (long) height * 16;
+        // Accept standard landscape formats close to 16:9. FIT_CENTER shows the full photo.
+        if (height <= 480) return false;
+        double ratio = (double) width / height;
+        return ratio >= 1.50 && ratio <= 2.05;
     }
 
     static boolean imageUrlAllowed(String url) {
