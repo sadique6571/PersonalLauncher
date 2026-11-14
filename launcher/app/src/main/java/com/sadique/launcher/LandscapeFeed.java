@@ -33,7 +33,8 @@ final class LandscapeFeed {
     private static final String[] FLICKR_TAGS = {
             "lake,cc0", "landscape,publicdomain", "mountains,cc0", "nature,cc0", "forest,cc0",
             "coast,cc0", "waterfall,cc0", "sunset,cc0", "glacier,cc0", "river,cc0", "ocean,cc0",
-            "landscape,cc0", "nationalpark,landscape", "nature,widescreen", "landscape,widescreen"
+            "landscape,cc0", "nationalpark,landscape", "nature,widescreen", "landscape,widescreen",
+            "mountains", "waterfall", "forest", "lake", "coast", "nationalpark"
     };
     private static final Pattern FLICKR_IMAGE = Pattern.compile("/[0-9]+/([0-9]+)_[a-f0-9]+_b\\.jpg");
     private static final String MEDIA_RSS = "http://search.yahoo.com/mrss/";
@@ -102,7 +103,8 @@ final class LandscapeFeed {
 
     Scene next(Predicate<String> alreadyShown) {
         for (int i = 0; i < SOURCES.length && !Thread.currentThread().isInterrupted(); i++) {
-            Source source = SOURCES[nextSource++ % SOURCES.length];
+            Source source = SOURCES[nextSource];
+            nextSource = (nextSource + 1) % SOURCES.length;
             ArrayDeque<Scene> queue = queues.get(source);
             Scene candidate = unseen(queue, alreadyShown);
             if (candidate != null) return candidate;
@@ -120,7 +122,8 @@ final class LandscapeFeed {
                 retryAfter.put(source, System.nanoTime() + TimeUnit.MINUTES.toNanos(2));
                 android.util.Log.w("PersonalLandscape", source + " hostname could not be resolved", dnsUnavailable);
             } catch (Exception unavailable) {
-                retryAfter.put(source, System.nanoTime() + TimeUnit.SECONDS.toNanos(45));
+                android.util.Log.w("PersonalLandscape", source + " photo feed unavailable", unavailable);
+                retryAfter.put(source, System.nanoTime() + TimeUnit.SECONDS.toNanos(15));
             }
         }
         return null;
@@ -222,9 +225,12 @@ final class LandscapeFeed {
             Scene scene;
             try {
                 scene = wallpaperScene(wallpaperText(link, 96 * 1024));
-            } finally {
+            } catch (java.io.IOException unavailable) {
+                // A single removed or unreachable page must not stall the rest of this feed.
                 wallpaperPages.remove();
+                continue;
             }
+            wallpaperPages.remove();
             examinedWallpaperPages.add(link);
             if (scene != null && !alreadyShown.test(scene.id)) return Collections.singletonList(scene);
         }
@@ -301,8 +307,11 @@ final class LandscapeFeed {
         JSONArray pages = data.getJSONArray("pages");
         for (int i = 0; i < pages.length(); i++) {
             JSONObject page = pages.getJSONObject(i);
-            JSONObject info = page.getJSONArray("imageinfo").getJSONObject(0);
-            JSONObject metadata = info.getJSONObject("extmetadata");
+            JSONArray infoList = page.optJSONArray("imageinfo");
+            JSONObject info = infoList == null ? null : infoList.optJSONObject(0);
+            if (info == null) continue;
+            JSONObject metadata = info.optJSONObject("extmetadata");
+            if (metadata == null) continue;
             String license = metadata(metadata, "LicenseShortName");
             String title = page.getString("title").replaceFirst("^File:", "").replaceFirst("(?i)\\.jpe?g$", "");
             String objectName = metadata(metadata, "ObjectName");
