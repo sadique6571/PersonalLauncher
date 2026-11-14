@@ -4,7 +4,7 @@ package com.sadique.launcher
 object GlassOsMetrics {
     @JvmStatic
     fun percent(used: Long, total: Long): Int {
-        return if (total <= 0) 0 else Math.max(0, Math.min(100, Math.round(100.0 * used / total).toInt()))
+        return if (total <= 0) 0 else Math.round(100.0 * used / total).coerceIn(0L, 100L).toInt()
     }
 
     @JvmStatic

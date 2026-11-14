@@ -4,10 +4,11 @@ package com.sadique.launcher
 object InputSources {
 
     @JvmStatic
-    fun mapped(mappings: List<String>?, inputId: String?): Int? {
+    fun mapped(mappings: List<String?>?, inputId: String?): Int? {
         if (inputId == null || mappings == null) return null
         val input = inputId.substring(inputId.lastIndexOf('/') + 1)
         for (mapping in mappings) {
+            if (mapping == null) continue
             val equals = mapping.indexOf('=')
             if (equals <= 0 || mapping.substring(0, equals).trim() != input) continue
             val value = mapping.substring(equals + 1).trim()
