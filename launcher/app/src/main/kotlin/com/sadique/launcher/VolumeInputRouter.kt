@@ -1,7 +1,7 @@
 package com.sadique.launcher
 
 /** Tracks one parser per input device so unrelated devices cannot release a held key. */
-class VolumeInputRouter(private val controller: FastVolumeController) {
+internal class VolumeInputRouter(private val controller: FastVolumeController) {
     private val parsers = HashMap<String, FastVolumeController.Parser>()
     private var active: String? = null
     private var key = 0
@@ -11,7 +11,7 @@ class VolumeInputRouter(private val controller: FastVolumeController) {
         if (start < 0) return
         val suffix = start + DEVICE_PREFIX.length
         var end = suffix
-        while (end < line.length && line[end].isDigit()) end++
+        while (end < line.length && Character.isDigit(line[end])) end++
         if (end == suffix) return
         val device = line.substring(start, end)
 

@@ -15,7 +15,7 @@ class UpdateApkProvider : ContentProvider() {
     override fun onCreate(): Boolean = true
 
     private fun file(uri: Uri): File {
-        val file = GitHubUpdates.readyFile(context)
+        val file = GitHubUpdates.readyFile(requireNotNull(context))
         if (uri.path != "/apk" || !file.isFile) throw FileNotFoundException("No verified update")
         return file
     }

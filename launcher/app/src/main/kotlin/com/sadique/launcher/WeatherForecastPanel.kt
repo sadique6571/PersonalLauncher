@@ -8,7 +8,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /** Forecast details in ordinary remote-focusable rows. */
-class WeatherForecastPanel(
+internal class WeatherForecastPanel(
     private val host: Activity,
     private val refresh: Runnable,
     private val city: Runnable
