@@ -67,6 +67,27 @@ public class LandscapeFeedTest {
         assertTrue(LandscapeFeed.flickrScenes(utf8("<!DOCTYPE rss SYSTEM 'https://example.com/x'>" + feed)).isEmpty());
     }
 
+    @Test public void flickrPeopleFeedChecksLicenseContentAndPhotoDimensions() throws Exception {
+        String feed = "<rss xmlns:m='http://search.yahoo.com/mrss/' "
+                + "xmlns:c='http://cyber.law.harvard.edu/rss/creativeCommonsRssModule.html'><channel><item>"
+                + "<m:title>Women and men at a market in Pakistan</m:title>"
+                + "<description>Shoppers browsing outdoor stalls</description><m:category>pakistan market</m:category>"
+                + "<m:content type='image/jpeg' width='1024' height='683' "
+                + "url='https://live.staticflickr.com/65535/53147294188_feebe50604_b.jpg'/>"
+                + "<c:license>https://creativecommons.org/publicdomain/zero/1.0/deed.en</c:license>"
+                + "</item></channel></rss>";
+        LandscapeFeed.Scene scene = LandscapeFeed.flickrPeopleScenes(utf8(feed)).get(0);
+        assertTrue(scene.livePeople);
+        assertFalse(scene.reviewed);
+        assertTrue(LandscapeFeed.flickrScenes(utf8(feed)).isEmpty());
+        assertTrue(LandscapeFeed.flickrPeopleScenes(utf8(feed.replace("683", "1024"))).isEmpty());
+        assertTrue(LandscapeFeed.flickrPeopleScenes(utf8(feed.replace("browsing outdoor stalls", "kissing"))).isEmpty());
+        assertTrue(LandscapeFeed.flickrPeopleScenes(utf8(feed.replace("pakistan market", "pakistan market glamour"))).isEmpty());
+        assertTrue(LandscapeFeed.flickrPeopleScenes(utf8(feed.replace("publicdomain/zero/1.0", "licenses/by/4.0"))).isEmpty());
+        assertTrue(LandscapeFeed.flickrPeopleScenes(utf8(feed.replace("Women and men", "Buildings")
+                .replace("Shoppers browsing outdoor stalls", "Architecture"))).isEmpty());
+    }
+
     private static byte[] utf8(String value) {
         return value.getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
