@@ -1,12 +1,11 @@
-package com.sadique.launcher;
+package com.sadique.launcher
 
-import java.time.LocalDate;
-import java.util.Calendar;
+import java.time.LocalDate
+import java.util.Calendar
 
-/** Original short lines. Device-local date rotates one line per day, offline without AI/API keys. */
-final class HarmonyDailyWords {
-    private HarmonyDailyWords() {}
-    private static final String[] LINES={
+/** Device-local date rotates one offline line each day. */
+object HarmonyDailyWords {
+    private val lines = arrayOf(
         "Let each hour leave the room a little kinder.",
         "Time finds balance in a quieter rhythm.",
         "A steady minute can change a restless day.",
@@ -103,13 +102,18 @@ final class HarmonyDailyWords {
         "Let tomorrow wait while today unfolds.",
         "Every moment deserves a little care.",
         "Simple choices can create quiet beauty."
-    };
-    static int count(){return LINES.length;}
-    static String forDay(LocalDate day){
-        return LINES[(int)Math.floorMod(day.toEpochDay(),(long)LINES.length)];
+    )
+
+    @JvmStatic fun count(): Int = lines.size
+
+    @JvmStatic
+    fun forDay(day: LocalDate): String {
+        return lines[Math.floorMod(day.toEpochDay(), lines.size.toLong()).toInt()]
     }
-    static String forCalendar(Calendar today){
-        return forDay(LocalDate.of(today.get(Calendar.YEAR),today.get(Calendar.MONTH)+1,
-                today.get(Calendar.DAY_OF_MONTH)));
+
+    @JvmStatic
+    fun forCalendar(today: Calendar): String {
+        return forDay(LocalDate.of(today.get(Calendar.YEAR), today.get(Calendar.MONTH) + 1,
+            today.get(Calendar.DAY_OF_MONTH)))
     }
 }
