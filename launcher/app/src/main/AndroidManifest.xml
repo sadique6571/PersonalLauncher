@@ -306,6 +306,11 @@
         </receiver>
 
         <service
+            android:name=".ScreensaverPrefetch"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <service
             android:name=".InputKeyService"
             android:exported="false"
             android:label="@string/app_name"

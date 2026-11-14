@@ -435,7 +435,10 @@ final class LandscapeFeed {
     }
 
     static boolean fitsWidescreen(int width, int height) {
-        return height > 480 && (long) width * 9 == (long) height * 16;
+        // Accept standard landscape formats close to 16:9. FIT_CENTER shows the full photo.
+        if (height <= 480) return false;
+        double ratio = (double) width / height;
+        return ratio >= 1.50 && ratio <= 2.05;
     }
 
     static boolean imageUrlAllowed(String url) {

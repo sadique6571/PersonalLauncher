@@ -122,7 +122,7 @@ class LandscapeHistory(context: Context) : SQLiteOpenHelper(context.applicationC
     }
 
     companion object {
-        const val RESERVE_SIZE = 6
+        const val RESERVE_SIZE = 12
         const val RESERVE_PHOTO_LIMIT = 900 * 1024
     }
 }

@@ -12,13 +12,14 @@ public class LandscapeFeedTest {
         assertFalse(LandscapeFeed.landscapeSubject("Evening", "A candid scene"));
     }
 
-    @Test public void acceptsOnlyExactSixteenByNineAbove480p() {
+    @Test public void acceptsNearWidescreenAbove480p() {
         assertTrue(LandscapeFeed.fitsWidescreen(1920, 1080));
         assertTrue(LandscapeFeed.fitsWidescreen(1280, 720));
         assertTrue(LandscapeFeed.fitsWidescreen(960, 540));
         assertFalse(LandscapeFeed.fitsWidescreen(848, 477));
-        assertFalse(LandscapeFeed.fitsWidescreen(1600, 899));
+        assertTrue(LandscapeFeed.fitsWidescreen(1600, 899));
         assertFalse(LandscapeFeed.fitsWidescreen(1600, 1200));
+        assertTrue(LandscapeFeed.fitsWidescreen(1620, 1080));
         assertFalse(LandscapeFeed.fitsWidescreen(608, 1080));
     }
 
@@ -60,7 +61,7 @@ public class LandscapeFeedTest {
                 + "<c:license>https://creativecommons.org/publicdomain/zero/1.0/deed.en</c:license>"
                 + "</item></channel></rss>";
         assertEquals("flickr:53147294188", LandscapeFeed.flickrScenes(utf8(feed)).get(0).id);
-        assertTrue(LandscapeFeed.flickrScenes(utf8(feed.replace("576", "640"))).isEmpty());
+        assertTrue(LandscapeFeed.flickrScenes(utf8(feed.replace("576", "768"))).isEmpty());
         assertTrue(LandscapeFeed.flickrScenes(utf8(feed.replace("publicdomain/zero/1.0", "licenses/by/4.0"))).isEmpty());
         assertTrue(LandscapeFeed.flickrScenes(utf8(feed.replace("quiet alpine lake", "couple kissing by the lake"))).isEmpty());
         assertTrue(LandscapeFeed.flickrScenes(utf8(feed.replace("quiet alpine lake", "cosplay in front of a lake"))).isEmpty());

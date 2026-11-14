@@ -46,6 +46,7 @@ final class HomeAutomation {
         return false;
     }
     static void onResume(Context c) {
+        ScreensaverPrefetch.schedule(c);
         if (enabled(c) && VolumeAutoStart.paired(c) && !VolumeAutoStart.busy() && POLICY.allow(SystemClock.elapsedRealtime(),isDefault(c)))
             VolumeAutoStart.requestHome(c);
     }
