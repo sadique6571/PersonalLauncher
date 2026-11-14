@@ -11,7 +11,7 @@ import android.graphics.drawable.GradientDrawable
 internal class MaterialSurface(
     radius: Int, stroke: Int, private val focused: Boolean,
     prefs: SharedPreferences, drawer: Boolean, finish: Int
-) : GlassSurface(stroke, 0) {
+) : GlassSurface(stroke.toFloat(), 0) {
     private val pearl = ThemeStyle.light(prefs)
     private val accent = ThemeStyle.focusAccent(prefs)
     private val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
