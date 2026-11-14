@@ -55,7 +55,7 @@ object HomeDashboard {
             rows.id = R.id.controlCenterPanel
             rows.addView(GlassSettings.label(host, "HARMONY CONTROL", 18, 0xfff5fbff.toInt()).apply {
                 letterSpacing = .08f
-                setPadding(GlassSettings.dp(host, 6), GlassSettings.dp(host, 8), 0, GlassSettings.dp(host, 4))
+                setPadding(GlassSettings.dp(host, 6f), GlassSettings.dp(host, 8f), 0, GlassSettings.dp(host, 4f))
             })
         } else if (ThemeStyle.id(prefs) == ThemeStyle.GLASS) {
             rows.id = R.id.controlCenterPanel
@@ -144,22 +144,22 @@ object HomeDashboard {
         val build = host.getString(R.string.launcher_build_number)
         val label = GlassSettings.label(host, host.getString(R.string.h_installed_version, version, build), 12,
             ThemeStyle.muted(ThemePreferences.get(host)))
-        label.setPadding(GlassSettings.dp(host, 6), GlassSettings.dp(host, 16), 0, GlassSettings.dp(host, 8))
+        label.setPadding(GlassSettings.dp(host, 6f), GlassSettings.dp(host, 16f), 0, GlassSettings.dp(host, 8f))
         rows.addView(label)
     }
 
     private fun card(host: Activity, strip: LinearLayout, title: Int, icon: Int, action: Runnable) {
         val card = GlassSettings.wideCard(host, host.getString(title), icon, GlassSettings.themeAccent(host), action)
-        card.minimumHeight = GlassSettings.dp(host, 64)
+        card.minimumHeight = GlassSettings.dp(host, 64f)
         val params = LinearLayout.LayoutParams(0, -2, 1f)
-        val margin = GlassSettings.dp(host, 3)
+        val margin = GlassSettings.dp(host, 3f)
         params.setMargins(margin, margin, margin, margin)
         strip.addView(card, params)
     }
 
     private fun section(host: Activity, rows: LinearLayout, title: Int) {
         val label = GlassSettings.label(host, host.getString(title), 12, GlassSettings.themeAccent(host))
-        label.setPadding(4, GlassSettings.dp(host, 14), 0, GlassSettings.dp(host, 6))
+        label.setPadding(4, GlassSettings.dp(host, 14f), 0, GlassSettings.dp(host, 6f))
         rows.addView(label)
     }
 
