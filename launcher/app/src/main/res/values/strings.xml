@@ -155,4 +155,9 @@
     <!-- game_day: a game on now, in the race panel. -->
     <string name="game_live">Live now</string>
     <string name="moon_image_credit">Illustrative imagery (not a live camera): Moon — NASA SVS (LRO/LOLA/LROC); Sun — NASA/SDO HMI color intensity; cloud and fog photos — NOAA/NWS JetStream. Place names © OpenStreetMap contributors.</string>
+    <string name="compose_apps_title">All apps</string>
+    <string name="compose_apps_loading">Loading apps…</string>
+    <string name="compose_apps_empty">No apps available</string>
+    <string name="compose_apps_menu">Compose app drawer</string>
+    <string name="compose_apps_hint">Open the Kotlin app grid</string>
 </resources>
