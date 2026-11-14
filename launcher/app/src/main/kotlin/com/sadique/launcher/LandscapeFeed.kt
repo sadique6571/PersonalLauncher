@@ -396,6 +396,9 @@ internal class LandscapeFeed {
             portrait(result, "1762368229295-81f2742fb8a5", "Sunset in Switzerland", 0.55)
             portrait(result, "1770564512661-eb2e142c26fd", "Women outdoors", 0.46)
             portrait(result, "1764740146693-4955d02c98f9", "Outdoor portrait · South Asia", 0.55)
+            portrait(result, "1536010447069-d2c8af80c584", "Friends laughing together", null)
+            portrait(result, "1556159916-26bf2ce06da9", "Friends in the tulip fields", null)
+            portrait(result, "1758272134073-39aced2153e6", "Group selfie outdoors", null)
             return result
         }
 

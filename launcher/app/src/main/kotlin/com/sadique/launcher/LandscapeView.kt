@@ -10,6 +10,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.RelativeSizeSpan
@@ -47,6 +48,8 @@ class LandscapeView(context: Context) : FrameLayout(context) {
     private val details: TextView
     private var worker: ExecutorService? = null
     private var weatherWorker: ExecutorService? = null
+    // Live-download feed used only on the single photo worker thread.
+    private val liveFeed = LandscapeFeed()
     private var running = false
     private var registered = false
     private var photoBusy = false
@@ -361,6 +364,14 @@ class LandscapeView(context: Context) : FrameLayout(context) {
                             }
                         }
                     }
+                    if (result == null && online()) {
+                        // Reserve empty and no bundled photo left: download the next
+                        // unseen photo directly instead of waiting for the prefetch
+                        // job to be scheduled, or the slideshow stalls on one photo.
+                        val live = downloadLivePhoto(history)
+                        result = live.first
+                        subject = live.second
+                    }
                 }
             } catch (unavailable: Exception) {
                 Log.w("PersonalLandscape", "Photo history unavailable", unavailable)
@@ -387,6 +398,43 @@ class LandscapeView(context: Context) : FrameLayout(context) {
                 }
             }
         }
+    }
+
+    /**
+     * Downloads the next unseen photo straight from the feeds, with the same
+     * decode, face and duplicate checks as the prefetch job. Runs only on the
+     * single photo worker thread. Returns the bitmap and its caption, or a
+     * null bitmap when nothing could be downloaded in time.
+     */
+    private fun downloadLivePhoto(history: LandscapeHistory): Pair<Bitmap?, String> {
+        val deadline = SystemClock.elapsedRealtime() + 45_000L
+        var attempts = 0
+        while (attempts < 6 && !Thread.currentThread().isInterrupted &&
+            SystemClock.elapsedRealtime() < deadline) {
+            attempts++
+            val scene = try {
+                liveFeed.next({ id -> history.contains(id) || history.reserved(id) }, deadline)
+            } catch (failure: Exception) {
+                Log.w("PersonalLandscape", "Live photo feed unavailable", failure)
+                null
+            } ?: break
+            try {
+                val bytes = OnlineContent.get(scene.url, 3 * 1024 * 1024, 3500, 8000)
+                val image = ScreensaverPrefetch.decode(bytes) ?: continue
+                var accepted = false
+                try {
+                    if (!scene.reviewed && !ScreensaverPrefetch.clearLandscape(image)) continue
+                    accepted = history.remember(scene.id, bytes, ScreensaverPrefetch.fingerprint(image))
+                    if (accepted) return image to scene.subject
+                } finally {
+                    if (!accepted) image.recycle()
+                }
+            } catch (failure: Exception) {
+                if (Thread.currentThread().isInterrupted) break
+                Log.d("PersonalLandscape", "Skipping unavailable live photo from ${scene.id.substringBefore(':')}", failure)
+            }
+        }
+        return null to ""
     }
 
     private fun requestWeather() {

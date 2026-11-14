@@ -113,6 +113,7 @@ class ScreensaverPrefetch : JobService() {
             val job = JobInfo.Builder(JOB, ComponentName(context, ScreensaverPrefetch::class.java))
                 .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
                 .setBackoffCriteria(10_000L, JobInfo.BACKOFF_POLICY_LINEAR)
+                .setOverrideDeadline(120_000L)
                 .build()
             if (scheduler.schedule(job) != JobScheduler.RESULT_SUCCESS) {
                 Log.w(TAG, "Android did not schedule the photo queue refill")
@@ -150,7 +151,7 @@ class ScreensaverPrefetch : JobService() {
             }
         }
 
-        private fun clearLandscape(image: Bitmap): Boolean {
+        internal fun clearLandscape(image: Bitmap): Boolean {
             val width = 480
             val height = maxOf(1, Math.round(width.toFloat() * image.height / image.width))
             val sample = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
