@@ -1,6 +1,5 @@
 package com.sadique.launcher
 
-import kotlin.math.roundToInt
 
 /** Quantized flex weights preserve each app's row while one card grows to 1.98 times its neighbours. */
 internal object GlassDockLayout {
@@ -77,6 +76,6 @@ internal object GlassDockLayout {
             if (i <= col) through += weight
             total += weight
         }
-        return Math.max(1, ((SPANS * through / total) - (SPANS * before / total)).roundToInt())
+        return Math.max(1, Math.round(SPANS * through / total).toInt() - Math.round(SPANS * before / total).toInt())
     }
 }
