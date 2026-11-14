@@ -22,12 +22,12 @@ import java.util.regex.Pattern;
 /** Independent online sources for the preview and Android TV dream. */
 final class LandscapeFeed {
     private enum Source {
-        FLICKR, BING, PORTRAITS, WALLSPAPERS, COMMONS, PUBLIC_DOMAIN_PICTURES, OCEAN_EXPLORATION, NATIONAL_PARK_SERVICE, PXHERE;
+        FLICKR, FLICKR_PEOPLE, BING, PORTRAITS, WALLSPAPERS, COMMONS, PUBLIC_DOMAIN_PICTURES, OCEAN_EXPLORATION, NATIONAL_PARK_SERVICE, PXHERE;
 
-        boolean live() { return this == FLICKR || this == BING || this == COMMONS || this == WALLSPAPERS; }
+        boolean live() { return this == FLICKR || this == FLICKR_PEOPLE || this == BING || this == COMMONS || this == WALLSPAPERS; }
     }
     // Give Flickr the first attempt and two additional turns in each rotation.
-    private static final Source[] SOURCES = {Source.FLICKR, Source.BING, Source.PORTRAITS, Source.FLICKR,
+    private static final Source[] SOURCES = {Source.FLICKR, Source.FLICKR_PEOPLE, Source.BING, Source.PORTRAITS, Source.FLICKR,
             Source.WALLSPAPERS, Source.COMMONS, Source.PUBLIC_DOMAIN_PICTURES, Source.FLICKR,
             Source.OCEAN_EXPLORATION, Source.NATIONAL_PARK_SERVICE, Source.PXHERE};
     private static final String[] FLICKR_TAGS = {
@@ -35,6 +35,23 @@ final class LandscapeFeed {
             "coast,cc0", "waterfall,cc0", "sunset,cc0", "glacier,cc0", "river,cc0", "ocean,cc0",
             "landscape,cc0", "nationalpark,landscape", "nature,widescreen", "landscape,widescreen"
     };
+    private static final String[] PEOPLE_REGIONS = {
+            "pakistan", "india", "iran", "tajikistan", "turkmenistan", "turkey", "saudiarabia",
+            "afghanistan", "uzbekistan", "kyrgyzstan", "kazakhstan", "bangladesh", "nepal", "srilanka",
+            "azerbaijan", "iraq", "oman", "qatar", "unitedarabemirates", "jordan", "kuwait"
+    };
+    private static final String[] PEOPLE_TAGS = {"cc0", "publicdomain", "people", "portrait", "streetphotography"};
+    private static final Pattern PEOPLE_SUBJECT = Pattern.compile(
+            "\\b(?:people|portraits?|women|woman|ladies|lady|men|man|boys?|girls?|children|family|families|"
+            + "friends|students?|shoppers?|vendors?|sellers?|workers?|walkers?|artists?|drivers?|crowd)\\b",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern PEOPLE_EXCLUDED = Pattern.compile(
+            "\\b(?:kiss\\w*|couples?|romanc\\w*|wedding\\w*|brid\\w*|grooms?|nud\\w*|erotic\\w*|"
+            + "sex\\w*|intimat\\w*|suggestive|lingerie|underwear|swimwear|bikinis?|topless|fetish|bdsm|"
+            + "boudoir|see.through|sheer|thongs?|bedroom|bed|provocative|sensual|glamour|hugg\\w*|embrac\\w*|"
+            + "paintings?|illustrations?|artwork|ai.generated|generative|midjourney|stable diffusion|"
+            + "protest\\w*|violence|weapons?|firearms?|wars?|conflict|nasa|astronaut\\w*|satellite)\\b",
+            Pattern.CASE_INSENSITIVE);
     private static final Pattern FLICKR_IMAGE = Pattern.compile("/[0-9]+/([0-9]+)_[a-f0-9]+_b\\.jpg");
     private static final String MEDIA_RSS = "http://search.yahoo.com/mrss/";
     private static final String CC_RSS = "http://cyber.law.harvard.edu/rss/creativeCommonsRssModule.html";
@@ -64,15 +81,20 @@ final class LandscapeFeed {
     static final class Scene {
         final String id, url, subject;
         final boolean reviewed;
+        final boolean livePeople;
         final int cropOffsetPercent;
         Scene(String id, String url, String subject, boolean reviewed) {
             this(id, url, subject, reviewed, -1);
         }
         Scene(String id, String url, String subject, boolean reviewed, int cropOffsetPercent) {
+            this(id, url, subject, reviewed, cropOffsetPercent, false);
+        }
+        Scene(String id, String url, String subject, boolean reviewed, int cropOffsetPercent, boolean livePeople) {
             this.id = id;
             this.url = url;
             this.subject = subject;
             this.reviewed = reviewed;
+            this.livePeople = livePeople;
             this.cropOffsetPercent = cropOffsetPercent;
         }
     }
@@ -83,7 +105,7 @@ final class LandscapeFeed {
     private final ArrayDeque<String> wallpaperPages = new ArrayDeque<>();
     private final Set<String> examinedWallpaperPages = new LinkedHashSet<>();
     private long nextWallpaperRefresh;
-    private int nextSource, flickrTopic, bingBatch, commonsTopic;
+    private int nextSource, flickrTopic, peopleTopic, bingBatch, commonsTopic;
     private final int bingMarket;
 
     LandscapeFeed() {
@@ -143,9 +165,12 @@ final class LandscapeFeed {
     private List<Scene> fetch(Source source, Predicate<String> alreadyShown) throws Exception {
         switch (source) {
             case FLICKR:
-                String tags = FLICKR_TAGS[flickrTopic++ % FLICKR_TAGS.length];
-                return flickrScenes(OnlineContent.get("https://www.flickr.com/services/feeds/photos_public.gne"
-                        + "?format=rss_200&tagmode=all&tags=" + encode(tags), 192 * 1024, 2200, 3500));
+                return flickrScenes(flickrRss(FLICKR_TAGS[flickrTopic++ % FLICKR_TAGS.length]));
+            case FLICKR_PEOPLE:
+                int topic = peopleTopic++ % (PEOPLE_REGIONS.length * PEOPLE_TAGS.length);
+                String region = PEOPLE_REGIONS[topic % PEOPLE_REGIONS.length];
+                String tag = PEOPLE_TAGS[topic / PEOPLE_REGIONS.length];
+                return flickrPeopleScenes(flickrRss(region + "," + tag));
             case BING:
                 int batchIndex = bingBatch++ % (MARKETS.length * 2);
                 return bing(MARKETS[(bingMarket + batchIndex % MARKETS.length) % MARKETS.length],
@@ -160,7 +185,20 @@ final class LandscapeFeed {
         }
     }
 
+    private static byte[] flickrRss(String tags) throws Exception {
+        return OnlineContent.get("https://www.flickr.com/services/feeds/photos_public.gne"
+                + "?format=rss_200&tagmode=all&tags=" + encode(tags), 192 * 1024, 2200, 3500);
+    }
+
+    static List<Scene> flickrPeopleScenes(byte[] feed) throws Exception {
+        return flickrScenes(feed, true);
+    }
+
     static List<Scene> flickrScenes(byte[] feed) throws Exception {
+        return flickrScenes(feed, false);
+    }
+
+    private static List<Scene> flickrScenes(byte[] feed, boolean people) throws Exception {
         javax.xml.parsers.DocumentBuilderFactory factory = javax.xml.parsers.DocumentBuilderFactory.newInstance();
         factory.setNamespaceAware(true);
         // Flickr publishes UTF-8 RSS. Reject DTDs before parsing so the parser cannot resolve entities.
@@ -176,21 +214,27 @@ final class LandscapeFeed {
             org.w3c.dom.Node content = item.getElementsByTagNameNS(MEDIA_RSS, "content").item(0);
             if (!(content instanceof org.w3c.dom.Element)) continue;
             org.w3c.dom.Element image = (org.w3c.dom.Element) content;
+            int width = xmlDimension(image, "width");
+            int height = xmlDimension(image, "height");
             if (!"image/jpeg".equals(image.getAttribute("type"))
-                    || !fitsWidescreen(xmlDimension(image, "width"), xmlDimension(image, "height"))) continue;
+                    || !(people ? fitsPeopleFrame(width, height) : fitsWidescreen(width, height))) continue;
             String title = xmlText(item, MEDIA_RSS, "title");
             String description = xmlText(item, null, "description").replaceAll("<[^>]*>", " ");
             String tags = xmlText(item, MEDIA_RSS, "category");
             String text = title + " " + description + " " + tags;
-            if (!landscapeSubject(title, description + " " + tags)
-                    || WALLPAPER_PEOPLE.matcher(text).find()
-                    || FLICKR_NON_SCENERY.matcher(text).find()) continue;
+            if (FLICKR_NON_SCENERY.matcher(text).find()) continue;
+            if (people) {
+                // Require a meaningful people subject in the title or caption, not just a search tag.
+                if (title.isEmpty() || !PEOPLE_SUBJECT.matcher(title + " " + description).find()
+                        || PEOPLE_EXCLUDED.matcher(text).find()) continue;
+            } else if (!landscapeSubject(title, description + " " + tags)
+                    || WALLPAPER_PEOPLE.matcher(text).find()) continue;
             String url = image.getAttribute("url");
             if (!imageUrlAllowed(url)) continue;
             URI uri = URI.create(url);
             if (!"live.staticflickr.com".equals(uri.getHost())) continue;
             Matcher id = FLICKR_IMAGE.matcher(uri.getPath());
-            if (id.matches()) photos.add(new Scene("flickr:" + id.group(1), url, title, false));
+            if (id.matches()) photos.add(new Scene("flickr:" + id.group(1), url, title, false, -1, people));
         }
         return photos;
     }
@@ -450,6 +494,12 @@ final class LandscapeFeed {
     static boolean commonsLicense(String license) {
         String name = license.trim().toLowerCase(Locale.ROOT);
         return name.equals("public domain") || name.equals("cc0") || name.startsWith("cc0 ");
+    }
+
+    static boolean fitsPeopleFrame(int width, int height) {
+        return width >= 960 && width <= 1920 && height > 480
+                && (long) width * 3 >= (long) height * 4
+                && (long) width * 9 <= (long) height * 16;
     }
 
     static boolean fitsWidescreen(int width, int height) {

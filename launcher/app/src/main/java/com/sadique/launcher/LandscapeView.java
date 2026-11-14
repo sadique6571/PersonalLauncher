@@ -384,6 +384,11 @@ public final class LandscapeView extends FrameLayout {
                     bytes = frameReviewedPortrait(bytes, scene.cropOffsetPercent);
                     if (bytes == null) continue;
                 }
+                if (scene.livePeople) {
+                    bytes = fitLivePeoplePhoto(bytes);
+                    if (bytes == null) continue;
+                    return new LandscapeHistory.SavedPhoto(scene.id, scene.subject, bytes);
+                }
                 Bitmap decoded = decodePhoto(bytes);
                 if (decoded == null) continue;
                 try {
@@ -397,6 +402,30 @@ public final class LandscapeView extends FrameLayout {
             }
         }
         return null;
+    }
+
+    private static byte[] fitLivePeoplePhoto(byte[] bytes) {
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.length, bounds);
+        if (!LandscapeFeed.fitsPeopleFrame(bounds.outWidth, bounds.outHeight)) return null;
+        if (LandscapeFeed.fitsWidescreen(bounds.outWidth, bounds.outHeight)) return bytes;
+        Bitmap original = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+        if (original == null) return null;
+        Bitmap frame = null;
+        try {
+            int units = (original.getHeight() + 8) / 9;
+            frame = Bitmap.createBitmap(units * 16, units * 9, Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas canvas = new android.graphics.Canvas(frame);
+            canvas.drawColor(0xff041225);
+            canvas.drawBitmap(original, (frame.getWidth() - original.getWidth()) / 2f,
+                    (frame.getHeight() - original.getHeight()) / 2f, null);
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            return frame.compress(Bitmap.CompressFormat.JPEG, 90, output) ? output.toByteArray() : null;
+        } finally {
+            if (frame != null) frame.recycle();
+            original.recycle();
+        }
     }
 
     private static byte[] frameReviewedPortrait(byte[] bytes, int offsetPercent) {
