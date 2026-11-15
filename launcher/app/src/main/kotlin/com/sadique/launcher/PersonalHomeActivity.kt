@@ -40,8 +40,6 @@ import android.os.Looper
 import android.os.Parcelable
 import android.os.SystemClock
 import android.provider.Settings
-import android.speech.RecognizerIntent
-import android.text.Editable
 import android.text.InputType
 import android.text.Layout
 import android.text.SpannableString
@@ -49,7 +47,6 @@ import android.text.Spanned
 import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
-import android.text.TextWatcher
 import android.text.style.ForegroundColorSpan
 import android.util.TypedValue
 import android.view.Gravity
@@ -59,7 +56,6 @@ import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver
 import android.view.WindowManager
-import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -94,7 +90,6 @@ class PersonalHomeActivity : Activity() {
     private var harmonyDateValue: TextView? = null
     private var harmonyGreetingValue: TextView? = null
     private var harmonyQuoteValue: TextView? = null
-    private var harmonyWeatherCard: View? = null
     private fun weatherWidgetEnabled(): Boolean = ((harmony() && tv) || prefs.getBoolean("weather_widget", ThemeStyle.id(prefs) == ThemeStyle.GLASS)) && !prefs.getBoolean("apps_only", false)
     private fun clockAlignment(): Int = WeatherWidgetLayout.clockAlignment(weatherWidgetEnabled(), ThemeStyle.clockAlignment(prefs))
     private lateinit var homeWeatherController: HomeWeatherController
@@ -104,13 +99,54 @@ class PersonalHomeActivity : Activity() {
         homeWeatherController.preferencesChanged(key)
     }
     private lateinit var prefs: SharedPreferences
+    private lateinit var homeSearch: HomeSearch
+    private val settingsMenus by lazy {
+        HomeSettingsMenus(
+            host = this,
+            prefs = prefs,
+            tv = tv,
+            settingsTransfer = settingsTransfer,
+            chooseSetting = this::chooseSetting,
+            refreshApps = this::refreshApps,
+            buildHomeSoon = this::buildHomeSoon,
+            updateClock = this::updateClock,
+            resetClockTick = { enabled ->
+                handler.removeCallbacks(secondTick)
+                if (enabled && resumed) secondTick.run() else updateClock()
+            },
+            configureHarmonyClock = { harmonyClock?.configure(prefs) },
+            reloadIcons = {
+                appWorker.execute { IconCache(this).clear() }
+                cachedApps = null
+                loadApps()
+            },
+            setAppHeadingSize = { appHeading?.setTextSize(it.toFloat()) },
+            wallpaper = { sky },
+            switchVisualStyle = this::switchVisualStyle,
+            resetCurrentTheme = this::resetCurrentTheme,
+            applyAppearance = this::applyAppearance,
+            profileAsset = this::profileAsset,
+            loadWallpaper = this::loadWallpaper,
+            rearrangeApps = this::rearrangeApps,
+            requestWatchNextAccess = { continueWatching?.requestAccess() },
+            editProfile = this::editProfile,
+            applyPerformanceProfile = this::applyPerformanceProfile,
+            cachedApps = { cachedApps },
+            loadApps = this::loadApps,
+            accentColor = this::accentColor,
+            activateWeatherWidget = { weatherWidget?.active(resumed) },
+            showForecast = { homeWeatherController.showForecast() },
+            launch = this::launch,
+            armIdleScreensaver = this::armIdleScreensaver,
+        )
+    }
     private lateinit var settingsTransfer: HomeSettingsTransfer
     private var page: LinearLayout? = null
     private var header: LinearLayout? = null
     private var actions: LinearLayout? = null
     private var clockLayout: LinearLayout? = null
     private var appBody: LinearLayout? = null
-    private var grid: HomeAppGrid<App>? = null
+    private var grid: HomeAppGrid<PersonalApp>? = null
     private var searchButton: ImageButton? = null
     private var selectedCategory = ""
     private var gridState: Parcelable? = null
@@ -179,65 +215,20 @@ class PersonalHomeActivity : Activity() {
         }
         return links
     }
-/** A dedicated Huawei Vision-inspired scene, not a recoloured Glass OS home. */
-    /** Three balanced zones: the original watch, one daily thought and a real weather widget. */
     private fun harmonyHero(): View {
-        val stage = LinearLayout(this)
-        stage.orientation = LinearLayout.HORIZONTAL
-        stage.gravity = Gravity.CENTER_VERTICAL
-        stage.clipChildren = false
-        stage.clipToPadding = false
-        val screenH = resources.configuration.screenHeightDp
-        val screenW = resources.configuration.screenWidthDp
-        val side = dp(HarmonyVisionLayout.clockDiameterDp(screenH, prefs.getInt("harmony_clock_size", 1)))
-        val clock = HarmonyVisionClockView(this)
-        harmonyClock = clock
-        clock.setOnClickListener { harmonyClockSettings() }
-        clock.setOnKeyListener { _, key, event -> harmonyHeroKey(key, event) }
-        if (!prefs.getBoolean("hide_clock", false)) {
-            val face = LinearLayout.LayoutParams(side, side)
-            face.marginEnd = dp(if (screenW < 780) 12 else 22)
-            stage.addView(clock, face)
-        }
-        val thought = LinearLayout(this)
-        thought.orientation = LinearLayout.VERTICAL
-        thought.gravity = Gravity.CENTER_VERTICAL
-        stage.addView(thought, LinearLayout.LayoutParams(0, -2, 1f))
-        val greetingValue = text(greetingText(), if (screenH < 470) 12 else 14, 0xffd7eaff.toInt())
-        harmonyGreetingValue = greetingValue
-        greetingValue.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-        thought.addView(greetingValue)
-        val quoteValue = text(HarmonyDailyWords.forCalendar(Calendar.getInstance()),
-                if (screenW < 780) 19 else if (screenH < 470) 21 else 25, 0xffffffff.toInt())
-        harmonyQuoteValue = quoteValue
-        quoteValue.typeface = Typeface.create("sans-serif", Typeface.BOLD)
-        quoteValue.maxLines = 3
-        quoteValue.ellipsize = TextUtils.TruncateAt.END
-        quoteValue.setShadowLayer(dp(6).toFloat(), 0f, dp(2).toFloat(), 0x88061627.toInt())
-        val quote = LinearLayout.LayoutParams(-1, -2)
-        quote.topMargin = dp(7)
-        thought.addView(quoteValue, quote)
-        val dateValue = text("", 12, 0xffc0d3e3.toInt())
-        harmonyDateValue = dateValue
-        val dateParams = LinearLayout.LayoutParams(-1, -2)
-        dateParams.topMargin = dp(10)
-        thought.addView(dateValue, dateParams)
-        quoteValue.visibility = if (prefs.getBoolean("harmony_daily_quote", true)) View.VISIBLE else View.GONE
-        if (HarmonyVisionLayout.showNativeWeatherWidget()) {
-            val widget = WeatherWidgetView(this, homeWeatherController::showForecast)
-            weatherWidget = widget
-            harmonyWeatherCard = widget
-            widget.setOnKeyListener { _, key, event -> harmonyHeroKey(key, event) }
-            val weatherWidth = Math.max(210, Math.min(285, Math.round(screenW * 0.29f)))
-            val wp = LinearLayout.LayoutParams(dp(weatherWidth), -2)
-            wp.marginStart = dp(if (screenW < 780) 8 else 24)
-            stage.addView(widget, wp)
-            widget.active(resumed)
-            homeWeatherController.restoreWidget(widget)
-        }
-        clock.active(resumed && !prefs.getBoolean("hide_clock", false))
-        return stage
+        val hero = HarmonyHomeHero(
+            this, prefs, resumed, this::dp, this::text, this::greetingText, this::harmonyHeroKey,
+            settingsMenus::harmonyClockSettings, homeWeatherController::showForecast,
+            homeWeatherController::restoreWidget,
+        ).build()
+        harmonyClock = hero.clock
+        harmonyGreetingValue = hero.greeting
+        harmonyDateValue = hero.date
+        harmonyQuoteValue = hero.quote
+        if (hero.weather != null) weatherWidget = hero.weather
+        return hero.container
     }
+
     private fun harmonyHeroKey(key: Int, event: KeyEvent): Boolean {
         val horizontal = key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT
         if (!horizontal && key != KeyEvent.KEYCODE_DPAD_UP && key != KeyEvent.KEYCODE_DPAD_DOWN) return false
@@ -276,52 +267,6 @@ class PersonalHomeActivity : Activity() {
         val g = grid
         if (g != null && (!g.isHorizontalDock() || !focusHarmonyHero())) g.focusKey(focusedPkg)
     }
-    private fun harmonyClockSettings() {
-        if (!harmony()) return
-        val names = arrayOf("Watch face", "Metal finish", "Clock accent", "Second hand", "Time format", "Clock size", "Hide clock", "Daily thoughts")
-        val hints = arrayOf("Heritage, Chronograph, Skeleton", "Space Blue, Obsidian, Titanium, Ceramic",
-                "Ice blue, Gold or Rose", "Smooth sweep or Quartz tick", "12-hour or 24-hour",
-                "Fit the clock on the TV", "Show or hide the dial", "An original thought for every day")
-        val icons = intArrayOf(R.drawable.ic_clock, R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_clock,
-                R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock)
-        GlassSettings.options(this, "Harmony Vision Clock", names, hints, icons, { which ->
-            when (which) {
-                0 -> chooseSetting("Watch face", arrayOf("Heritage", "Chronograph", "Skeleton")) { i ->
-                    prefs.edit().putInt("harmony_clock_face", i).apply()
-                    harmonyClock?.configure(prefs)
-                }
-                1 -> chooseSetting("Metal finish", arrayOf("Space Blue", "Obsidian", "Titanium", "Ceramic")) { i ->
-                    prefs.edit().putInt("harmony_clock_finish", i).apply()
-                    harmonyClock?.configure(prefs)
-                }
-                2 -> chooseSetting("Clock accent", arrayOf("Ice Blue", "Gold", "Rose")) { i ->
-                    prefs.edit().putInt("harmony_clock_accent", i).apply()
-                    harmonyClock?.configure(prefs)
-                }
-                3 -> chooseSetting("Second hand", arrayOf("Smooth sweep", "Quartz tick")) { i ->
-                    prefs.edit().putBoolean("harmony_clock_sweep", i == 0).apply()
-                    harmonyClock?.configure(prefs)
-                }
-                4 -> chooseSetting("Time format", arrayOf("12-hour", "24-hour")) { i ->
-                    prefs.edit().putBoolean("time_24h", i == 1).apply()
-                    harmonyClock?.configure(prefs)
-                    updateClock()
-                }
-                5 -> chooseSetting("Harmony clock size", arrayOf("Small", "Normal", "Large")) { i ->
-                    prefs.edit().putInt("harmony_clock_size", i).apply()
-                    buildHomeSoon()
-                }
-                6 -> chooseSetting("Hide clock", arrayOf("Show", "Hide")) { i ->
-                    prefs.edit().putBoolean("hide_clock", i == 1).apply()
-                    buildHomeSoon()
-                }
-                7 -> chooseSetting("Daily thoughts", arrayOf("On", "Off")) { i ->
-                    prefs.edit().putBoolean("harmony_daily_quote", i == 0).apply()
-                    buildHomeSoon()
-                }
-            }
-        }, { which -> which >= 6 || clockVisible() })
-    }
     private var avatarBitmap: Bitmap? = null
     private var customWallpaper: Bitmap? = null
     private val clockContrast = HomeClockContrast()
@@ -348,9 +293,9 @@ class PersonalHomeActivity : Activity() {
     private var onCreateStartMs = 0L
     /** First buildHome() also logs the first drawn frame; rebuilds only log their own duration. */
     private var firstBuild = true
-    private var cachedApps: List<App>? = null
+    private var cachedApps: List<PersonalApp>? = null
     /** Move mode: the app being carried, and the visible package order while it moves. Null when off. */
-    private var carriedApp: App? = null
+    private var carriedApp: PersonalApp? = null
     private var movingRendered = false
     private var moveOrder: MutableList<String>? = null
     /** Live tiles by package, for progressive icon fill-in. Rebuilt with the grid. */
@@ -361,9 +306,6 @@ class PersonalHomeActivity : Activity() {
     private var lastLight = false
     private var panel: AlertDialog? = null
     private var profile: AlertDialog? = null
-    private var searchDialog: AlertDialog? = null
-    private var searchInput: EditText? = null
-    private var searchRefresh: Runnable? = null
     private val idleScreensaver = Runnable {
         if (resumed && hasWindowFocus() && !GitHubUpdates.manualActive()) launch(Intent(this, LandscapeActivity::class.java))
         else armIdleScreensaver()
@@ -441,6 +383,10 @@ class PersonalHomeActivity : Activity() {
         }
         val modes = getSystemService(UiModeManager::class.java)
         tv = modes != null && modes.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
+        homeSearch = HomeSearch(
+            this, prefs, tv, MUTED, { cachedApps }, this::dp, this::text, this::applyAppFont,
+            this::toolbarSurface, this::tryLaunch, this::launch,
+        )
         ThemeStyle.demoDefaults(prefs, tv)
         connectivity = getSystemService(ConnectivityManager::class.java)
         bluetooth = GlassBluetooth(this, this::updateBluetooth)
@@ -685,7 +631,6 @@ class PersonalHomeActivity : Activity() {
         harmonyDateValue = null
         harmonyGreetingValue = null
         harmonyQuoteValue = null
-        harmonyWeatherCard = null
         clockDatesInline = glassOs() && resources.configuration.screenWidthDp >= 700 && !weatherWidgetEnabled() && prefs.getInt("clock_style", 0) != 1
         islamicDate = null
         bluetoothStatus = null
@@ -893,7 +838,7 @@ class PersonalHomeActivity : Activity() {
         } else if (harmony()) {
             iconAction("All apps", R.drawable.ic_apps, this::showAppLibrary)
         }
-        searchButton = iconAction(getString(R.string.h_search), R.drawable.ic_search, this::searchApps)
+        searchButton = iconAction(getString(R.string.h_search), R.drawable.ic_search, homeSearch::show)
         iconAction(getString(R.string.h_notifications), R.drawable.ic_notifications, this::showNotifications)
         if (!ThemeStyle.custom(prefs) && !harmony()) iconAction(getString(R.string.h_screensaver), R.drawable.ic_picture) { launch(Intent(this, LandscapeActivity::class.java)) }
         val controls = iconAction("Control Center", R.drawable.ic_settings, this::showSettings)
@@ -1090,7 +1035,7 @@ class PersonalHomeActivity : Activity() {
         heading.isSingleLine = true
         heading.ellipsize = TextUtils.TruncateAt.END
         heading.setPadding(dp(4), dp(8), 0, dp(12))
-        val grid = HomeAppGrid<App>(this, { app -> app.info.activityInfo.packageName },
+        val grid = HomeAppGrid<PersonalApp>(this, { app -> app.info.activityInfo.packageName },
                 { app, width ->
                     val carried = carriedApp
                     createAppTile(app, width, carried != null && app.info.activityInfo.packageName == carried.info.activityInfo.packageName)
@@ -1411,8 +1356,8 @@ class PersonalHomeActivity : Activity() {
             found.addAll(packageManager.queryIntentActivities(
                     Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0))
             val packages = HashSet<String>()
-            val apps = ArrayList<App>()
-            val previous = HashMap<String, App>()
+            val apps = ArrayList<PersonalApp>()
+            val previous = HashMap<String, PersonalApp>()
             val snapshot = prior
             if (snapshot != null) for (app in snapshot) previous[app.info.activityInfo.packageName] = app
             // Phase 1: labels only — the grid renders immediately with letter placeholders.
@@ -1425,9 +1370,9 @@ class PersonalHomeActivity : Activity() {
                     val old = previous[pkg]
                     if (old != null && old.iconReady && old.name == label
                             && java.util.Objects.equals(old.info.activityInfo.applicationInfo.sourceDir, info.activityInfo.applicationInfo.sourceDir)) {
-                        apps.add(App(label, info, old.icon, old.accent, true))
+                        apps.add(PersonalApp(label, info, old.icon, old.accent, true))
                     } else {
-                        apps.add(App(label, info, letterIcon(label), CYAN, false))
+                        apps.add(PersonalApp(label, info, letterIcon(label), CYAN, false))
                     }
                 } catch (removedDuringQuery: RuntimeException) {
                     // A package can be replaced or removed between queryIntentActivities and loading its resources.
@@ -1441,7 +1386,7 @@ class PersonalHomeActivity : Activity() {
     }
 
     /** Only bound/visible tiles request artwork. Serial work and generation checks bound concurrency. */
-    private fun requestAppIcon(app: App) {
+    private fun requestAppIcon(app: PersonalApp) {
         if (app.iconReady || app.iconRequest.pending(appGeneration) || isDestroyed) return
         val generation = appGeneration
         app.iconRequest.begin(generation)
@@ -1559,17 +1504,7 @@ class PersonalHomeActivity : Activity() {
         }
     }
 
-    private class App(
-        val name: String,
-        val info: ResolveInfo,
-        var icon: Drawable?,
-        var accent: Int,
-        var iconReady: Boolean
-    ) {
-        val iconRequest = ArtworkRequestState()
-    }
-
-    private fun renderApps(apps: List<App>) {
+    private fun renderApps(apps: List<PersonalApp>) {
         val g = grid!!
         val restoreFocus = !g.footerFocusedOrPending() && (g.hasFocus() || (focusedPkg != null && !hasWindowFocus()))
         cachedApps = apps
@@ -1588,12 +1523,12 @@ class PersonalHomeActivity : Activity() {
         val state = gridState
         if (state != null) { g.layoutManager?.onRestoreInstanceState(state); gridState = null }
         appHeading?.setText(if (visible.isEmpty()) R.string.h_no_apps else R.string.h_your_apps)
-        if (restoreFocus && (panel == null || panel?.isShowing != true) && (searchDialog == null || searchDialog?.isShowing != true))
+        if (restoreFocus && (panel == null || panel?.isShowing != true) && (!homeSearch.isShowing))
             g.focusKey(focusedPkg)
-        searchRefresh?.run()
+        homeSearch.refresh()
     }
 
-    private fun submitHomeApps(apps: List<App>, columns: Int, availableWidth: Int) {
+    private fun submitHomeApps(apps: List<PersonalApp>, columns: Int, availableWidth: Int) {
         val g = grid!!
         if (!g.isHorizontalDock()) {
             g.submit(apps, columns, availableWidth / columns)
@@ -1619,7 +1554,7 @@ class PersonalHomeActivity : Activity() {
     private fun profileAsset(name: String): File = File(filesDir, HomeLibraryStore(this).assetName(name))
 
     /** Direct move mode: long-press > Move, then arrows carry the tile, OK drops it, Back cancels. */
-    private fun startMoveMode(app: App) {
+    private fun startMoveMode(app: PersonalApp) {
         val apps = cachedApps ?: return
         val visible = orderedApps(apps)
         val hidden = prefs.getStringSet("hidden_apps", emptySet())
@@ -1635,7 +1570,7 @@ class PersonalHomeActivity : Activity() {
 
     private fun renderMoveGrid() {
         movingRendered = true
-        val byPackage = LinkedHashMap<String, App>()
+        val byPackage = LinkedHashMap<String, PersonalApp>()
         for (app in cachedApps!!) byPackage[app.info.activityInfo.packageName] = app
         val carried = carriedApp!!
         appHeading?.text = "Move " + carried.name
@@ -1643,7 +1578,7 @@ class PersonalHomeActivity : Activity() {
         val g = grid!!
         val columns = g.columnCount
         val movingPkg = carried.info.activityInfo.packageName
-        val moved = ArrayList<App>()
+        val moved = ArrayList<PersonalApp>()
         for (pkg in moveOrder!!) {
             val app = byPackage[pkg]
             if (app != null) moved.add(app)
@@ -1775,173 +1710,70 @@ class PersonalHomeActivity : Activity() {
         val margin = intArrayOf(6, 8, 12)[spacing]
         return card + dp(GlassDockLayout.reflectionHeight(Math.round(card / resources.displayMetrics.density)) + margin * 2 + 44)
     }
-    private fun createAppTile(app: App, width: Int, moving: Boolean): View {
+    private val tileFactory by lazy {
+        HomeTileFactory(
+            host = this, prefs = prefs, tv = tv, dp = this::dp, text = this::text,
+            tileRadius = this::tileRadius, cardHeight = this::referenceCardHeight,
+            captionHeight = this::referenceCaptionHeight, surface = this::appSurface,
+            border = this::tileBorder, perfAllows = this::perfAllows, accentColor = this::accentColor,
+            selectApp = { focusedPkg = it.info.activityInfo.packageName },
+            updateFocusWallpaper = this::updateTileFocusWallpaper, launch = this::launch,
+            isCarryingApp = { carriedApp != null }, showOptions = this::showTileOptions,
+            trackAttachment = this::trackTileAttachment,
+        )
+    }
+
+    private fun createAppTile(app: PersonalApp, width: Int, moving: Boolean): View {
         requestAppIcon(app)
-        val g = grid!!
-        val tile: FrameLayout = if (harmony()) HarmonyAppTile(this, app.name, app.icon, app.accent, HarmonyVisionLayout.dockPlateDp(resources.configuration.screenHeightDp), g.isHorizontalDock())
-                else if (glassOs()) GlassIconTile(this, app.name, app.icon, app.accent, referenceCardHeight(width) - dp(referenceCaptionHeight()), dp(referenceCaptionHeight()), tileRadius(), moving)
-                else if (ThemeStyle.custom(prefs)) DemoTile(this, ThemeStyle.id(prefs), tileRadius().toFloat())
-                else FrameLayout(this)
-        if (tile !is GlassIconTile && tile !is HarmonyAppTile) {
-            tile.background = appSurface(app.accent, false)
-            tile.outlineProvider = object : ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: Outline) {
-                    outline.setRoundRect(0, 0, view.width, view.height, tileRadius().toFloat())
+        return tileFactory.create(app, width, moving, grid!!)
+    }
+
+    private fun updateTileFocusWallpaper(tile: View, app: PersonalApp, focus: Boolean) {
+        if (focus) {
+            if (glassOs()) { spotlightName = app.name; spotlightCategory = appCategory(app); updateGlassAccent(app.accent) }
+            if (!TvGlassStyle.enabled(prefs)) appHeading?.text = app.name
+            appHeading?.setTextColor(ThemeStyle.foreground(prefs))
+            val position = IntArray(2)
+            val origin = IntArray(2)
+            tile.getLocationInWindow(position)
+            val skyView = sky
+            if (skyView != null) {
+                skyView.getLocationInWindow(origin)
+                skyView.focusX = position[0] - origin[0] + tile.width / 2f
+                skyView.focusY = position[1] - origin[1] + tile.height / 2f
+                skyView.focusRadius = tile.width.toFloat()
+                skyView.focusAccent = if (prefs.getBoolean("focus_glow", true)) app.accent else 0
+                if (!tv) {
+                    // Parallax: wallpaper drifts slightly opposite to the focused tile,
+                    // vertical only — never sideways. (User 2026-11-01.)
+                    val cy = position[1] + tile.height / 2f
+                    val size = Point()
+                    windowManager.defaultDisplay.getSize(size)
+                    skyView.animate().translationX(0f)
+                            .translationY(if (perfAllows("parallax")) (size.y / 2f - cy) / size.y * dp(36) else 0f)
+                            .setDuration(350).start()
                 }
             }
-            tile.clipToOutline = !ThemeStyle.custom(prefs)
-        } else tile.clipToOutline = false
-        tile.elevation = (if (perfAllows("parallax")) dp(if (tvGlass()) 4 else 3) else 0).toFloat()
-        tile.isFocusable = true
-        tile.isClickable = true
-        tile.contentDescription = app.name
-        tile.setTag(app.accent)
-        if (tile !is GlassIconTile && tile !is HarmonyAppTile) tile.foreground = tileBorder(app.accent, false)
-        if (moving) {
-            tile.scaleX = 1.07f
-            tile.scaleY = 1.07f
-            tile.elevation = dp(10).toFloat()
-            if (tile is HarmonyAppTile) tile.appearance(true)
-            else if (tile is GlassIconTile) tile.appearance(app.accent, true)
-            else tile.foreground = tileBorder(accentColor(), true)
-        }
-        val icon = ImageView(this)
-        if (app.icon != null) icon.setImageDrawable(app.icon)
-        else icon.setImageDrawable(TvSymbols.icon(this, R.drawable.ic_apps))
-        // Artwork is composed at the card's 16:9 ratio; no second inset or crop here.
-        icon.scaleType = if (ThemeStyle.custom(prefs)) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.FIT_XY
-        icon.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        if (ThemeStyle.custom(prefs)) {
-            val logoWidth = Math.max(dp(26), Math.round(width * 0.25f))
-            val logo = FrameLayout.LayoutParams(logoWidth, -1, Gravity.START or Gravity.CENTER_VERTICAL)
-            logo.marginStart = dp(10)
-            logo.topMargin = dp(10)
-            logo.bottomMargin = dp(10)
-            tile.addView(icon, logo)
-            val title = text(app.name, prefs.getInt("app_label_size", if (tv) 17 else 14), ThemeStyle.foreground(prefs))
-            title.setShadowLayer(dp(2).toFloat(), 0f, dp(1).toFloat(), if (ThemeStyle.light(prefs)) 0xeeffffff.toInt() else 0xee000000.toInt())
-            title.gravity = Gravity.CENTER_VERTICAL or Gravity.START
-            title.maxLines = 2
-            title.ellipsize = TextUtils.TruncateAt.END
-            title.setTypeface(title.typeface, if (ThemeStyle.id(prefs) == ThemeStyle.DUNE) Typeface.NORMAL else Typeface.BOLD)
-            val caption = FrameLayout.LayoutParams(-1, -1)
-            if (ThemeStyle.id(prefs) != ThemeStyle.DUNE) {
-                val separator = View(this)
-                separator.setBackgroundColor(if (ThemeStyle.light(prefs)) 0x44708070 else 0x6682a2cf)
-                val rule = FrameLayout.LayoutParams(dp(1), -1)
-                rule.marginStart = logoWidth + dp(15)
-                rule.topMargin = dp(18)
-                rule.bottomMargin = dp(18)
-                tile.addView(separator, rule)
+        } else sky?.focusAccent = 0
+        sky?.invalidate()
+    }
+
+    private fun showTileOptions(app: PersonalApp) {
+        ThemeDialogBuilder(this).setTitle(app.name).setItems(arrayOf("App info", "Hide from launcher", "Move app", getString(R.string.h_category))) { _, which ->
+            if (which == 0) launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + app.info.activityInfo.packageName)))
+            else if (which == 2) startMoveMode(app)
+            else if (which == 3) HomeLibraryUi.category(this, app.info.activityInfo.packageName) { cachedApps?.let { renderApps(it) } }
+            else {
+                val hidden = HashSet(prefs.getStringSet("hidden_apps", emptySet()) ?: emptySet())
+                hidden.add(app.info.activityInfo.packageName)
+                prefs.edit().putStringSet("hidden_apps", hidden).apply()
+                refreshApps()
+                focusFirstApp()
             }
-            caption.marginStart = logoWidth + dp(24)
-            caption.marginEnd = dp(10)
-            tile.addView(title, caption)
-        } else if (tile !is GlassIconTile && tile !is HarmonyAppTile) tile.addView(icon, FrameLayout.LayoutParams(-1, -1))
-        tile.setOnFocusChangeListener { v, focus ->
-            if (tile is HarmonyAppTile) tile.appearance(focus || moving)
-            else if (tile is GlassIconTile) tile.appearance(app.accent, focus || moving)
-            else { tile.background = appSurface(app.accent, focus); if (!moving) tile.foreground = tileBorder(app.accent, focus) }
-            if (focus) focusedPkg = app.info.activityInfo.packageName
-            // Java passed null to clear the expansion; expandKey takes a non-null String,
-            // and "" behaves identically (HomeAppGrid.index returns -1 for both).
-            if (glassOs() && !harmony() && !moving) g.expandKey(if (focus) app.info.activityInfo.packageName else "")
-            if (!moving) {
-                // Focus zoom: gentle scale animation.
-                val scale = if (focus) (if (glassOs()) 1f else if (tvGlass()) 1.06f else 1.05f) else 1f
-                val sy = if (glassOs()) 1f else scale
-                val lift = 0f
-                v.animate().cancel()
-                if (harmony()) {
-                    v.scaleX = 1f
-                    v.scaleY = 1f
-                    v.translationY = 0f
-                } else if (MemoryProfile.effectiveTier(this, prefs) == MemoryProfile.TIER_LIGHT) {
-                    v.scaleX = scale
-                    v.scaleY = sy
-                    v.translationY = lift
-                } else v.animate().scaleX(scale).scaleY(sy).translationY(lift).setUpdateListener { _ -> g.refreshReflections() }.setDuration(if (tvGlass()) 180 else 150).start()
-                if (glassOs() && !harmony()) g.refreshReflections()
-            }
-            tile.translationZ = (if (focus && prefs.getBoolean("focus_glow", true)) dp(10) else 0).toFloat()
-            val tileParent = tile.parent
-            if (glassOs() && !harmony() && tileParent is View) tileParent.translationZ = (if (focus) dp(10) else 0).toFloat()
-            if (Build.VERSION.SDK_INT >= 28) {
-                tile.outlineAmbientShadowColor = app.accent
-                tile.outlineSpotShadowColor = app.accent
-            }
-            if (focus) {
-                if (glassOs()) { spotlightName = app.name; spotlightCategory = appCategory(app); updateGlassAccent(app.accent) }
-                if (!TvGlassStyle.enabled(prefs)) appHeading?.text = app.name
-                appHeading?.setTextColor(ThemeStyle.foreground(prefs))
-                val position = IntArray(2)
-                val origin = IntArray(2)
-                tile.getLocationInWindow(position)
-                val skyView = sky
-                if (skyView != null) {
-                    skyView.getLocationInWindow(origin)
-                    skyView.focusX = position[0] - origin[0] + tile.width / 2f
-                    skyView.focusY = position[1] - origin[1] + tile.height / 2f
-                    skyView.focusRadius = tile.width.toFloat()
-                    skyView.focusAccent = if (prefs.getBoolean("focus_glow", true)) app.accent else 0
-                    if (!tv) {
-                        // Parallax: wallpaper drifts slightly opposite to the focused tile,
-                        // vertical only — never sideways. (User 2026-11-01.)
-                        val cy = position[1] + tile.height / 2f
-                        val size = Point()
-                        windowManager.defaultDisplay.getSize(size)
-                        skyView.animate().translationX(0f)
-                                .translationY(if (perfAllows("parallax")) (size.y / 2f - cy) / size.y * dp(36) else 0f)
-                                .setDuration(350).start()
-                    }
-                }
-            } else sky?.focusAccent = 0
-            sky?.invalidate()
-        }
-        tile.setOnClickListener { v ->
-            val open = Runnable {
-                launch(Intent(Intent.ACTION_MAIN)
-                        .setClassName(app.info.activityInfo.packageName, app.info.activityInfo.name)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED))
-            }
-            if (carriedApp != null) { open.run(); return@setOnClickListener }
-            if (v is HarmonyAppTile && g.isHorizontalDock()) {
-                v.launchEffect(open)
-                return@setOnClickListener
-            }
-            v.animate().scaleX(if (glassOs()) 1f else 1.08f).scaleY(if (glassOs()) 1f else 1.08f).alpha(0.7f).setDuration(120).withEndAction {
-                v.scaleX = if (glassOs()) 1f else 1.05f
-                v.scaleY = if (glassOs()) 1f else 1.05f
-                v.alpha = 1f
-                open.run()
-            }.start()
-        }
-        tile.setOnLongClickListener { _ ->
-            ThemeDialogBuilder(this).setTitle(app.name).setItems(arrayOf("App info", "Hide from launcher", "Move app", getString(R.string.h_category))) { _, which ->
-                if (which == 0) launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + app.info.activityInfo.packageName)))
-                else if (which == 2) startMoveMode(app)
-                else if (which == 3) HomeLibraryUi.category(this, app.info.activityInfo.packageName) { cachedApps?.let { renderApps(it) } }
-                else {
-                    val hidden = HashSet(prefs.getStringSet("hidden_apps", emptySet()) ?: emptySet())
-                    hidden.add(app.info.activityInfo.packageName)
-                    prefs.edit().putStringSet("hidden_apps", hidden).apply()
-                    refreshApps()
-                    focusFirstApp()
-                }
-            }.show()
-            true
-        }
-        val position = FrameLayout.LayoutParams(-1, -2)
-        val spacing = Math.max(0, Math.min(2, prefs.getInt("tile_spacing", 1)))
-        val hm = if (harmony()) dp(3) else (if (tvGlass()) intArrayOf(dp(6), dp(10), dp(16)) else intArrayOf(dp(4), dp(8), dp(14)))[spacing]
-        val vm = if (harmony()) dp(4) else (if (glassOs()) intArrayOf(dp(6), dp(8), dp(12)) else if (tvGlass()) intArrayOf(dp(8), dp(12), dp(18)) else intArrayOf(dp(5), dp(10), dp(16)))[spacing]
-        position.width = width - hm * 2
-        position.height = if (ThemeStyle.custom(prefs)) Math.max(dp(54), Math.round(position.width / DemoGeometry.ratio())) + Math.round(DemoGeometry.footer(ThemeStyle.id(prefs), dp(1).toFloat())) else Math.round(position.width * 9f / 16f)
-        if (harmony()) { position.height = dp(HarmonyVisionLayout.dockTileHeightDp(resources.configuration.screenHeightDp)); position.width = -1 }
-        else if (glassOs()) { position.height = referenceCardHeight(width); position.width = -1 }
-        if (g.isHorizontalDock()) position.height += dp(HarmonyVisionLayout.DOCK_HEADROOM_DP)
-        position.setMargins(hm, vm, hm, vm)
-        tile.layoutParams = position
+        }.show()
+    }
+
+    private fun trackTileAttachment(tile: View, app: PersonalApp, g: HomeAppGrid<PersonalApp>) {
         tile.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(view: View) {
                 tileViews[app.info.activityInfo.packageName] = view
@@ -1951,138 +1783,6 @@ class PersonalHomeActivity : Activity() {
                 if (tileViews[app.info.activityInfo.packageName] === view) tileViews.remove(app.info.activityInfo.packageName)
             }
         })
-        return tile
-    }
-
-    private fun searchApps() {
-        val existing = searchDialog
-        if (existing != null && existing.isShowing) return
-        val form = LinearLayout(this)
-        form.orientation = LinearLayout.VERTICAL
-        form.setPadding(dp(16), dp(8), dp(16), dp(8))
-        val input = EditText(this)
-        input.isSingleLine = true
-        input.hint = "Search installed apps"
-        searchInput = input
-        input.imeOptions = EditorInfo.IME_ACTION_SEARCH
-        input.setTextColor(ThemeStyle.foreground(prefs))
-        input.setHintTextColor(ThemeStyle.muted(prefs))
-        applyAppFont(input)
-        input.setPadding(dp(16), dp(10), dp(16), dp(10))
-        input.background = toolbarSurface(false)
-        form.addView(input)
-        val results = LinearLayout(this)
-        results.orientation = LinearLayout.VERTICAL
-        val matches = ScrollView(this)
-        matches.addView(results)
-        form.addView(matches, LinearLayout.LayoutParams(-1, dp(if (tv) 250 else 300)))
-        val dialog = ThemeDialogBuilder(this).setTitle("Search apps").setView(form)
-                .setPositiveButton("Find on Play Store") { _, _ -> openStore(input.text.toString().trim()) }
-                .setNeutralButton("Voice search") { _, _ -> recognizeIntoSearch() }
-                .setNegativeButton("Close", null).create()
-        searchDialog = dialog
-        searchRefresh = Runnable {
-            results.removeAllViews()
-            val query = input.text.toString().trim().lowercase(Locale.ROOT)
-            val hidden = prefs.getStringSet("hidden_apps", emptySet())
-            var count = 0
-            val apps = cachedApps
-            if (apps != null) for (app in apps) {
-                if (hidden?.contains(app.info.activityInfo.packageName) == true || !(app.name + " " + app.info.activityInfo.packageName).lowercase(Locale.ROOT).contains(query)) continue
-                val result = GlassSettings.row(this, app.name, null, R.drawable.ic_apps, GlassSettings.themeAccent(this)) {
-                    searchDialog?.dismiss()
-                    launch(Intent(Intent.ACTION_MAIN).setClassName(app.info.activityInfo.packageName, app.info.activityInfo.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                }
-                val position = LinearLayout.LayoutParams(-1, -2)
-                position.setMargins(0, dp(4), 0, dp(4))
-                val appIcon = app.icon
-                if (result is LinearLayout && appIcon != null) {
-                    val resultIcon = result.getChildAt(0) as ImageView
-                    val state = appIcon.constantState
-                    resultIcon.setImageDrawable(if (state == null) appIcon else state.newDrawable(resources))
-                    resultIcon.clearColorFilter()
-                    resultIcon.scaleType = ImageView.ScaleType.FIT_CENTER
-                }
-                results.addView(result, position)
-                if (++count == 16) break
-            }
-            if (count == 0) results.addView(text(if (cachedApps == null) "Loading apps…" else "No installed matches. Find new apps on Play Store.", 15, MUTED))
-        }
-        input.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(value: CharSequence?, start: Int, count: Int, after: Int) { }
-            override fun onTextChanged(value: CharSequence?, start: Int, before: Int, count: Int) { searchRefresh?.run() }
-            override fun afterTextChanged(value: Editable?) { }
-        })
-        dialog.setOnDismissListener { searchRefresh = null; searchDialog = null; searchInput = null }
-        dialog.show()
-        GlassSettings.styleDialog(this, dialog)
-        searchRefresh?.run()
-    }
-
-    private fun launchAssistant(): Boolean {
-        return tryLaunch(Intent(Intent.ACTION_ASSIST)) || tryLaunch(Intent(Intent.ACTION_VOICE_COMMAND))
-                || tryLaunch(Intent(RecognizerIntent.ACTION_WEB_SEARCH))
-    }
-
-    private fun voiceSearch() { if (!launchAssistant()) recognizeIntoSearch() }
-
-    private fun recognizeIntoSearch() {
-        try {
-            startActivityForResult(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
-                    .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                    .putExtra(RecognizerIntent.EXTRA_PROMPT, "Search launcher apps"), 9)
-        } catch (unavailable: ActivityNotFoundException) {
-            if (!launchAssistant()) Toast.makeText(this, "Enable your TV's Assistant or speech service in system settings", Toast.LENGTH_LONG).show()
-        } catch (unavailable: SecurityException) {
-            if (!launchAssistant()) Toast.makeText(this, "Enable your TV's Assistant or speech service in system settings", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    /** YouTube search: tries the YouTube TV app first, falls back to browser. */
-    private fun youtubeSearch(query: String) {
-        val encoded = Uri.encode(query)
-        // Try YouTube TV app.
-        val appSearch = Intent(Intent.ACTION_SEARCH)
-                .setPackage("com.google.android.youtube.tv")
-                .putExtra("query", query)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (tryLaunch(appSearch)) return
-        // Try regular YouTube app.
-        val mobileSearch = Intent(Intent.ACTION_SEARCH)
-                .setPackage("com.google.android.youtube")
-                .putExtra("query", query)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (tryLaunch(mobileSearch)) return
-        // Fall back to browser.
-        launch(Intent(Intent.ACTION_VIEW,
-                Uri.parse("https://www.youtube.com/results?search_query=" + encoded))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    }
-
-    /** Returns true if any installed (non-hidden) app matches the query. */
-    private fun appMatches(query: String): Boolean {
-        val apps = cachedApps ?: return true // Apps not loaded yet; show search.
-        val q = query.trim().lowercase(Locale.ROOT)
-        val hidden = prefs.getStringSet("hidden_apps", emptySet())
-        for (app in apps) {
-            if (hidden?.contains(app.info.activityInfo.packageName) == true) continue
-            if ((app.name + " " + app.info.activityInfo.packageName).lowercase(Locale.ROOT).contains(q)) return true
-        }
-        return false
-    }
-
-    private fun openStore(query: String) {
-        if (query.isEmpty()) {
-            val store = packageManager.getLaunchIntentForPackage("com.android.vending")
-            if (store != null && tryLaunch(store)) return
-        }
-        val suffix = if (query.isEmpty()) "" else "search?q=" + Uri.encode(query) + "&c=apps"
-        val market = Intent(Intent.ACTION_VIEW, Uri.parse(if (query.isEmpty()) "market://apps" else "market://" + suffix))
-                .setPackage("com.android.vending")
-        if (!tryLaunch(market)) launch(Intent(Intent.ACTION_VIEW,
-                Uri.parse("https://play.google.com/store/" + if (suffix.isEmpty()) "apps" else suffix)))
     }
 
     private fun tryLaunch(target: Intent): Boolean {
@@ -2118,15 +1818,15 @@ class PersonalHomeActivity : Activity() {
         chooseSetting("Inputs", labels.toTypedArray()) { which -> launch(targets[which]) }
     }
 
-    private fun orderedApps(apps: List<App>): MutableList<App> {
-        val byPackage = LinkedHashMap<String, App>()
+    private fun orderedApps(apps: List<PersonalApp>): MutableList<PersonalApp> {
+        val byPackage = LinkedHashMap<String, PersonalApp>()
         for (app in apps) byPackage[app.info.activityInfo.packageName] = app
         val saved = ArrayList<String>()
         try {
             val array = org.json.JSONArray(prefs.getString("app_order", "[]"))
             for (i in 0 until array.length()) saved.add(array.getString(i))
         } catch (malformed: org.json.JSONException) { /* Fall back to alphabetical order. */ }
-        val result = ArrayList<App>()
+        val result = ArrayList<PersonalApp>()
         for (pkg in AppOrder.merge(ArrayList(byPackage.keys), saved)) result.add(byPackage[pkg]!!)
         return result
     }
@@ -2143,7 +1843,7 @@ class PersonalHomeActivity : Activity() {
         GlassSettings.options(this, "Rearrange apps", names, hints) { which -> moveApp(visible[which]) }
     }
 
-    private fun moveApp(moving: App) {
+    private fun moveApp(moving: PersonalApp) {
         val apps = cachedApps ?: return
         val ordered = orderedApps(apps)
         val visible = ArrayList(ordered)
@@ -2176,7 +1876,7 @@ class PersonalHomeActivity : Activity() {
         sky?.invalidate()
         updateSpotlight()
     }
-    private fun appCategory(app: App): String {
+    private fun appCategory(app: PersonalApp): String {
         val value = ApplicationInfo.getCategoryTitle(this, app.info.activityInfo.applicationInfo.category)
         return value?.toString() ?: "App"
     }
@@ -2215,9 +1915,9 @@ class PersonalHomeActivity : Activity() {
     private fun showSettingsUnlocked() {
         panel = HomeDashboard.show(this, networkStatus?.text.toString() ?: "", { gridState = null; buildHome() }, { action ->
             when (action) {
-                HomeDashboard.SETTINGS -> launcherSettings()
-                HomeDashboard.SEARCH -> searchApps()
-                HomeDashboard.STORE -> openStore("")
+                HomeDashboard.SETTINGS -> settingsMenus.launcherSettings()
+                HomeDashboard.SEARCH -> homeSearch.show()
+                HomeDashboard.STORE -> homeSearch.openStore("")
                 HomeDashboard.SCREENSAVER -> launch(Intent(this, LandscapeActivity::class.java))
                 HomeDashboard.CATEGORIES -> chooseCategoryFilter()
                 HomeDashboard.WIFI -> openSetting(Settings.ACTION_WIFI_SETTINGS)
@@ -2244,35 +1944,6 @@ class PersonalHomeActivity : Activity() {
     }
 
     /** Custom accent color picker (8 colors). Applies the Custom theme. */
-    private fun chooseAccentColor() {
-        val names = arrayOf("Cyan", "Orange", "Purple", "Green", "Red", "Yellow", "Pink", "White", "Black", "Graphite", "Silver", "Blue", "Teal", "Gold", "Rose", "Indigo")
-        val colors = intArrayOf(0xff40d9ff.toInt(), 0xffff9a5c.toInt(), 0xffb388ff.toInt(), 0xff69f0ae.toInt(), 0xffff5252.toInt(), 0xffffea00.toInt(), 0xffff80ab.toInt(), 0xffffffff.toInt(),
-                0xff000000.toInt(), 0xff343b46.toInt(), 0xffcbd3df.toInt(), 0xff508dff.toInt(), 0xff44c6bc.toInt(), 0xffe8c66a.toInt(), 0xffd890a5.toInt(), 0xff7986ed.toInt())
-        chooseSetting("Custom accent color", names) { which ->
-            prefs.edit().putInt("theme_name", 3).putInt("custom_accent", colors[which]).apply()
-            applyAppearance()
-            refreshApps()
-        }
-    }
-
-    private fun launcherSettings() {
-        val cats = arrayOf("Tiles", "Clock", "Theme", "Wallpaper", "Weather", "Apps", "System")
-        val catHints = arrayOf("App cards layout", "Time display", "Colors & appearance", "Background", "Widget, city and forecast", "Your apps", "Launcher system")
-        val catIcons = intArrayOf(R.drawable.ic_apps, R.drawable.ic_clock, R.drawable.ic_palette,
-                R.drawable.ic_picture, R.drawable.ic_brightness, R.drawable.ic_apps, R.drawable.ic_settings)
-        GlassSettings.options(this, "Launcher settings", cats, catHints, catIcons, { which ->
-            when (which) {
-                0 -> tileSettings()
-                1 -> clockSettings()
-                2 -> themeSettings()
-                3 -> wallpaperMenu()
-                4 -> weatherMenu()
-                5 -> appMenu()
-                else -> systemMenu()
-            }
-        }, { which -> showsSetting(cats[which]) })
-    }
-
     /** Subtle background behind the header (toggle in settings). */
     /**
      * Applies the performance profile. In Light mode, disables expensive effects:
@@ -2335,141 +2006,16 @@ class PersonalHomeActivity : Activity() {
     }
 
     /** Submenu helper with per-row icons. */
-    private fun subMenu(title: String, labels: Array<String>, hints: Array<String>, icons: IntArray, choices: Array<Runnable>) {
-        GlassSettings.options(this, title, labels, hints, icons, { which -> choices[which].run() },
-                { which -> showsSetting(labels[which]) })
-    }
-
-    private fun showsSetting(label: String): Boolean {
-        return when (label) {
-            "Tiles" -> !harmony()
-            "App columns", "Tile size", "Tile spacing", "Tile corners", "Logo size", "App label size" -> !harmony()
-            "Focus border" -> ThemeStyle.id(prefs) == ThemeStyle.CLASSIC
-            "Wallpaper focus glow" -> !gradientWallpaper()
-            "Launcher font" -> !ThemeStyle.fixedTypography(prefs)
-            "Clock style", "Clock shadow", "Hijri day adjustment" -> clockVisible()
-            "Clock size", "Time format", "Clock seconds" -> digitalClockVisible()
-            "Clock font" -> digitalClockVisible() && !ThemeStyle.fixedTypography(prefs)
-            "Clock alignment" -> digitalClockVisible() && !ThemeStyle.fixedTypography(prefs) && !weatherWidgetEnabled()
-            "Clock glow" -> clockVisible() && !gradientWallpaper()
-            "Glass edge" -> ThemeStyle.id(prefs) != ThemeStyle.CLASSIC || headerBgMode() != 0
-            "Glass finish" -> ThemeStyle.id(prefs) != ThemeStyle.CLASSIC || headerBgMode() == 1
-                        || (PanelTransparency.enabled(prefs) && GlassSettings.frostedAvailable(this))
-            "Wallpaper darkness", "Bottom shade" -> "solid" != prefs.getString("wallpaper_mode", if (glassOs()) "solid" else "mountains")
-            else -> true
-        }
-    }
-
     private fun clockVisible(): Boolean {
         return !prefs.getBoolean("hide_clock", false) && !prefs.getBoolean("apps_only", false)
-    }
-
-    private fun digitalClockVisible(): Boolean {
-        return clockVisible() && prefs.getInt("clock_style", 0) != 1
     }
 
     private fun gradientWallpaper(): Boolean {
         return glassOs() && "solid" == prefs.getString("wallpaper_mode", "solid")
     }
 
-    private fun appTitleSizeLabel(): String {
-        return if (ThemeStyle.id(prefs) == ThemeStyle.CLASSIC) "Focused app title size" else "App label size"
-    }
-
     private fun appLabelSizes(): IntArray {
         return if (glassOs()) intArrayOf(14, 16, 20, 22) else intArrayOf(14, 17, 20, 24)
-    }
-
-    private fun tileSettings() {
-        val labels = arrayOf("App columns", "Tile size", "Tile spacing", "Tile corners", "Logo size", appTitleSizeLabel(), "Focus border")
-        val hints = arrayOf("Number of cards per row", "Compact or large cards", "Gap between cards", "Sharp, rounded or round", "App logo size in cards", if (ThemeStyle.id(prefs) == ThemeStyle.CLASSIC) "Name above the app grid" else "App name on the tile", "Thin, normal or thick")
-        val icons = intArrayOf(R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_settings, R.drawable.ic_apps)
-        val choices = arrayOf<Runnable>(
-            Runnable { chooseSetting("App columns", arrayOf("Automatic", "2", "3", "4", "5", "6")) { which ->
-                prefs.edit().putInt(if (tv) "tv_columns" else "phone_columns", if (which == 0) 0 else which + 1).apply()
-                refreshApps()
-            } },
-            Runnable { chooseSetting("Tile size", arrayOf("Compact", "Large")) { which ->
-                prefs.edit().putBoolean("large_tiles", which == 1).putInt(if (tv) "tv_columns" else "phone_columns", 0).apply()
-                refreshApps()
-            } },
-            Runnable { chooseSetting("Tile spacing", arrayOf("Compact", "Normal", "Wide")) { which ->
-                prefs.edit().putInt("tile_spacing", which).apply()
-                refreshApps()
-            } },
-            Runnable { chooseSetting("Tile corners", arrayOf("Sharp", "Rounded", "Round")) { which ->
-                prefs.edit().putInt("tile_corners", which).apply()
-                buildHomeSoon()
-            } },
-            Runnable { chooseSetting("Logo size", arrayOf("Small", "Normal", "Large")) { which ->
-                prefs.edit().putInt("logo_size", which).apply()
-                appWorker.execute { IconCache(this).clear() }
-                cachedApps = null
-                loadApps()
-            } },
-            Runnable { chooseSetting(appTitleSizeLabel(), arrayOf("Small", "Normal", "Large", "Extra large")) { which ->
-                if (ThemeStyle.id(prefs) != ThemeStyle.CLASSIC) { prefs.edit().putInt("app_label_size", appLabelSizes()[which]).apply(); refreshApps() }
-                else { val size = intArrayOf(24, 32, 40, 48)[which]; prefs.edit().putInt("focus_title_size", size).apply(); appHeading?.setTextSize(size.toFloat()) }
-            } },
-            Runnable { chooseSetting("Focus border", arrayOf("Thin", "Normal", "Thick")) { which ->
-                prefs.edit().putInt("focus_border", which).apply()
-                refreshApps()
-            } }
-        )
-        subMenu("Tiles", labels, hints, icons, choices)
-    }
-
-    private fun clockSettings() {
-        if (harmony() && tv) { harmonyClockSettings(); return }
-        val labels = arrayOf("Clock size", "Clock style", "Clock font", "Time format", "Clock alignment", "Clock seconds", "Clock glow", "Clock shadow", "Hide clock", "Hide greeting", "Hijri day adjustment")
-        val hints = arrayOf("Small, normal or large", "Digital or analog", "Bold, serif or mono", "12-hour or 24-hour", "Left, center or right", "Show seconds", "Halo behind the clock", "Shadow for readability", "Hide the clock", "Hide the greeting", "Adjust for local moon sighting")
-        val icons = intArrayOf(R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock)
-        val choices = arrayOf<Runnable>(
-            Runnable { chooseSetting("Clock size", arrayOf("Small", "Normal", "Large")) { which ->
-                prefs.edit().putInt("clock_size", (if (ThemeStyle.custom(prefs)) DemoGeometry.clockSizes(tv) else if (tv) intArrayOf(42, 52, 62) else intArrayOf(36, 44, 52))[which]).apply()
-                buildHomeSoon()
-            } },
-            Runnable { chooseSetting("Clock style", arrayOf("Digital", "Analog")) { which ->
-                prefs.edit().putInt("clock_style", which).apply()
-                buildHomeSoon()
-            } },
-            Runnable { chooseSetting("Clock font", arrayOf("Bold", "Serif", "Mono")) { which ->
-                prefs.edit().putInt("clock_font", which).apply()
-                buildHomeSoon()
-            } },
-            Runnable { chooseSetting("Time format", arrayOf("12-hour", "24-hour")) { which ->
-                prefs.edit().putBoolean("time_24h", which == 1).apply()
-                updateClock()
-            } },
-            Runnable { chooseSetting("Clock alignment", arrayOf("Left", "Center", "Right")) { which ->
-                prefs.edit().putInt("clock_align", which).apply()
-                buildHomeSoon()
-            } },
-            Runnable { chooseSetting("Clock seconds", arrayOf("Off", "On")) { which ->
-                prefs.edit().putBoolean("clock_seconds", which == 1).apply()
-                handler.removeCallbacks(secondTick)
-                if (which == 1 && resumed) secondTick.run()
-                else updateClock()
-            } },
-            Runnable { chooseSetting("Clock glow", arrayOf("Off", "On")) { which ->
-                prefs.edit().putBoolean("clock_glow", which == 1).apply()
-                sky?.invalidate()
-            } },
-            Runnable { chooseSetting("Clock shadow", arrayOf("Off", "On")) { which ->
-                prefs.edit().putBoolean("clock_shadow", which == 1).apply()
-                buildHomeSoon()
-            } },
-            Runnable { chooseSetting("Hide clock", arrayOf("Show", "Hide")) { which ->
-                prefs.edit().putBoolean("hide_clock", which == 1).apply()
-                buildHomeSoon()
-            } },
-            Runnable { chooseSetting("Hide greeting", arrayOf("Show", "Hide")) { which ->
-                prefs.edit().putBoolean("hide_greeting", which == 1).apply()
-                buildHomeSoon()
-            } },
-            Runnable { chooseSetting("Hijri day adjustment", arrayOf("-2 days", "-1 day", "Calculated date", "+1 day", "+2 days")) { which -> prefs.edit().putInt("hijri_adjustment", which - 2).apply(); updateClock() } }
-        )
-        subMenu("Clock", labels, hints, icons, choices)
     }
 
     private fun switchVisualStyle(style: Int) {
@@ -2498,53 +2044,7 @@ class PersonalHomeActivity : Activity() {
     }
 
     private val themeMenuRefresh: Runnable = Runnable {
-        if (resumed && !isFinishing && !isDestroyed && !GlassSettings.showing(this)) themeSettings()
-    }
-
-    private fun themeSettings() {
-        // "Dark mode" removed 2026-11-01 (user): the theme glass color covers it.
-        val labels = arrayOf("Visual style", "Accent preset", "Custom accent color", "Launcher font", "Glass intensity", "Glass finish", "Glass edge", "Panel transparency", "Header background", "Reset current theme")
-        val hints = arrayOf("Switch theme", "Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels", "Soft, Clear or Frosted panels", "Reflection around glass surfaces", "Solid panels when off; app drawer stays transparent", "Status-bar glass in this theme", "Restore defaults for the active style")
-        val icons = intArrayOf(R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, android.R.drawable.ic_popup_sync)
-        val choices = arrayOf<Runnable>(
-            Runnable { chooseSetting("Visual style", arrayOf("Sadique Glass OS", "Classic", "Dune Loom", "Pearl Current", "Cobalt Rail", "Sage Fold", "Pine Mist", "Amber Night", "Harmony Vision"), this::switchVisualStyle) },
-            Runnable { chooseSetting("Accent preset", arrayOf(if (ThemeStyle.custom(prefs)) "Theme default" else if (harmony()) "Harmony Blue" else "Midnight Cyan", "Sunset Orange", "Deep Purple", "Custom")) { which ->
-                prefs.edit().putInt("theme_name", which).apply()
-                if (which == 3) chooseAccentColor()
-                else { applyAppearance(); refreshApps() }
-            } },
-            Runnable { chooseAccentColor() },
-            Runnable { chooseSetting("Launcher font", arrayOf("Default", "Serif", "Mono", "Light")) { which ->
-                prefs.edit().putInt("app_font", which).apply()
-                buildHomeSoon()
-            } },
-            Runnable { chooseSetting("Glass intensity", arrayOf("Airy", "Normal", "Solid")) { which ->
-                prefs.edit().putInt("glass_alpha", intArrayOf(30, 70, 100)[which]).apply()
-                buildHomeSoon()
-            } },
-            Runnable { chooseSetting("Glass finish", arrayOf("Soft", "Clear", "Frosted")) { which ->
-                prefs.edit().putInt("glass_finish", which).apply()
-                buildHomeSoon()
-            } },
-            Runnable { chooseSetting("Glass edge", arrayOf("Off", "Subtle", "Bright")) { which ->
-                prefs.edit().putInt("glass_edge", which).apply()
-                buildHomeSoon()
-            } },
-            Runnable { chooseSetting("Panel transparency", arrayOf("On", "Off")) { which ->
-                prefs.edit().putBoolean("panel_transparency", which == 0).apply()
-                buildHomeSoon()
-            } },
-            Runnable { chooseSetting("Header background", if (glassOs()) arrayOf("Off", "Glass") else arrayOf("Off", "Glass", "Frosted")) { which ->
-                prefs.edit().putInt("header_bg_mode", which).apply()
-                buildHomeSoon()
-            } },
-            Runnable { chooseSetting("Reset theme", arrayOf("Keep current settings", "Reset to original defaults")) { which ->
-                if (which == 1) {
-                    resetCurrentTheme()
-                }
-            } }
-        )
-        subMenu("Theme", labels, hints, icons, choices)
+        if (resumed && !isFinishing && !isDestroyed && !GlassSettings.showing(this)) settingsMenus.themeSettings()
     }
 
     private fun resetCurrentTheme() {
@@ -2572,115 +2072,8 @@ class PersonalHomeActivity : Activity() {
         Toast.makeText(this, "Theme settings reset to defaults", Toast.LENGTH_SHORT).show()
     }
 
-    private fun wallpaperMenu() {
-        // Removed 2026-11-01 (user): "Save as favorite", "Day / night wallpaper",
-        // "Smooth day/night", and the built-in Midnight mountains / Solid midnight options.
-        val labels = arrayOf("Wallpaper", "Wallpaper source", "Wallpaper darkness", "Bottom shade", "Wallpaper focus glow")
-        val hints = arrayOf("Your own picture", "Choose the home background", "Keep the landscape visible", "Dark gradient behind tiles", "Glow behind the focused app")
-        val icons = intArrayOf(R.drawable.ic_picture, R.drawable.ic_picture, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness)
-        val choices = arrayOf<Runnable>(
-            Runnable(::wallpaperSettings),
-            Runnable(::chooseWallpaperSource),
-            Runnable { chooseSetting("Wallpaper darkness", arrayOf("Light", "Medium", "Dark")) { which ->
-                prefs.edit().putInt("background_dim", which * 20).apply()
-                sky?.invalidate()
-            } },
-            Runnable { chooseSetting("Bottom shade", arrayOf("Off", "On")) { which ->
-                prefs.edit().putBoolean("bottom_shade", which == 1).apply()
-                sky?.invalidate()
-            } },
-            Runnable { chooseSetting("Wallpaper focus glow", arrayOf("On", "Off")) { which ->
-                prefs.edit().putBoolean("focus_glow", which == 0).apply()
-                sky?.focusAccent = 0
-                sky?.invalidate()
-            } }
-        )
-        subMenu("Wallpaper", labels, hints, icons, choices)
-    }
-
     private fun hasFavoriteWallpaper(): Boolean {
         return profileAsset("favorite_wallpaper.jpg").isFile
-    }
-
-    private fun chooseWallpaperSource() {
-        val sources = arrayListOf("Built-in", "Bing daily")
-        if (hasFavoriteWallpaper()) sources.add("Favorite")
-        if (glassOs()) sources.add("Gradient only")
-        chooseSetting("Wallpaper source", sources.toTypedArray()) { which ->
-            val gradient = "Gradient only" == sources[which]
-            prefs.edit().putInt("wallpaper_source", if (gradient) 0 else which)
-                    .putString("wallpaper_mode", if (gradient) "solid" else "mountains").apply()
-            buildHomeSoon()
-        }
-    }
-
-    private fun appMenu() {
-        if (harmony()) {
-            subMenu("Apps", arrayOf("Hide / unhide apps", "Rearrange apps"),
-                    arrayOf("Choose which apps appear", "Choose the order of app cards"),
-                    intArrayOf(R.drawable.ic_apps, R.drawable.ic_swap_vert),
-                    arrayOf<Runnable>(Runnable(::hiddenApps), Runnable(::rearrangeApps)))
-            return
-        }
-        val labels = arrayOf("Hide / unhide apps", "Rearrange apps", "Continue watching")
-        val hints = arrayOf("Choose which apps appear", "Choose the order of app cards", "Resume titles shared by your TV apps")
-        val icons = intArrayOf(R.drawable.ic_apps, R.drawable.ic_swap_vert, R.drawable.ic_livetv)
-        val choices = arrayOf<Runnable>(
-            Runnable(::hiddenApps),
-            Runnable(::rearrangeApps),
-            Runnable { chooseSetting("Continue watching", arrayOf("Show below apps", "Hide row", "Allow TV Watch Next access")) { which ->
-                if (which == 2) continueWatching?.requestAccess()
-                else {
-                    val settings = prefs.edit().putBoolean("continue_watching", which == 0)
-                    if (which == 0) settings.putBoolean("apps_only", false)
-                    settings.apply()
-                    buildHomeSoon()
-                }
-            } }
-        )
-        subMenu("Apps", labels, hints, icons, choices)
-    }
-
-    private fun systemMenu() {
-        val labels = arrayOf("Screensaver & weather", "Profile name & photo", "Performance", "Updates", "Export settings", "Import settings", "Reset layout & unhide apps", getString(R.string.compose_apps_menu))
-        val hints = arrayOf("Photos, weather & idle timer", "Name and local profile picture", "Light, Balanced or Full", "Automatic GitHub updates", "Save to a file", "Restore from a file", "Restore the default layout", getString(R.string.compose_apps_hint))
-        val icons = intArrayOf(R.drawable.ic_picture, R.drawable.ic_person, R.drawable.ic_settings, R.drawable.ic_internet, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_settings, R.drawable.ic_apps)
-        val choices = arrayOf<Runnable>(
-            Runnable(::screensaverSettings),
-            Runnable(::editProfile),
-            Runnable { chooseSetting("Performance", arrayOf("Auto", "Light", "Balanced", "Full")) { which ->
-                prefs.edit().putInt("perf_mode", which).apply()
-                applyPerformanceProfile()
-                buildHomeSoon()
-            } },
-            Runnable { LauncherUpdatesUi.show(this) },
-            Runnable(settingsTransfer::exportSettings),
-            Runnable(settingsTransfer::importSettings),
-            Runnable { ThemeDialogBuilder(this).setTitle("Reset layout and show all apps?").setPositiveButton("Reset") { _, _ ->
-                prefs.edit().remove("app_order").remove("hidden_apps").remove("tv_columns").remove("phone_columns").remove("large_tiles")
-                        .remove("focus_title_size").remove("clock_size").remove("background_dim").remove("theme_mode")
-                        .remove("wallpaper_mode").remove("focus_glow").remove("continue_watching")
-                        .remove("header_bg_mode").remove("header_bg").remove("header_blur").apply()
-                buildHomeSoon()
-            }.setNegativeButton(android.R.string.cancel, null).show() },
-            Runnable { startActivity(Intent(this, ComposeAppsActivity::class.java)) }
-        )
-        subMenu("System", labels, hints, icons, choices)
-    }
-
-    private fun wallpaperSettings() {
-        // Built-in Midnight mountains / Solid midnight removed 2026-11-01 (user).
-        chooseSetting("Home wallpaper", arrayOf("Choose picture", "Saved custom picture")) { which ->
-            if (which == 0) {
-                try { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), 8) }
-                catch (unavailable: ActivityNotFoundException) { Toast.makeText(this, "No image picker available on this device", Toast.LENGTH_LONG).show() }
-                catch (unavailable: SecurityException) { Toast.makeText(this, "No image picker available on this device", Toast.LENGTH_LONG).show() }
-            } else {
-                if (!profileAsset("personal-wallpaper.jpg").exists()) { Toast.makeText(this, "Choose a picture first", Toast.LENGTH_SHORT).show(); return@chooseSetting }
-                prefs.edit().putString("wallpaper_mode", "custom").putInt("wallpaper_source", 0).apply()
-                loadWallpaper()
-            }
-        }
     }
 
     private fun loadWallpaper() {
@@ -2748,62 +2141,6 @@ class PersonalHomeActivity : Activity() {
         if (apps != null) { renderApps(apps); grid?.rebind() } else loadApps()
         // Style preferences can change while app identities/content remain unchanged.
         continueWatching?.reload()
-    }
-
-    private fun hiddenApps() {
-        val apps = cachedApps
-        if (apps == null) { loadApps(); return }
-        val hidden = HashSet(prefs.getStringSet("hidden_apps", emptySet()) ?: emptySet())
-        val rows = LinearLayout(this)
-        rows.orientation = LinearLayout.VERTICAL
-        val dialog = GlassSettings.panel(this, "Show / hide apps", rows)
-        for (app in apps) {
-            val pkg = app.info.activityInfo.packageName
-            val row = GlassSettings.row(this, app.name, if (hidden.contains(pkg)) "Hidden · select to show" else "Visible · select to hide",
-                    R.drawable.ic_apps, accentColor(), Runnable {})
-            row.setOnClickListener { _ ->
-                if (!hidden.add(pkg)) hidden.remove(pkg)
-                prefs.edit().putStringSet("hidden_apps", HashSet(hidden)).apply()
-                val copy = (row as LinearLayout).getChildAt(1) as LinearLayout
-                (copy.getChildAt(1) as TextView).text = if (hidden.contains(pkg)) "Hidden · select to show" else "Visible · select to hide"
-                row.contentDescription = app.name + if (hidden.contains(pkg)) ", hidden" else ", visible"
-                refreshApps()
-            }
-            rows.addView(row)
-        }
-        dialog.show()
-    }
-
-    private fun weatherMenu() {
-        GlassSettings.options(this, "Weather", arrayOf("Home weather widget", "Widget animation", "Weather city", "Temperature unit", "Hourly / daily forecast"),
-            arrayOf("Saved separately for this theme", "Animate only while Home is visible", "Shared weather location", "Celsius or Fahrenheit", "Open weather details"),
-            intArrayOf(R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_picture, R.drawable.ic_brightness, R.drawable.ic_brightness), { which ->
-                if (which == 0) chooseSetting("Home weather widget", arrayOf("On", "Off")) { value ->
-                    val edit = prefs.edit().putBoolean("weather_widget", value == 0)
-                    if (value == 0) edit.putBoolean("apps_only", false)
-                    edit.apply()
-                    buildHomeSoon()
-                }
-                else if (which == 1) chooseSetting("Widget animation", arrayOf("On", "Off")) { value ->
-                    prefs.edit().putBoolean("weather_widget_animation", value == 0).apply()
-                    weatherWidget?.active(resumed)
-                }
-                else if (which == 2) WeatherSettings.show(this)
-                else if (which == 3) chooseSetting("Temperature unit", arrayOf("Celsius", "Fahrenheit")) { value -> prefs.edit().putBoolean("weather_fahrenheit", value == 1).apply() }
-                else homeWeatherController.showForecast()
-            }, { which -> if (which == 0) !(harmony() && tv) else which != 1 || weatherWidgetEnabled() })
-    }
-    private fun screensaverSettings() {
-        chooseSetting("Online landscape screensaver", arrayOf("Preview", "Weather city", "Temperature unit", "Start after idle", "Set automatic screensaver")) { which ->
-            if (which == 0) launch(Intent(this, LandscapeActivity::class.java))
-            else if (which == 1) WeatherSettings.show(this)
-            else if (which == 2) chooseSetting("Temperature unit", arrayOf("Celsius", "Fahrenheit")) { value -> prefs.edit().putBoolean("weather_fahrenheit", value == 1).apply() }
-            else if (which == 3) chooseSetting("Start screensaver after idle", arrayOf("Off", "2 minutes", "5 minutes", "10 minutes", "15 minutes")) { value ->
-                prefs.edit().putInt("idle_screensaver_minutes", intArrayOf(0, 2, 5, 10, 15)[value]).apply()
-                armIdleScreensaver()
-            }
-            else launch(Intent(this, ScreensaverSetupActivity::class.java))
-        }
     }
 
     private fun armIdleScreensaver() {
@@ -2925,8 +2262,7 @@ class PersonalHomeActivity : Activity() {
         override fun run() {
             if (!resumed) return
             val currentProfile = profile
-            val currentSearch = searchDialog
-            if ((currentProfile == null || !currentProfile.isShowing) && !homeOfferShowing && (currentSearch == null || !currentSearch.isShowing))
+            if ((currentProfile == null || !currentProfile.isShowing) && !homeOfferShowing && !homeSearch.isShowing)
                 GitHubUpdates.check(this@PersonalHomeActivity, false)
             handler.postDelayed(this, 60_000L)
         }
@@ -2935,8 +2271,7 @@ class PersonalHomeActivity : Activity() {
     private var homeOfferShowing = false
     private fun maybeOfferNotificationAccess() {
         val currentProfile = profile
-        val currentSearch = searchDialog
-        if (!resumed || homeOfferShowing || (currentProfile != null && currentProfile.isShowing) || (currentSearch != null && currentSearch.isShowing) || GlassSettings.showing(this)) return
+        if (!resumed || homeOfferShowing || (currentProfile != null && currentProfile.isShowing) || homeSearch.isShowing || GlassSettings.showing(this)) return
         NotificationAccessSetup.offer(this)
     }
 
@@ -2984,24 +2319,7 @@ class PersonalHomeActivity : Activity() {
     override fun onActivityResult(request: Int, result: Int, data: Intent?) {
         super.onActivityResult(request, result, data)
         if (settingsTransfer.onActivityResult(request, result, data)) return
-        if (request == 9) {
-            if (result == RESULT_OK && data != null) {
-                val words = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-                if (words != null && words.isNotEmpty()) {
-                    val query = words[0]
-                    // Google Home behavior: if an installed app matches, show it;
-                    // otherwise fall back to YouTube search.
-                    if (appMatches(query)) {
-                        if (searchDialog == null) searchApps()
-                        val input = searchInput
-                        if (input != null) { input.setText(query); input.setSelection(input.length()) }
-                    } else {
-                        youtubeSearch(query)
-                    }
-                }
-            }
-            return
-        }
+        if (request == 9) { homeSearch.onSpeechResult(result, data); return }
         if ((request != 7 && request != 8) || result != RESULT_OK || data == null || data.data == null) return
         val wallpaper = request == 8
         val uri = data.data!!
@@ -3102,7 +2420,7 @@ class PersonalHomeActivity : Activity() {
         super.onNewIntent(intent)
         setIntent(intent)
         panel?.dismiss()
-        searchDialog?.dismiss()
+        homeSearch.dismiss()
         focusFirstApp()
         handleHomeAction(intent)
     }
@@ -3110,7 +2428,7 @@ class PersonalHomeActivity : Activity() {
     private fun handleHomeAction(intent: Intent?) {
         if (intent == null) return
         if (MainActivity.ACTION_VIEW_INPUTS == intent.action) handler.post { showInputs() }
-        else if (MainActivity.ACTION_LAUNCHER_SETTINGS == intent.action) handler.post { LauncherPin.require(this, this::launcherSettings) }
+        else if (MainActivity.ACTION_LAUNCHER_SETTINGS == intent.action) handler.post { LauncherPin.require(this, settingsMenus::launcherSettings) }
         else if (MainActivity.ACTION_SHOW_SETTINGS == intent.action) handler.post(this::showSettings)
     }
 
@@ -3149,7 +2467,7 @@ class PersonalHomeActivity : Activity() {
         appLibrary?.close()
         panel?.dismiss()
         profile?.dismiss()
-        searchDialog?.dismiss()
+        homeSearch.dismiss()
         handler.removeCallbacksAndMessages(null)
         continueWatching?.stop()
         prefs.unregisterOnSharedPreferenceChangeListener(homePreferences)
@@ -3187,7 +2505,7 @@ class PersonalHomeActivity : Activity() {
         private val TEXT = 0xfff0f7ff.toInt()
         private val MUTED = 0xffa4bcd6.toInt()
 
-        private fun sameApps(before: List<App>?, after: List<App>): Boolean {
+        private fun sameApps(before: List<PersonalApp>?, after: List<PersonalApp>): Boolean {
             if (before == null || before.size != after.size) return false
             for (i in before.indices) {
                 val a = before[i]
