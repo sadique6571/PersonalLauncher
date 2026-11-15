@@ -74,7 +74,7 @@ internal class HomeAppGrid<T>(
         clipToPadding = false
         setPadding(0, 10, 0, 14)
         descendantFocusability = FOCUS_AFTER_DESCENDANTS
-        isPreserveFocusAfterLayout = true
+        preserveFocusAfterLayout = true
     }
 
     fun setReferenceExpansion(enabled: Boolean) {

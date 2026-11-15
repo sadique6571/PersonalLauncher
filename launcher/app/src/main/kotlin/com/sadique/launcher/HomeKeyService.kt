@@ -230,8 +230,8 @@ class HomeKeyService : AccessibilityService() {
         }
         // power_on_home, off by default. Not with boot_to_live_tv, or with Live TV picked as the Open on start app:
         // those open Live TV on purpose at boot.
-        val openOnStart = if (config.openOnStartChoice)
-            getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE).getString(OpenOnStart.KEY, "") else ""
+        val openOnStart = (if (config.openOnStartChoice)
+            getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE).getString(OpenOnStart.KEY, "") else "") ?: ""
         powerOnLiveTv = if (config.powerOnHome && !config.bootToLiveTv && config.liveTvPackage != openOnStart)
             config.liveTvPackage else ""
         powerOnAlways = config.powerOnHomeAlways && !config.bootToLiveTv && openOnStart.isEmpty()
@@ -454,7 +454,7 @@ class HomeKeyService : AccessibilityService() {
      *  alone. Held time, not repeats: key repeats are made after accessibility filtering, so none arrive here. */
     private fun redirectHomeKey(event: KeyEvent) {
         if (event.action == KeyEvent.ACTION_UP && !event.isCanceled &&
-            isShortPress(event.downTime, event.eventTime, ViewConfiguration.getLongPressTimeout())
+            isShortPress(event.downTime, event.eventTime, ViewConfiguration.getLongPressTimeout().toLong())
         ) {
             handler.postDelayed({ openHome() }, HOME_KEY_DELAY_MS)
         }

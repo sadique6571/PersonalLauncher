@@ -220,7 +220,7 @@ class LauncherSettingsActivity : Activity() {
             for (a in apps) seen = seen or (a[1] == pkg)
             if (!seen) apps.add(arrayOf(r.loadLabel(pm).toString(), pkg))
         }
-        Collections.sort(apps) { a, b -> a[0].compareToIgnoreCase(b[0]) }
+        Collections.sort(apps) { a, b -> a[0].compareTo(b[0], ignoreCase = true) }
         val labels = Array<CharSequence>(apps.size + 1) { i ->
             if (i == 0) getString(R.string.off) else apps[i - 1][0]
         }
@@ -246,7 +246,7 @@ class LauncherSettingsActivity : Activity() {
 
     /** The picked app's name, its package when it is gone, or Off. */
     private fun openOnStartLabel(): String {
-        val pkg = choices.getString(OpenOnStart.KEY, "")
+        val pkg = choices.getString(OpenOnStart.KEY, "") ?: ""
         if (pkg.isEmpty()) return getString(R.string.off)
         return try {
             val pm = packageManager

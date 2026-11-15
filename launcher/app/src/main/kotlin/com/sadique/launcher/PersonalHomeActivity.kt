@@ -149,7 +149,7 @@ class PersonalHomeActivity : Activity() {
     private var bluetooth: GlassBluetooth? = null
     private var telemetry: GlassTelemetry? = null
     private var appLibrary: AppLibraryDialog? = null
-    private var glassAccent = 0xffe50914
+    private var glassAccent = 0xffe50914.toInt()
     private fun harmony(): Boolean = ThemeStyle.harmony(prefs)
     private fun glassOs(): Boolean = ThemeStyle.id(prefs) == ThemeStyle.GLASS || harmony()
     private fun glassDefaults() {
@@ -219,22 +219,22 @@ class PersonalHomeActivity : Activity() {
         val thought = LinearLayout(this)
         thought.orientation = LinearLayout.VERTICAL
         thought.gravity = Gravity.CENTER_VERTICAL
-        stage.addView(thought, LinearLayout.LayoutParams(0, -2, 1))
-        val greetingValue = text(greetingText(), if (screenH < 470) 12 else 14, 0xffd7eaff)
+        stage.addView(thought, LinearLayout.LayoutParams(0, -2, 1f))
+        val greetingValue = text(greetingText(), if (screenH < 470) 12 else 14, 0xffd7eaff.toInt())
         harmonyGreetingValue = greetingValue
         greetingValue.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         thought.addView(greetingValue)
         val quoteValue = text(HarmonyDailyWords.forCalendar(Calendar.getInstance()),
-                if (screenW < 780) 19 else if (screenH < 470) 21 else 25, 0xffffffff)
+                if (screenW < 780) 19 else if (screenH < 470) 21 else 25, 0xffffffff.toInt())
         harmonyQuoteValue = quoteValue
         quoteValue.typeface = Typeface.create("sans-serif", Typeface.BOLD)
         quoteValue.maxLines = 3
         quoteValue.ellipsize = TextUtils.TruncateAt.END
-        quoteValue.setShadowLayer(dp(6).toFloat(), 0, dp(2).toFloat(), 0x88061627)
+        quoteValue.setShadowLayer(dp(6).toFloat(), 0f, dp(2).toFloat(), 0x88061627.toInt())
         val quote = LinearLayout.LayoutParams(-1, -2)
         quote.topMargin = dp(7)
         thought.addView(quoteValue, quote)
-        val dateValue = text("", 12, 0xffc0d3e3)
+        val dateValue = text("", 12, 0xffc0d3e3.toInt())
         harmonyDateValue = dateValue
         val dateParams = LinearLayout.LayoutParams(-1, -2)
         dateParams.topMargin = dp(10)
@@ -346,7 +346,7 @@ class PersonalHomeActivity : Activity() {
     private var avatarBitmap: Bitmap? = null
     private var customWallpaper: Bitmap? = null
     private var contrastKey: ClockSampleKey? = null
-    private var wallpaperClockInk = 0xffffffff
+    private var wallpaperClockInk = 0xffffffff.toInt()
     private var liquidBackdrop: LiquidBackdrop? = null
     private var headerBackdrop: LiquidBackdrop? = null
     private var continueWatching: ContinueWatchingView? = null
@@ -525,8 +525,8 @@ class PersonalHomeActivity : Activity() {
     private fun accentColor(): Int {
         if (ThemeStyle.custom(prefs) || harmony()) return GlassSettings.themeAccent(this)
         return when (prefs.getInt("theme_name", 0)) {
-            1 -> 0xffff9a5c // Sunset Orange
-            2 -> 0xffb388ff // Deep Purple
+            1 -> 0xffff9a5c.toInt() // Sunset Orange
+            2 -> 0xffb388ff.toInt() // Deep Purple
             3 -> prefs.getInt("custom_accent", CYAN)
             else -> CYAN // Midnight Cyan
         }
@@ -549,14 +549,14 @@ class PersonalHomeActivity : Activity() {
         // Theme-tinted glass (user 2026-11-01): the dark base takes the theme's hue.
         val accent = accentColor()
         val tint = 0.3f
-        val night = blend(if (focused) 0xff153d5b else 0xff092038, accent, tint)
-        val dayC = blend(if (focused) 0xff407596 else 0xff335975, accent, tint)
+        val night = blend(if (focused) 0xff153d5b.toInt() else 0xff092038.toInt(), accent, tint)
+        val dayC = blend(if (focused) 0xff407596.toInt() else 0xff335975.toInt(), accent, tint)
         shape.setColor(blend(night, dayC, day))
         // Glass intensity (user 2026-11-01): 0=airy, 100=solid. Focused stays a touch brighter.
         val intensity = Math.max(0, Math.min(100, prefs.getInt("glass_alpha", 70)))
         shape.setAlpha(PanelTransparency.alpha(ClassicGlassAlpha.card(intensity, focused), prefs, drawer))
         shape.cornerRadius = tileRadius().toFloat()
-        shape.setStroke(dp(if (focused) 3 else 1), if (focused) accent else 0xff28435e)
+        shape.setStroke(dp(if (focused) 3 else 1), if (focused) accent else 0xff28435e.toInt())
         return shape
     }
 
@@ -600,7 +600,7 @@ class PersonalHomeActivity : Activity() {
     private fun button(label: String, action: Runnable): Button {
         val view = Button(this)
         view.text = label
-        view.setTextSize(14)
+        view.setTextSize(14f)
         view.setTextColor(ThemeStyle.foreground(prefs))
         view.isAllCaps = false
         view.minHeight = dp(48)
@@ -718,7 +718,7 @@ class PersonalHomeActivity : Activity() {
         tileViews.clear()
         pageWidth = 0
         val root = FrameLayout(this)
-        root.setBackgroundColor(0xff031126)
+        root.setBackgroundColor(0xff031126.toInt())
         val oldSky = sky
         if (oldSky != null) handler.removeCallbacks(oldSky.crossfadeStep)
         val sky = SkyClock()
@@ -825,17 +825,17 @@ class PersonalHomeActivity : Activity() {
         identity.addView(greetView)
         if (glassOs()) {
             nameView.id = R.id.profileName
-            nameView.setTextSize(19)
+            nameView.setTextSize(19f)
             nameView.setTypeface(nameView.typeface, Typeface.BOLD)
             greetView.id = R.id.greeting
-            greetView.setTextSize(12)
+            greetView.setTextSize(12f)
             greetView.isAllCaps = false
             greetView.setTypeface(greetView.typeface, Typeface.BOLD)
             identity.removeView(greetView)
             identity.addView(greetView)
         }
-        identityCard.addView(identity, LinearLayout.LayoutParams(0, -2, 1))
-        val identityParams = LinearLayout.LayoutParams(0, -2, 1)
+        identityCard.addView(identity, LinearLayout.LayoutParams(0, -2, 1f))
+        val identityParams = LinearLayout.LayoutParams(0, -2, 1f)
         identityParams.marginEnd = dp(10)
         header.addView(identityCard, identityParams)
         val netStatus = text("", 13, MUTED)
@@ -863,7 +863,7 @@ class PersonalHomeActivity : Activity() {
         if (harmony()) weatherView.visibility = View.GONE
         bar.addView(weatherView, 0, LinearLayout.LayoutParams(-2, dp(44)))
         if (glassOs() && !harmony()) {
-            val btStatus = text("Bluetooth", 11, 0xffdbeafe)
+            val btStatus = text("Bluetooth", 11, 0xffdbeafe.toInt())
             bluetoothStatus = btStatus
             btStatus.id = R.id.btnBluetooth
             btStatus.maxWidth = dp(130)
@@ -921,7 +921,7 @@ class PersonalHomeActivity : Activity() {
         timeView.isSingleLine = true
         // Clock shadow for readability on bright wallpapers (toggle).
         if (prefs.getBoolean("clock_shadow", true)) {
-            timeView.setShadowLayer(dp(8).toFloat(), 0, dp(3).toFloat(), 0xcc000000)
+            timeView.setShadowLayer(dp(8).toFloat(), 0f, dp(3).toFloat(), 0xcc000000.toInt())
         }
         // Use the regular family with bold weight; the light family overrides the intended weight.
         timeView.typeface = Typeface.create(
@@ -934,7 +934,7 @@ class PersonalHomeActivity : Activity() {
         ampm = ampmView
         ampmView.isSingleLine = true
         if (prefs.getBoolean("clock_shadow", true)) {
-            ampmView.setShadowLayer(dp(4).toFloat(), 0, dp(2).toFloat(), 0xcc000000)
+            ampmView.setShadowLayer(dp(4).toFloat(), 0f, dp(2).toFloat(), 0xcc000000.toInt())
         }
         if (analogClockMode) {
             timeView.visibility = View.INVISIBLE
@@ -950,10 +950,10 @@ class PersonalHomeActivity : Activity() {
         val dateView = text("", if (ThemeStyle.custom(prefs)) if (tv) 20 else 16 else if (tv) 14 else 13, MUTED)
         date = dateView
         if (prefs.getBoolean("clock_shadow", true)) {
-            dateView.setShadowLayer(dp(6).toFloat(), 0, dp(2).toFloat(), 0xcc000000)
+            dateView.setShadowLayer(dp(6).toFloat(), 0f, dp(2).toFloat(), 0xcc000000.toInt())
         }
         dateView.gravity = if (weatherWidgetEnabled()) Gravity.START else Gravity.CENTER
-        if (glassOs()) { dateView.id = R.id.date; ampmView.id = R.id.ampm; ampmView.setTextSize(18) }
+        if (glassOs()) { dateView.id = R.id.date; ampmView.id = R.id.ampm; ampmView.setTextSize(18f) }
         val timeRow = LinearLayout(this)
         timeRow.orientation = LinearLayout.HORIZONTAL
         timeRow.gravity = Gravity.CENTER_VERTICAL or intArrayOf(Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END)[clockAlignment()]
@@ -968,17 +968,17 @@ class PersonalHomeActivity : Activity() {
         if (glassOs()) {
             timeView.typeface = Typeface.create("sans-serif", Typeface.BOLD)
             ampmView.typeface = Typeface.create("sans-serif", Typeface.BOLD)
-            val ampmBadge = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(if (harmony()) 0xff406c92 else 0xff1b3855, if (harmony()) 0xff183b65 else 0xff102941))
+            val ampmBadge = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(if (harmony()) 0xff406c92.toInt() else 0xff1b3855.toInt(), if (harmony()) 0xff183b65.toInt() else 0xff102941.toInt()))
             ampmBadge.cornerRadius = dp(10).toFloat()
             ampmBadge.setStroke(dp(1), 0x7796bdf5)
             ampmView.setTextColor(Color.WHITE)
-            ampmView.setTextSize(20)
+            ampmView.setTextSize(20f)
             ampmView.background = ampmBadge
             ampmView.setPadding(dp(8), dp(4), dp(8), dp(4))
             ampmView.minWidth = dp(56)
             ampmView.minHeight = dp(36)
             ampmView.gravity = Gravity.CENTER
-            ampmView.setShadowLayer(0, 0, 0, Color.TRANSPARENT)
+            ampmView.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
             clock.setPadding(0, 0, 0, 0)
             val islamicView = text("", 13, MUTED)
             islamicDate = islamicView
@@ -995,12 +995,12 @@ class PersonalHomeActivity : Activity() {
                 timeRow.addView(divider, line)
                 val dates = LinearLayout(this)
                 dates.orientation = LinearLayout.VERTICAL
-                dateView.setTextSize(18)
+                dateView.setTextSize(18f)
                 dateView.setTypeface(dateView.typeface, Typeface.BOLD)
                 dateView.gravity = Gravity.START
                 dates.addView(dateView)
                 dates.addView(islamicView)
-                timeRow.addView(dates, LinearLayout.LayoutParams(0, -2, 1))
+                timeRow.addView(dates, LinearLayout.LayoutParams(0, -2, 1f))
             }
         }
         if (!glassOs()) {
@@ -1023,15 +1023,15 @@ class PersonalHomeActivity : Activity() {
             val dates = LinearLayout(this)
             dates.orientation = LinearLayout.VERTICAL
             dates.gravity = Gravity.CENTER_VERTICAL
-            dateView.setTextSize(15)
+            dateView.setTextSize(15f)
             dateView.gravity = Gravity.START
             dateView.maxLines = 2
-            islamicDate?.setTextSize(13)
+            islamicDate?.setTextSize(13f)
             islamicDate?.maxLines = 2
             islamicDate?.setPadding(0, dp(10), 0, 0)
             dates.addView(dateView, LinearLayout.LayoutParams(-1, -2))
             dates.addView(islamicDate, LinearLayout.LayoutParams(-1, -2))
-            val dpDates = LinearLayout.LayoutParams(0, -2, 1)
+            val dpDates = LinearLayout.LayoutParams(0, -2, 1f)
             dpDates.marginStart = dp(16)
             analogRow.addView(dates, dpDates)
             clock.addView(analogRow, 0, LinearLayout.LayoutParams(-1, -2))
@@ -1056,7 +1056,7 @@ class PersonalHomeActivity : Activity() {
             if (r - l != orOld - ol && timeView.text.isNotEmpty()) fitClockText(timeView.text)
         }
         if (glassOs() && !harmony() && !analogClockMode) {
-            val spotlight = text("", 13, 0xffffffff)
+            val spotlight = text("", 13, 0xffffffff.toInt())
             focusedSpotlight = spotlight
             spotlight.isSingleLine = true
             spotlight.ellipsize = TextUtils.TruncateAt.END
@@ -1133,7 +1133,7 @@ class PersonalHomeActivity : Activity() {
             stage.gravity = Gravity.CENTER_VERTICAL or Gravity.END
             val wide = resources.configuration.screenWidthDp >= 700
             stage.orientation = if (wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-            if (wide) stage.addView(clock, LinearLayout.LayoutParams(0, -2, 1)) else stage.addView(clock, clockParams)
+            if (wide) stage.addView(clock, LinearLayout.LayoutParams(0, -2, 1f)) else stage.addView(clock, clockParams)
             val instruments = LinearLayout(this)
             instruments.gravity = Gravity.CENTER_VERTICAL or Gravity.END
             if (!wide) instruments.orientation = LinearLayout.VERTICAL
@@ -1168,10 +1168,10 @@ class PersonalHomeActivity : Activity() {
         } else scrollContent.addView(clock, clockParams)
         val referenceStage = glassOs() && !prefs.getBoolean("apps_only", false)
         scroll.addView(scrollContent, ViewGroup.LayoutParams(-1, -2))
-        page.addView(scroll, if (referenceStage) LinearLayout.LayoutParams(-1, 0, 1) else LinearLayout.LayoutParams(-1, -2))
+        page.addView(scroll, if (referenceStage) LinearLayout.LayoutParams(-1, 0, 1f) else LinearLayout.LayoutParams(-1, -2))
         if (harmony() || ThemeStyle.custom(prefs) || glassOs()) heading.visibility = View.GONE
         page.addView(heading)
-        page.addView(body, if (referenceStage) LinearLayout.LayoutParams(-1, referenceDockHeight()) else LinearLayout.LayoutParams(-1, 0, 1))
+        page.addView(body, if (referenceStage) LinearLayout.LayoutParams(-1, referenceDockHeight()) else LinearLayout.LayoutParams(-1, 0, 1f))
         // Focus-glow tracker: keep the wallpaper glow on the focused tile no matter
         // which scroller moved.
         val glowTracker = View.OnScrollChangeListener { _, _, _, _, _ ->
@@ -1485,9 +1485,9 @@ class PersonalHomeActivity : Activity() {
     }
 
     private fun weatherCacheKey(): String {
-        return prefs.getString("weather_lat", "") + ","
-                + prefs.getString("weather_lon", "") + ","
-                + prefs.getBoolean("weather_fahrenheit", false)
+        return prefs.getString("weather_lat", "") + "," +
+                prefs.getString("weather_lon", "") + "," +
+                prefs.getBoolean("weather_fahrenheit", false)
     }
 
     private val weatherRefresh: Runnable = Runnable(::refreshHomeWeather)
@@ -1502,7 +1502,7 @@ class PersonalHomeActivity : Activity() {
         status.text = if (ThemeStyle.custom(prefs)) "" else if (online) "Connected" else if (caps == null) "Disconnected" else "No internet access"
         status.contentDescription = if (online) "Network connected" else if (caps == null) "Network disconnected" else "Network without internet"
         status.tooltipText = if (online) (if (wifi) "Wi-Fi · Internet available" else "Internet available") else "No internet"
-        val color = if (online) 0xff59e493 else 0xffff6c78
+        val color = if (online) 0xff59e493.toInt() else 0xffff6c78.toInt()
         status.setTextColor(if (ThemeStyle.custom(prefs)) HeaderAppearance.foreground(prefs) else color)
         val iconId = if (wifi || caps == null) R.drawable.ic_wifi
                 else if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) R.drawable.ic_ethernet else R.drawable.ic_internet
@@ -1514,14 +1514,14 @@ class PersonalHomeActivity : Activity() {
         if (glassOs()) {
             val transport = if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) "Ethernet" else if (wifi || caps == null) "Wi-Fi" else "Internet"
             status.text = "● " + transport + " • " + if (online) "Online" else "No Internet"
-            status.setTextSize(11)
+            status.setTextSize(11f)
             icon?.setBounds(0, 0, dp(18), dp(18))
             status.setCompoundDrawables(icon, null, null, null)
-            status.setTextColor(if (online) 0xffdcfce7 else 0xfffee2e2)
+            status.setTextColor(if (online) 0xffdcfce7.toInt() else 0xfffee2e2.toInt())
             val state = GradientDrawable()
-            state.setColor(if (online) 0x8014532d else 0x947f1d1d)
+            state.setColor(if (online) 0x8014532d.toInt() else 0x947f1d1d.toInt())
             state.cornerRadius = dp(999).toFloat()
-            state.setStroke(dp(if (status.isFocused) 2 else 1), if (online) 0xb322c55e else 0xccef4444)
+            state.setStroke(dp(if (status.isFocused) 2 else 1), if (online) 0xb322c55e.toInt() else 0xccef4444.toInt())
             status.background = state
             val photo = avatar
             if (photo is AppAccentAvatar) photo.online(online)
@@ -1564,7 +1564,7 @@ class PersonalHomeActivity : Activity() {
                     // A package can be replaced or removed between queryIntentActivities and loading its resources.
                 }
             }
-            apps.sortWith { a, b -> a.name.compareToIgnoreCase(b.name) }
+            apps.sortWith { a, b -> a.name.compareTo(b.name, ignoreCase = true) }
             handler.post {
                 if (!isDestroyed && generation == appGeneration && !sameApps(cachedApps, apps)) renderApps(apps)
             }
@@ -1644,16 +1644,16 @@ class PersonalHomeActivity : Activity() {
         val canvas = Canvas(bitmap)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         if (square) {
-            paint.color = 0xff537d9a
+            paint.color = 0xff537d9a.toInt()
             canvas.drawRoundRect(5f, 5f, 91f, 91f, 21f, 21f, paint)
-            paint.color = 0xfff5fbff
+            paint.color = 0xfff5fbff.toInt()
             paint.textSize = 47f
             paint.typeface = Typeface.DEFAULT_BOLD
             paint.textAlign = Paint.Align.CENTER
             val letter = if (name.isEmpty()) "?" else name.substring(0, 1).uppercase(Locale.ROOT)
             canvas.drawText(letter, 48f, 64f, paint)
         } else {
-            if (!ThemeStyle.custom(prefs)) canvas.drawColor(0xff0d2036)
+            if (!ThemeStyle.custom(prefs)) canvas.drawColor(0xff0d2036.toInt())
             paint.color = if (ThemeStyle.custom(prefs)) accentColor() else 0x6640d9ff
             paint.textSize = 44f
             paint.textAlign = Paint.Align.CENTER
@@ -1950,7 +1950,7 @@ class PersonalHomeActivity : Activity() {
             logo.bottomMargin = dp(10)
             tile.addView(icon, logo)
             val title = text(app.name, prefs.getInt("app_label_size", if (tv) 17 else 14), ThemeStyle.foreground(prefs))
-            title.setShadowLayer(dp(2).toFloat(), 0, dp(1).toFloat(), if (ThemeStyle.light(prefs)) 0xeeffffff else 0xee000000)
+            title.setShadowLayer(dp(2).toFloat(), 0f, dp(1).toFloat(), if (ThemeStyle.light(prefs)) 0xeeffffff.toInt() else 0xee000000.toInt())
             title.gravity = Gravity.CENTER_VERTICAL or Gravity.START
             title.maxLines = 2
             title.ellipsize = TextUtils.TruncateAt.END
@@ -2364,7 +2364,7 @@ class PersonalHomeActivity : Activity() {
 
     private fun addQuickCard(strip: LinearLayout, title: String, icon: Int, tint: Int, action: Runnable) {
         val card = GlassSettings.wideCard(this, title, icon, tint) { panel?.dismiss(); action.run() }
-        val params = LinearLayout.LayoutParams(0, -2, 1)
+        val params = LinearLayout.LayoutParams(0, -2, 1f)
         val margin = dp(4)
         params.setMargins(margin, 0, margin, 0)
         strip.addView(card, params)
@@ -2377,8 +2377,8 @@ class PersonalHomeActivity : Activity() {
     /** Custom accent color picker (8 colors). Applies the Custom theme. */
     private fun chooseAccentColor() {
         val names = arrayOf("Cyan", "Orange", "Purple", "Green", "Red", "Yellow", "Pink", "White", "Black", "Graphite", "Silver", "Blue", "Teal", "Gold", "Rose", "Indigo")
-        val colors = intArrayOf(0xff40d9ff, 0xffff9a5c, 0xffb388ff, 0xff69f0ae, 0xffff5252, 0xffffea00, 0xffff80ab, 0xffffffff,
-                0xff000000, 0xff343b46, 0xffcbd3df, 0xff508dff, 0xff44c6bc, 0xffe8c66a, 0xffd890a5, 0xff7986ed)
+        val colors = intArrayOf(0xff40d9ff.toInt(), 0xffff9a5c.toInt(), 0xffb388ff.toInt(), 0xff69f0ae.toInt(), 0xffff5252.toInt(), 0xffffea00.toInt(), 0xffff80ab.toInt(), 0xffffffff.toInt(),
+                0xff000000.toInt(), 0xff343b46.toInt(), 0xffcbd3df.toInt(), 0xff508dff.toInt(), 0xff44c6bc.toInt(), 0xffe8c66a.toInt(), 0xffd890a5.toInt(), 0xff7986ed.toInt())
         chooseSetting("Custom accent color", names) { which ->
             prefs.edit().putInt("theme_name", 3).putInt("custom_accent", colors[which]).apply()
             applyAppearance()
@@ -2516,33 +2516,33 @@ class PersonalHomeActivity : Activity() {
         val hints = arrayOf("Number of cards per row", "Compact or large cards", "Gap between cards", "Sharp, rounded or round", "App logo size in cards", if (ThemeStyle.id(prefs) == ThemeStyle.CLASSIC) "Name above the app grid" else "App name on the tile", "Thin, normal or thick")
         val icons = intArrayOf(R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_apps, R.drawable.ic_settings, R.drawable.ic_apps)
         val choices = arrayOf<Runnable>(
-            { chooseSetting("App columns", arrayOf("Automatic", "2", "3", "4", "5", "6")) { which ->
+            Runnable { chooseSetting("App columns", arrayOf("Automatic", "2", "3", "4", "5", "6")) { which ->
                 prefs.edit().putInt(if (tv) "tv_columns" else "phone_columns", if (which == 0) 0 else which + 1).apply()
                 refreshApps()
             } },
-            { chooseSetting("Tile size", arrayOf("Compact", "Large")) { which ->
+            Runnable { chooseSetting("Tile size", arrayOf("Compact", "Large")) { which ->
                 prefs.edit().putBoolean("large_tiles", which == 1).putInt(if (tv) "tv_columns" else "phone_columns", 0).apply()
                 refreshApps()
             } },
-            { chooseSetting("Tile spacing", arrayOf("Compact", "Normal", "Wide")) { which ->
+            Runnable { chooseSetting("Tile spacing", arrayOf("Compact", "Normal", "Wide")) { which ->
                 prefs.edit().putInt("tile_spacing", which).apply()
                 refreshApps()
             } },
-            { chooseSetting("Tile corners", arrayOf("Sharp", "Rounded", "Round")) { which ->
+            Runnable { chooseSetting("Tile corners", arrayOf("Sharp", "Rounded", "Round")) { which ->
                 prefs.edit().putInt("tile_corners", which).apply()
                 buildHomeSoon()
             } },
-            { chooseSetting("Logo size", arrayOf("Small", "Normal", "Large")) { which ->
+            Runnable { chooseSetting("Logo size", arrayOf("Small", "Normal", "Large")) { which ->
                 prefs.edit().putInt("logo_size", which).apply()
                 appWorker.execute { IconCache(this).clear() }
                 cachedApps = null
                 loadApps()
             } },
-            { chooseSetting(appTitleSizeLabel(), arrayOf("Small", "Normal", "Large", "Extra large")) { which ->
+            Runnable { chooseSetting(appTitleSizeLabel(), arrayOf("Small", "Normal", "Large", "Extra large")) { which ->
                 if (ThemeStyle.id(prefs) != ThemeStyle.CLASSIC) { prefs.edit().putInt("app_label_size", appLabelSizes()[which]).apply(); refreshApps() }
                 else { val size = intArrayOf(24, 32, 40, 48)[which]; prefs.edit().putInt("focus_title_size", size).apply(); appHeading?.setTextSize(size.toFloat()) }
             } },
-            { chooseSetting("Focus border", arrayOf("Thin", "Normal", "Thick")) { which ->
+            Runnable { chooseSetting("Focus border", arrayOf("Thin", "Normal", "Thick")) { which ->
                 prefs.edit().putInt("focus_border", which).apply()
                 refreshApps()
             } }
@@ -2556,49 +2556,49 @@ class PersonalHomeActivity : Activity() {
         val hints = arrayOf("Small, normal or large", "Digital or analog", "Bold, serif or mono", "12-hour or 24-hour", "Left, center or right", "Show seconds", "Halo behind the clock", "Shadow for readability", "Hide the clock", "Hide the greeting", "Adjust for local moon sighting")
         val icons = intArrayOf(R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock, R.drawable.ic_clock)
         val choices = arrayOf<Runnable>(
-            { chooseSetting("Clock size", arrayOf("Small", "Normal", "Large")) { which ->
+            Runnable { chooseSetting("Clock size", arrayOf("Small", "Normal", "Large")) { which ->
                 prefs.edit().putInt("clock_size", (if (ThemeStyle.custom(prefs)) DemoGeometry.clockSizes(tv) else if (tv) intArrayOf(42, 52, 62) else intArrayOf(36, 44, 52))[which]).apply()
                 buildHomeSoon()
             } },
-            { chooseSetting("Clock style", arrayOf("Digital", "Analog")) { which ->
+            Runnable { chooseSetting("Clock style", arrayOf("Digital", "Analog")) { which ->
                 prefs.edit().putInt("clock_style", which).apply()
                 buildHomeSoon()
             } },
-            { chooseSetting("Clock font", arrayOf("Bold", "Serif", "Mono")) { which ->
+            Runnable { chooseSetting("Clock font", arrayOf("Bold", "Serif", "Mono")) { which ->
                 prefs.edit().putInt("clock_font", which).apply()
                 buildHomeSoon()
             } },
-            { chooseSetting("Time format", arrayOf("12-hour", "24-hour")) { which ->
+            Runnable { chooseSetting("Time format", arrayOf("12-hour", "24-hour")) { which ->
                 prefs.edit().putBoolean("time_24h", which == 1).apply()
                 updateClock()
             } },
-            { chooseSetting("Clock alignment", arrayOf("Left", "Center", "Right")) { which ->
+            Runnable { chooseSetting("Clock alignment", arrayOf("Left", "Center", "Right")) { which ->
                 prefs.edit().putInt("clock_align", which).apply()
                 buildHomeSoon()
             } },
-            { chooseSetting("Clock seconds", arrayOf("Off", "On")) { which ->
+            Runnable { chooseSetting("Clock seconds", arrayOf("Off", "On")) { which ->
                 prefs.edit().putBoolean("clock_seconds", which == 1).apply()
                 handler.removeCallbacks(secondTick)
                 if (which == 1 && resumed) secondTick.run()
                 else updateClock()
             } },
-            { chooseSetting("Clock glow", arrayOf("Off", "On")) { which ->
+            Runnable { chooseSetting("Clock glow", arrayOf("Off", "On")) { which ->
                 prefs.edit().putBoolean("clock_glow", which == 1).apply()
                 sky?.invalidate()
             } },
-            { chooseSetting("Clock shadow", arrayOf("Off", "On")) { which ->
+            Runnable { chooseSetting("Clock shadow", arrayOf("Off", "On")) { which ->
                 prefs.edit().putBoolean("clock_shadow", which == 1).apply()
                 buildHomeSoon()
             } },
-            { chooseSetting("Hide clock", arrayOf("Show", "Hide")) { which ->
+            Runnable { chooseSetting("Hide clock", arrayOf("Show", "Hide")) { which ->
                 prefs.edit().putBoolean("hide_clock", which == 1).apply()
                 buildHomeSoon()
             } },
-            { chooseSetting("Hide greeting", arrayOf("Show", "Hide")) { which ->
+            Runnable { chooseSetting("Hide greeting", arrayOf("Show", "Hide")) { which ->
                 prefs.edit().putBoolean("hide_greeting", which == 1).apply()
                 buildHomeSoon()
             } },
-            { chooseSetting("Hijri day adjustment", arrayOf("-2 days", "-1 day", "Calculated date", "+1 day", "+2 days")) { which -> prefs.edit().putInt("hijri_adjustment", which - 2).apply(); updateClock() } }
+            Runnable { chooseSetting("Hijri day adjustment", arrayOf("-2 days", "-1 day", "Calculated date", "+1 day", "+2 days")) { which -> prefs.edit().putInt("hijri_adjustment", which - 2).apply(); updateClock() } }
         )
         subMenu("Clock", labels, hints, icons, choices)
     }
@@ -2638,38 +2638,38 @@ class PersonalHomeActivity : Activity() {
         val hints = arrayOf("Switch theme", "Cyan, Orange, Purple or Custom", "Custom theme color", "Font for the launcher", "Transparency of panels", "Soft, Clear or Frosted panels", "Reflection around glass surfaces", "Solid panels when off; app drawer stays transparent", "Status-bar glass in this theme", "Restore defaults for the active style")
         val icons = intArrayOf(R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_palette, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, R.drawable.ic_brightness, android.R.drawable.ic_popup_sync)
         val choices = arrayOf<Runnable>(
-            { chooseSetting("Visual style", arrayOf("Sadique Glass OS", "Classic", "Dune Loom", "Pearl Current", "Cobalt Rail", "Sage Fold", "Pine Mist", "Amber Night", "Harmony Vision"), this::switchVisualStyle) },
-            { chooseSetting("Accent preset", arrayOf(if (ThemeStyle.custom(prefs)) "Theme default" else if (harmony()) "Harmony Blue" else "Midnight Cyan", "Sunset Orange", "Deep Purple", "Custom")) { which ->
+            Runnable { chooseSetting("Visual style", arrayOf("Sadique Glass OS", "Classic", "Dune Loom", "Pearl Current", "Cobalt Rail", "Sage Fold", "Pine Mist", "Amber Night", "Harmony Vision"), this::switchVisualStyle) },
+            Runnable { chooseSetting("Accent preset", arrayOf(if (ThemeStyle.custom(prefs)) "Theme default" else if (harmony()) "Harmony Blue" else "Midnight Cyan", "Sunset Orange", "Deep Purple", "Custom")) { which ->
                 prefs.edit().putInt("theme_name", which).apply()
                 if (which == 3) chooseAccentColor()
                 else { applyAppearance(); refreshApps() }
             } },
-            { chooseAccentColor() },
-            { chooseSetting("Launcher font", arrayOf("Default", "Serif", "Mono", "Light")) { which ->
+            Runnable { chooseAccentColor() },
+            Runnable { chooseSetting("Launcher font", arrayOf("Default", "Serif", "Mono", "Light")) { which ->
                 prefs.edit().putInt("app_font", which).apply()
                 buildHomeSoon()
             } },
-            { chooseSetting("Glass intensity", arrayOf("Airy", "Normal", "Solid")) { which ->
+            Runnable { chooseSetting("Glass intensity", arrayOf("Airy", "Normal", "Solid")) { which ->
                 prefs.edit().putInt("glass_alpha", intArrayOf(30, 70, 100)[which]).apply()
                 buildHomeSoon()
             } },
-            { chooseSetting("Glass finish", arrayOf("Soft", "Clear", "Frosted")) { which ->
+            Runnable { chooseSetting("Glass finish", arrayOf("Soft", "Clear", "Frosted")) { which ->
                 prefs.edit().putInt("glass_finish", which).apply()
                 buildHomeSoon()
             } },
-            { chooseSetting("Glass edge", arrayOf("Off", "Subtle", "Bright")) { which ->
+            Runnable { chooseSetting("Glass edge", arrayOf("Off", "Subtle", "Bright")) { which ->
                 prefs.edit().putInt("glass_edge", which).apply()
                 buildHomeSoon()
             } },
-            { chooseSetting("Panel transparency", arrayOf("On", "Off")) { which ->
+            Runnable { chooseSetting("Panel transparency", arrayOf("On", "Off")) { which ->
                 prefs.edit().putBoolean("panel_transparency", which == 0).apply()
                 buildHomeSoon()
             } },
-            { chooseSetting("Header background", if (glassOs()) arrayOf("Off", "Glass") else arrayOf("Off", "Glass", "Frosted")) { which ->
+            Runnable { chooseSetting("Header background", if (glassOs()) arrayOf("Off", "Glass") else arrayOf("Off", "Glass", "Frosted")) { which ->
                 prefs.edit().putInt("header_bg_mode", which).apply()
                 buildHomeSoon()
             } },
-            { chooseSetting("Reset theme", arrayOf("Keep current settings", "Reset to original defaults")) { which ->
+            Runnable { chooseSetting("Reset theme", arrayOf("Keep current settings", "Reset to original defaults")) { which ->
                 if (which == 1) {
                     resetCurrentTheme()
                 }
@@ -2712,15 +2712,15 @@ class PersonalHomeActivity : Activity() {
         val choices = arrayOf<Runnable>(
             Runnable(::wallpaperSettings),
             Runnable(::chooseWallpaperSource),
-            { chooseSetting("Wallpaper darkness", arrayOf("Light", "Medium", "Dark")) { which ->
+            Runnable { chooseSetting("Wallpaper darkness", arrayOf("Light", "Medium", "Dark")) { which ->
                 prefs.edit().putInt("background_dim", which * 20).apply()
                 sky?.invalidate()
             } },
-            { chooseSetting("Bottom shade", arrayOf("Off", "On")) { which ->
+            Runnable { chooseSetting("Bottom shade", arrayOf("Off", "On")) { which ->
                 prefs.edit().putBoolean("bottom_shade", which == 1).apply()
                 sky?.invalidate()
             } },
-            { chooseSetting("Wallpaper focus glow", arrayOf("On", "Off")) { which ->
+            Runnable { chooseSetting("Wallpaper focus glow", arrayOf("On", "Off")) { which ->
                 prefs.edit().putBoolean("focus_glow", which == 0).apply()
                 sky?.focusAccent = 0
                 sky?.invalidate()
@@ -2759,7 +2759,7 @@ class PersonalHomeActivity : Activity() {
         val choices = arrayOf<Runnable>(
             Runnable(::hiddenApps),
             Runnable(::rearrangeApps),
-            { chooseSetting("Continue watching", arrayOf("Show below apps", "Hide row", "Allow TV Watch Next access")) { which ->
+            Runnable { chooseSetting("Continue watching", arrayOf("Show below apps", "Hide row", "Allow TV Watch Next access")) { which ->
                 if (which == 2) continueWatching?.requestAccess()
                 else {
                     val settings = prefs.edit().putBoolean("continue_watching", which == 0)
@@ -2779,22 +2779,22 @@ class PersonalHomeActivity : Activity() {
         val choices = arrayOf<Runnable>(
             Runnable(::screensaverSettings),
             Runnable(::editProfile),
-            { chooseSetting("Performance", arrayOf("Auto", "Light", "Balanced", "Full")) { which ->
+            Runnable { chooseSetting("Performance", arrayOf("Auto", "Light", "Balanced", "Full")) { which ->
                 prefs.edit().putInt("perf_mode", which).apply()
                 applyPerformanceProfile()
                 buildHomeSoon()
             } },
-            { LauncherUpdatesUi.show(this) },
+            Runnable { LauncherUpdatesUi.show(this) },
             Runnable(::exportSettings),
             Runnable(::importSettings),
-            { ThemeDialogBuilder(this).setTitle("Reset layout and show all apps?").setPositiveButton("Reset") { _, _ ->
+            Runnable { ThemeDialogBuilder(this).setTitle("Reset layout and show all apps?").setPositiveButton("Reset") { _, _ ->
                 prefs.edit().remove("app_order").remove("hidden_apps").remove("tv_columns").remove("phone_columns").remove("large_tiles")
                         .remove("focus_title_size").remove("clock_size").remove("background_dim").remove("theme_mode")
                         .remove("wallpaper_mode").remove("focus_glow").remove("continue_watching")
                         .remove("header_bg_mode").remove("header_bg").remove("header_blur").apply()
                 buildHomeSoon()
             }.setNegativeButton(android.R.string.cancel, null).show() },
-            { startActivity(Intent(this, ComposeAppsActivity::class.java)) }
+            Runnable { startActivity(Intent(this, ComposeAppsActivity::class.java)) }
         )
         subMenu("System", labels, hints, icons, choices)
     }
@@ -2844,16 +2844,16 @@ class PersonalHomeActivity : Activity() {
         if (label == null) return
         if (glassOs() && label === networkStatus) return
         if (glassOs() && label === ampm) { label.setTextColor(Color.WHITE); return }
-        label.setTextColor(if (ThemeStyle.custom(prefs)) (if (muted) ThemeStyle.muted(prefs) else ThemeStyle.foreground(prefs)) else (if (muted) 0xE6FFFFFF else 0xFFFFFFFF))
+        label.setTextColor(if (ThemeStyle.custom(prefs)) (if (muted) ThemeStyle.muted(prefs) else ThemeStyle.foreground(prefs)) else (if (muted) 0xE6FFFFFF.toInt() else 0xFFFFFFFF.toInt()))
         val clockLabel = label === time || label === ampm || label === date || label === islamicDate
         val headerLabel = label === userName || label === greeting || label === homeWeather || label === networkStatus
         if (headerLabel) label.setTextColor(HeaderAppearance.foreground(prefs))
         if (glassOs() && label === networkStatus) return
         if (clockLabel) label.setTextColor(wallpaperClockInk)
-        if (clockLabel && !prefs.getBoolean("clock_shadow", true)) label.setShadowLayer(0, 0, 0, Color.TRANSPARENT)
+        if (clockLabel && !prefs.getBoolean("clock_shadow", true)) label.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
         else {
-            val darkInk = if (clockLabel) wallpaperClockInk != 0xffffffff else headerLabel && ThemeStyle.light(prefs) && headerBgMode() != 0
-            label.setShadowLayer(dp(if (clockLabel) 5 else 2).toFloat(), 0, dp(if (clockLabel) 2 else 1).toFloat(), if (darkInk) 0x99ffffff else 0xe6000000)
+            val darkInk = if (clockLabel) wallpaperClockInk != 0xffffffff.toInt() else headerLabel && ThemeStyle.light(prefs) && headerBgMode() != 0
+            label.setShadowLayer(dp(if (clockLabel) 5 else 2).toFloat(), 0f, dp(if (clockLabel) 2 else 1).toFloat(), if (darkInk) 0x99ffffff.toInt() else 0xe6000000.toInt())
         }
     }
 
@@ -2864,8 +2864,8 @@ class PersonalHomeActivity : Activity() {
         val photo = skyView.currentPicture()
         if (photo == null || photo.isRecycled) {
             contrastKey = null
-            val changed = wallpaperClockInk != 0xffffffff
-            wallpaperClockInk = 0xffffffff
+            val changed = wallpaperClockInk != 0xffffffff.toInt()
+            wallpaperClockInk = 0xffffffff.toInt()
             return changed
         }
         if (skyView.width <= 0 || skyView.height <= 0) return false
@@ -2881,7 +2881,7 @@ class PersonalHomeActivity : Activity() {
         val px = Math.max(0, Math.min(photo.width - 1, Math.round((x - frame[0]) / (frame[2] - frame[0]) * photo.width)))
         val py = Math.max(0, Math.min(photo.height - 1, Math.round((y - frame[1]) / (frame[3] - frame[1]) * photo.height)))
         val shade = HomeAppearance.shade(prefs.getString("theme_mode", "light"), skyView.minute, prefs.getInt("background_dim", 0))
-        val darkInk = 0xff11191c
+        val darkInk = 0xff11191c.toInt()
         val key = contrastKey
         if (key != null && key.matches(photo, px, py, shade, darkInk)) return false
         contrastKey = ClockSampleKey(photo, px, py, shade, darkInk)
@@ -2896,7 +2896,7 @@ class PersonalHomeActivity : Activity() {
             green += (pixel shr 8) and 255
             blue += pixel and 255
         }
-        val background = MaterialAppearance.mix(Color.rgb(red / 9, green / 9, blue / 9), 0xff051327, shade / 255f)
+        val background = MaterialAppearance.mix(Color.rgb(red / 9, green / 9, blue / 9), 0xff051327.toInt(), shade / 255f)
         // A white cloud or bright patch must not turn an otherwise colourful photo's clock black.
         var whiteWallpaper = true
         for (row in 0 until 3) {
@@ -2904,10 +2904,10 @@ class PersonalHomeActivity : Activity() {
             for (col in 0 until 3) {
                 val pixel = photo.getPixel(Math.min(photo.width - 1, Math.round(photo.width * (0.15f + 0.35f * col))),
                         Math.min(photo.height - 1, Math.round(photo.height * (0.15f + 0.35f * row))))
-                if (ThemeStyle.wallpaperClockInk(pixel, darkInk) == 0xffffffff) { whiteWallpaper = false; break }
+                if (ThemeStyle.wallpaperClockInk(pixel, darkInk) == 0xffffffff.toInt()) { whiteWallpaper = false; break }
             }
         }
-        val ink = if (whiteWallpaper) ThemeStyle.wallpaperClockInk(background, darkInk) else 0xffffffff
+        val ink = if (whiteWallpaper) ThemeStyle.wallpaperClockInk(background, darkInk) else 0xffffffff.toInt()
         val changed = ink != wallpaperClockInk
         wallpaperClockInk = ink
         return changed
@@ -2931,8 +2931,8 @@ class PersonalHomeActivity : Activity() {
     /** Index of the currently applied option for a settings chooser (-1 when none applies). (User 2026-11-01.) */
     private fun settingCurrentIndex(title: String): Int {
         return when (title) {
-            "Custom accent color" -> if (prefs.getInt("theme_name", 0) != 3) -1 else indexOf(intArrayOf(0xff40d9ff, 0xffff9a5c, 0xffb388ff, 0xff69f0ae, 0xffff5252, 0xffffea00, 0xffff80ab, 0xffffffff,
-                    0xff000000, 0xff343b46, 0xffcbd3df, 0xff508dff, 0xff44c6bc, 0xffe8c66a, 0xffd890a5, 0xff7986ed), prefs.getInt("custom_accent", 0))
+            "Custom accent color" -> if (prefs.getInt("theme_name", 0) != 3) -1 else indexOf(intArrayOf(0xff40d9ff.toInt(), 0xffff9a5c.toInt(), 0xffb388ff.toInt(), 0xff69f0ae.toInt(), 0xffff5252.toInt(), 0xffffea00.toInt(), 0xffff80ab.toInt(), 0xffffffff.toInt(),
+                    0xff000000.toInt(), 0xff343b46.toInt(), 0xffcbd3df.toInt(), 0xff508dff.toInt(), 0xff44c6bc.toInt(), 0xffe8c66a.toInt(), 0xffd890a5.toInt(), 0xff7986ed.toInt()), prefs.getInt("custom_accent", 0))
             "Panel transparency" -> if (PanelTransparency.enabled(prefs)) 0 else 1
             "Glass finish" -> TvGlassStyle.finish(prefs)
             "Glass edge" -> Math.max(0, Math.min(2, prefs.getInt("glass_edge", 1)))
@@ -3131,10 +3131,10 @@ class PersonalHomeActivity : Activity() {
             refreshProfile()
             refreshProfileAvatarPreview()
         }
-        val photoBtn = LinearLayout.LayoutParams(0, -2, 1)
+        val photoBtn = LinearLayout.LayoutParams(0, -2, 1f)
         photoBtn.setMargins(dp(4), dp(8), dp(4), dp(4))
         photoRow.addView(choose, photoBtn)
-        val photoBtn2 = LinearLayout.LayoutParams(0, -2, 1)
+        val photoBtn2 = LinearLayout.LayoutParams(0, -2, 1f)
         photoBtn2.setMargins(dp(4), dp(8), dp(4), dp(4))
         photoRow.addView(remove, photoBtn2)
         form.addView(photoRow)
@@ -3151,9 +3151,9 @@ class PersonalHomeActivity : Activity() {
             handler.post { maybeOfferDefaultHome() }
         }
         val later = button("Later") { profile?.dismiss() }
-        val saveParams = LinearLayout.LayoutParams(0, -2, 1)
+        val saveParams = LinearLayout.LayoutParams(0, -2, 1f)
         saveParams.setMargins(dp(4), dp(8), dp(4), 0)
-        val laterParams = LinearLayout.LayoutParams(0, -2, 1)
+        val laterParams = LinearLayout.LayoutParams(0, -2, 1f)
         laterParams.setMargins(dp(4), dp(8), dp(4), 0)
         actionRow.addView(save, saveParams)
         actionRow.addView(later, laterParams)
@@ -3826,8 +3826,8 @@ class PersonalHomeActivity : Activity() {
                 smoothDay = targetDay
             }
             val day = smoothDay
-            val top = blend(0xff020817, 0xff145d85, day)
-            val bottom = blend(0xff07172b, 0xff092b4a, day)
+            val top = blend(0xff020817.toInt(), 0xff145d85.toInt(), day)
+            val bottom = blend(0xff07172b.toInt(), 0xff092b4a.toInt(), day)
             paint.shader = LinearGradient(0f, 0f, 0f, height.toFloat(), top, bottom, Shader.TileMode.CLAMP)
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
             paint.shader = null
@@ -3857,7 +3857,7 @@ class PersonalHomeActivity : Activity() {
 
                 if (mountains && height > width) {
                     // Blend the portrait hero into midnight below the lake, keeping the ridge visible.
-                    val base = blend(0xff07172b, 0xff092b4a, day)
+                    val base = blend(0xff07172b.toInt(), 0xff092b4a.toInt(), day)
                     paint.shader = LinearGradient(0f, frame[3] * 0.78f, 0f, frame[3],
                             base and 0x00ffffff, base, Shader.TileMode.CLAMP)
                     canvas.drawRect(0f, frame[3] * 0.78f, width.toFloat(), frame[3], paint)
@@ -3866,13 +3866,13 @@ class PersonalHomeActivity : Activity() {
                 // Bottom shade: dark gradient behind tiles for readability (demo look).
                 if (prefs.getBoolean("bottom_shade", true)) {
                     paint.shader = LinearGradient(0f, height * 0.55f, 0f, height.toFloat(),
-                            Color.TRANSPARENT, 0x99000000, Shader.TileMode.CLAMP)
+                            Color.TRANSPARENT, 0x99000000.toInt(), Shader.TileMode.CLAMP)
                     canvas.drawRect(0f, height * 0.55f, width.toFloat(), height.toFloat(), paint)
                     paint.shader = null
                 }
             }
             if (focusAccent != 0 && focusRadius > 0) {
-                val glow = (focusAccent and 0x00ffffff) or if (ThemeStyle.light(prefs)) 0x33000000 else 0x80000000
+                val glow = (focusAccent and 0x00ffffff) or if (ThemeStyle.light(prefs)) 0x33000000 else 0x80000000.toInt()
                 paint.shader = RadialGradient(focusX, focusY, focusRadius, glow, Color.TRANSPARENT, Shader.TileMode.CLAMP)
                 canvas.drawCircle(focusX, focusY, focusRadius, paint)
                 paint.shader = null
@@ -3892,7 +3892,7 @@ class PersonalHomeActivity : Activity() {
                 val cx = Math.max(radius, Math.min(width - radius, if (clockX >= 0) clockX else width / 2f))
                 paint.shader = null
                 paint.style = Paint.Style.FILL
-                paint.color = if (ThemeStyle.light(prefs)) 0xccfff6e9 else 0x99000000
+                paint.color = if (ThemeStyle.light(prefs)) 0xccfff6e9.toInt() else 0x99000000.toInt()
                 canvas.drawCircle(cx, cy, radius, paint)
                 paint.style = Paint.Style.STROKE
                 paint.strokeWidth = dp(2).toFloat()
@@ -3932,7 +3932,7 @@ class PersonalHomeActivity : Activity() {
         border.setColor(Color.TRANSPARENT)
         border.cornerRadius = tileRadius().toFloat()
         val thickness = if (focused) intArrayOf(2, 3, 5)[Math.max(0, Math.min(2, prefs.getInt("focus_border", 1)))] else 1
-        border.setStroke(dp(thickness), if (tvGlass()) (if (focused) 0xfff4f8ff else TvGlassStyle.edge(prefs)) else (if (focused) accent else 0x4028435e))
+        border.setStroke(dp(thickness), if (tvGlass()) (if (focused) 0xfff4f8ff.toInt() else TvGlassStyle.edge(prefs)) else (if (focused) accent else 0x4028435e))
         val bevel = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(0x20ffffff, 0x00ffffff, 0x28000000))
         bevel.cornerRadius = tileRadius().toFloat()
@@ -3940,9 +3940,9 @@ class PersonalHomeActivity : Activity() {
     }
 
     companion object {
-        private const val CYAN = 0xff40d9ff
-        private const val TEXT = 0xfff0f7ff
-        private const val MUTED = 0xffa4bcd6
+        private val CYAN = 0xff40d9ff.toInt()
+        private val TEXT = 0xfff0f7ff.toInt()
+        private val MUTED = 0xffa4bcd6.toInt()
 
         /** Weather cache validity: 15 minutes. */
         private const val WEATHER_CACHE_MS = 15 * 60_000L

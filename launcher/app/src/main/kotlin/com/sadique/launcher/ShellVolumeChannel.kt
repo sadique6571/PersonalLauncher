@@ -38,7 +38,7 @@ internal class ShellVolumeChannel : AutoCloseable {
             activity = Class.forName("android.app.ActivityManager").getMethod("getService").invoke(null)
             activityType = Class.forName("android.app.IActivityManager")
             val type = activityType!!
-            val holder: Any?
+            var holder: Any?
             try {
                 holder = type.getMethod(
                     "getContentProviderExternal", String::class.java, Int::class.javaPrimitiveType,
@@ -54,7 +54,7 @@ internal class ShellVolumeChannel : AutoCloseable {
             acquired = true
             val provider = holder.javaClass.getField("provider").get(holder)
             val providerType = Class.forName("android.content.IContentProvider")
-            val response: Bundle?
+            var response: Bundle?
             if (Build.VERSION.SDK_INT >= 31) {
                 val source = AttributionSource.Builder(2000).setPackageName("com.android.shell").build()
                 val call: Method = providerType.getMethod(

@@ -115,7 +115,8 @@ internal class RemoteKeys private constructor() {
             }
             if (canceled || (sawDown && press.fired)) return
             // Without its DOWN (the service started while the button was held), the event's own down time will do.
-            open.accept(RemoteKeys.target(app, holdApp, eventTime - if (sawDown) press.downAt else downTime))
+            val target = RemoteKeys.target(app, holdApp, eventTime - if (sawDown) press.downAt else downTime)
+            if (target != null) open.accept(target)
         }
     }
 

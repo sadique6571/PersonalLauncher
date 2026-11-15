@@ -1449,7 +1449,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         val dock = HashSet<String>()
         dockInSession = dock
         dockedAtStart = adapter.dockFilled()
-        for (i in 0 until Math.min(dockedAtStart, adapter.movableCount())) dock.add(adapter.keyAt(i))
+        for (i in 0 until Math.min(dockedAtStart, adapter.movableCount())) adapter.keyAt(i)?.let { dock.add(it) }
         adapter.setReordering(true)
         if (adapter.hasEmptySlots()) reloadTiles()   // every position must hold a tile that can move
         reordering = true
@@ -1553,7 +1553,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
                 adapter.move(pos, slot)
                 adapter.move(adapter.positionOf(slotKey), pos)
             }
-            dockInSession!!.add(adapter.keyAt(slot))
+            adapter.keyAt(slot)?.let { dockInSession!!.add(it) }
             if (pos >= COLUMNS) dockInSession!!.remove(slotKey)
         }
         endReorder()
@@ -3060,8 +3060,8 @@ class MainActivity : Activity(), AppAdapter.TileListener {
      *  low-memory TV the app can push the launcher out of memory, and an apply() still in flight was lost then, so
      *  every Home press opened the app again. */
     private fun openLiveTvAfterBoot(): Boolean {
-        val app = if (openOnStartChoice) getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE)
-                .getString(OpenOnStart.KEY, "") else ""
+        val app = (if (openOnStartChoice) getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE)
+                .getString(OpenOnStart.KEY, "") else "") ?: ""
         if (!bootToLiveTv && app.isEmpty()) return false
         val boot = OpenOnStart.boot(this)
         val prefs = getSharedPreferences(OpenOnStart.BOOT_PREFS, MODE_PRIVATE)
@@ -3240,7 +3240,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
                 if (ha != hb) {
                     if (ha) -1 else 1
                 } else {
-                    String.valueOf(a.loadLabel(this)).compareTo(String.valueOf(b.loadLabel(this)), ignoreCase = true)
+                    a.loadLabel(this).toString().compareTo(b.loadLabel(this).toString(), ignoreCase = true)
                 }
             })
             // An HDMI-CEC device (an Apple TV, a soundbar) gets an input of its own whose parent is the

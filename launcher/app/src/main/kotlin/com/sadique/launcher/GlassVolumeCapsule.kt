@@ -35,32 +35,32 @@ internal class GlassVolumeCapsule(context: Context) : LinearLayout(context) {
         id = R.id.volumeCapsule
         orientation = VERTICAL
         gravity = Gravity.CENTER
-        setPadding(dp(10), dp(12), dp(10), dp(12))
+        setPadding(dp(10f), dp(12f), dp(10f), dp(12f))
         val shell: GradientDrawable
         if (ThemeStyle.id(prefs) == ThemeStyle.GLASS) {
             val finish = if (TvGlassStyle.finish(prefs) == 1) 0.65f else if (TvGlassStyle.finish(prefs) == 2) 1.2f else 1f
             val alpha = PanelTransparency.alpha(Math.min(245, Math.round((194 * TvGlassStyle.intensity(prefs)).toFloat() / 70f * finish)), prefs, false)
             shell = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf((alpha shl 24) or 0x132539, (Math.min(255, alpha + 26) shl 24) or 0x09182a))
-            shell.setStroke(dp(1), TvGlassStyle.edge(prefs))
+            shell.setStroke(dp(1f), TvGlassStyle.edge(prefs))
         } else if (ThemeStyle.harmony(prefs)) {
             shell = HarmonyVisionSurface.status(context)
         } else if (ThemeStyle.id(prefs) == ThemeStyle.CLASSIC) {
             shell = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(TvGlassStyle.tinted(0xff132539.toInt(), prefs), TvGlassStyle.tinted(0xff09182a.toInt(), prefs)))
-            shell.setStroke(dp(1), 0x55415a72)
+            shell.setStroke(dp(1f), 0x55415a72)
             shell.alpha = PanelTransparency.alpha(ClassicGlassAlpha.card(TvGlassStyle.intensity(prefs), false), prefs, false)
         } else {
-            shell = TvGlassStyle.surface(dp(999), dp(1), false, prefs)
+            shell = TvGlassStyle.surface(dp(999f), dp(1f), false, prefs)
         }
-        shell.cornerRadius = dp(999).toFloat()
+        shell.cornerRadius = dp(999f).toFloat()
         background = shell
         percent = label("—", 12, foreground)
         percent.id = R.id.volPercent
-        addView(percent, LayoutParams(-1, dp(24)))
+        addView(percent, LayoutParams(-1, dp(24f)))
         track = Track(context, prefs)
         track.id = R.id.volTrack
-        addView(track, LayoutParams(dp(38), 0, 1f))
+        addView(track, LayoutParams(dp(38f), 0, 1f))
         val caption = label(if (ThemeStyle.harmony(prefs)) "SOUND" else "VOL", if (ThemeStyle.harmony(prefs)) 9 else 10, ThemeStyle.muted(prefs))
-        addView(caption, LayoutParams(-1, dp(24)))
+        addView(caption, LayoutParams(-1, dp(24f)))
         isFocusable = false
     }
 
@@ -160,16 +160,16 @@ internal class GlassVolumeCapsule(context: Context) : LinearLayout(context) {
         private fun place() {
             val symbol = symbolDrawable
             if (symbol != null) {
-                val side = dp(22)
+                val side = dp(22f)
                 val left = (width - side) / 2
-                val bottom = height - dp(14)
+                val bottom = height - dp(14f)
                 symbol.setBounds(left, bottom - side, left + side, bottom)
             }
         }
 
         override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
             super.onSizeChanged(w, h, ow, oh)
-            bounds.set(dp(1).toFloat(), dp(1).toFloat(), (w - dp(1)).toFloat(), (h - dp(1)).toFloat())
+            bounds.set(dp(1f).toFloat(), dp(1f).toFloat(), (w - dp(1f)).toFloat(), (h - dp(1f)).toFloat())
             outline.reset()
             outline.addRoundRect(bounds, w / 2f, w / 2f, Path.Direction.CW)
             place()
@@ -196,7 +196,7 @@ internal class GlassVolumeCapsule(context: Context) : LinearLayout(context) {
                 c.restoreToCount(save)
             }
             paint.style = Paint.Style.STROKE
-            paint.strokeWidth = dp(1).toFloat()
+            paint.strokeWidth = dp(1f).toFloat()
             paint.color = if (light) 0x24000000 else 0x29ffffff
             c.drawRoundRect(bounds, width / 2f, width / 2f, paint)
             paint.style = Paint.Style.FILL
@@ -204,7 +204,7 @@ internal class GlassVolumeCapsule(context: Context) : LinearLayout(context) {
             if (symbol != null) {
                 var save = c.save()
                 c.clipRect(0f, 0f, width.toFloat(), top)
-                symbol.setColorFilter(foreground, PorterDuff.Mode.SRC_IN)
+                symbol.setColorFilter(this@GlassVolumeCapsule.foreground, PorterDuff.Mode.SRC_IN)
                 symbol.draw(c)
                 c.restoreToCount(save)
                 save = c.save()

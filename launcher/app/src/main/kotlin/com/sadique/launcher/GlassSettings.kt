@@ -127,7 +127,7 @@ internal object GlassSettings {
         val glass = TvGlassStyle.enabled(prefs)
         val frosted = PanelTransparency.enabled(prefs) && TvGlassStyle.finish(prefs) == 2
         val blur = frostedAvailable(context) && frosted
-        val window = dialog.window
+        val window = dialog.window ?: return
         if (Build.VERSION.SDK_INT >= 31) {
             val attrs = window.attributes
             if (blur) window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)

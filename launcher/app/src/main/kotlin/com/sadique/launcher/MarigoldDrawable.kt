@@ -230,7 +230,7 @@ class MarigoldDrawable(private val density: Float) : Drawable() {
         val b: Rect = bounds
         if (b.isEmpty) return
         val s = minOf(b.width(), b.height()).toFloat() / BOX
-        val save = if (alphaValue < 255) c.saveLayerAlpha(b.left, b.top, b.right, b.bottom, alphaValue) else c.save()
+        val save = if (alphaValue < 255) c.saveLayerAlpha(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(), alphaValue) else c.save()
         c.clipRect(b)
         c.translate(b.exactCenterX() - C * s, b.exactCenterY() - C * s)
         c.scale(s, s)
@@ -244,12 +244,12 @@ class MarigoldDrawable(private val density: Float) : Drawable() {
                 val l = Math.cos(Math.toRadians((angles[i][j] + rot - LIGHT_DEG).toDouble())).toFloat()
                 val base = colors[i][j]
                 fill.color = if (l >= 0f) lerp(base, LIT, 0.3f * l) else lerp(base, SHADOWED, -0.24f * l)
-                c.drawPath(ring[j], fill)
+                c.drawPath(ring[j]!!, fill)
                 edge.color = edges[i][j]
-                c.drawPath(ring[j], edge)
+                c.drawPath(ring[j]!!, edge)
             }
             c.restore()
-            c.drawCircle(C + SHADOW_DX, C + SHADOW_DY, shadowR[i], shadowPaints[i])
+            c.drawCircle(C + SHADOW_DX, C + SHADOW_DY, shadowR[i], shadowPaints[i]!!)
         }
 
         c.save()

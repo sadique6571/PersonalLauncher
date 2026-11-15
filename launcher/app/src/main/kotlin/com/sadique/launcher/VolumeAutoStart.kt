@@ -42,7 +42,7 @@ internal class VolumeAutoStart private constructor() {
         private fun prefs(c: Context): SharedPreferences = c.getSharedPreferences(PREFS, 0)
 
         @JvmStatic
-        fun status(c: Context): String = prefs(c).getString("status", "Off · one-time pairing required")
+        fun status(c: Context): String = prefs(c).getString("status", "Off · one-time pairing required") ?: "Off · one-time pairing required"
 
         private fun state(c: Context, value: String) {
             prefs(c).edit().putString("status", value).apply()

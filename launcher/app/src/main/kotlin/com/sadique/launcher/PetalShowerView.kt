@@ -209,9 +209,9 @@ class PetalShowerView @JvmOverloads constructor(
             c.translate(x, y)
             c.rotate(angle)
             c.scale(len * sx, len)
-            c.drawPath(shapes[shape[i]], fill)
-            c.drawPath(shapes[shape[i]], edge)
-            c.drawPath(veins[shape[i]], vein)
+            shapes[shape[i]]?.let { c.drawPath(it, fill) }
+            shapes[shape[i]]?.let { c.drawPath(it, edge) }
+            veins[shape[i]]?.let { c.drawPath(it, vein) }
             c.restore()
         }
         postInvalidateOnAnimation()

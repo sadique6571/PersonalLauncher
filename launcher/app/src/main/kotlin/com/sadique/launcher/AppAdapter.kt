@@ -9,7 +9,7 @@ import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.content.res.Resources
 import android.graphics.Bitmap
-import android.graphics.BitmapDrawable
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Outline
@@ -459,7 +459,7 @@ class AppAdapter internal constructor(
     private val showLibrary: Boolean
 
     /** Packages with a leanback entry at the last reload(): their tiles launch with the leanback category. */
-    private var leanbackPackages: Set<String> = HashSet<>()
+    private var leanbackPackages: Set<String> = HashSet()
     private val showHomeSettings: Boolean
 
     /** Calmer motion for weak GPUs (config.xml, reduced_motion): no overshoot, shorter fades. */
@@ -520,7 +520,7 @@ class AppAdapter internal constructor(
      * Rebuilds the tiles. A shown module card stands in for every tile of its package (same component,
      * so focus follows it); hidden_apps wins over a card, and a card's package in dock_apps takes that slot.
      */
-    fun reload(cards: List<Cards.Card>, leanback: List<ResolveInfo>) {
+    internal fun reload(cards: List<Cards.Card>, leanback: List<ResolveInfo>) {
         val pm = ctx.packageManager
         // The LEANBACK query is shared with the module-card check (MainActivity); copy it before adding
         // library apps so the caller's list stays as it was.
@@ -560,7 +560,7 @@ class AppAdapter internal constructor(
             // Same cleaner as the card prompt: an app label with a bidi override or line separator must not
             // redraw the tile name as something else (#117).
             val label = if (card != null) card.label else Cards.cleanLabel(
-                if (appLabels.containsKey(pkg)) appLabels[pkg] else String.valueOf(ri.loadLabel(pm)), pkg)
+                if (appLabels.containsKey(pkg)) appLabels[pkg] else ri.loadLabel(pm).toString(), pkg)
             if (!seen.add(pkg + "\n" + label)) continue
             var banner: Drawable? = null
             // uniform_tiles draws the icon, so an app's banner is never loaded. A module card keeps its banner.
@@ -591,7 +591,7 @@ class AppAdapter internal constructor(
                     val ca = a.kind == Entry.CARD
                     val cb = b.kind == Entry.CARD
                     if (ca != cb) (if (ca) -1 else 1)
-                    else a.label.compareToIgnoreCase(b.label)
+                    else a.label.compareTo(b.label, ignoreCase = true)
                 }
             }
         })

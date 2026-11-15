@@ -188,8 +188,8 @@ internal class Cards private constructor() {
                 val pkg = ai.packageName
                 tiles.add(ComponentName(pkg, ai.name).flattenToString())
                 try {
-                    addName(names, String.valueOf(ri.loadLabel(pm)), pkg)
-                    addName(names, String.valueOf(ai.applicationInfo.loadLabel(pm)), pkg)
+                    addName(names, ri.loadLabel(pm).toString(), pkg)
+                    addName(names, ai.applicationInfo.loadLabel(pm).toString(), pkg)
                 } catch (e: Exception) {
                     Log.w(TAG, "$pkg: label unreadable, $e") // an app with broken resources; not a card problem
                 }
@@ -306,7 +306,7 @@ internal class Cards private constructor() {
             // another app's name on an update either.
             if (isReserved(folded, uiNames)) throw CardException("label '${d.label}' is reserved")
             if (pending && isTaken(folded, pkg, names)) throw CardException("label '${d.label}' is the name of another installed app")
-            val appLabel = cleanLabel(String.valueOf(ai.applicationInfo.loadLabel(pm)), pkg)
+            val appLabel = cleanLabel(ai.applicationInfo.loadLabel(pm).toString(), pkg)
             if (pending && isTaken(fold(appLabel), pkg, names)) throw CardException("app label '$appLabel' is the name of another installed app")
 
             return Card(pkg, component, d.label, appLabel, d.caption, d.accent, sigDigest, state)
@@ -350,7 +350,7 @@ internal class Cards private constructor() {
 
         @JvmStatic
         fun byLabel(a: Card, b: Card): Int {
-            val c = a.label.compareToIgnoreCase(b.label)
+            val c = a.label.compareTo(b.label, ignoreCase = true)
             return if (c != 0) c else a.pkg.compareTo(b.pkg)
         }
 

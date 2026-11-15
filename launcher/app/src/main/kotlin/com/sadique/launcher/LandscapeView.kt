@@ -275,9 +275,9 @@ class LandscapeView(context: Context) : FrameLayout(context) {
         val connected = caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
         val color = if (connected) 0xff59e493.toInt() else 0xffff6c78.toInt()
         val image = if (caps == null || caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) R.drawable.ic_wifi else R.drawable.ic_internet
-        val icon = context.getDrawable(image).mutate()
-        icon.setTint(color)
-        icon.setBounds(0, 0, dp(24), dp(24))
+        val icon = context.getDrawable(image)?.mutate()
+        icon?.setTint(color)
+        icon?.setBounds(0, 0, dp(24), dp(24))
         wifi.setCompoundDrawables(icon, null, null, null)
         wifi.compoundDrawablePadding = dp(8)
         wifi.text = if (connected) "Online" else "No internet"

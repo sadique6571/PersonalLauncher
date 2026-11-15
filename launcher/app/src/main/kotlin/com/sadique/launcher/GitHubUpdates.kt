@@ -71,7 +71,7 @@ internal class GitHubUpdates private constructor() {
         }
 
         @JvmStatic
-        fun status(c: Context): String = prefs(c).getString("status", "Checks GitHub while Home is open")
+        fun status(c: Context): String = prefs(c).getString("status", "Checks GitHub while Home is open") ?: "Checks GitHub while Home is open"
 
         private fun state(c: Context, value: String) {
             prefs(c).edit().putString("status", value).apply()

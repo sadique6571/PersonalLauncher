@@ -69,7 +69,7 @@ internal class AppLibraryDialog(
         private fun loadLabel(pm: PackageManager, app: ResolveInfo): String {
             val pkg = app.activityInfo.packageName
             try {
-                return Cards.cleanLabel(String.valueOf(app.loadLabel(pm)), pkg)
+                return Cards.cleanLabel(app.loadLabel(pm).toString(), pkg)
             } catch (e: RuntimeException) {
                 return pkg
             }
@@ -387,7 +387,7 @@ internal class AppLibraryDialog(
         header.gravity = Gravity.CENTER_VERTICAL
         header.setPadding(dp(12), dp(4), dp(8), dp(4))
         val title = text(activity.getString(R.string.app_library), 22, Color.WHITE)
-        header.addView(title, LinearLayout.LayoutParams(0, dp(36), 1))
+        header.addView(title, LinearLayout.LayoutParams(0, dp(36), 1f))
         title.gravity = Gravity.CENTER_VERTICAL or (if (rtl) Gravity.RIGHT else Gravity.LEFT)
         title.setSingleLine(true)
         title.ellipsize = TextUtils.TruncateAt.END
@@ -461,7 +461,7 @@ internal class AppLibraryDialog(
                 }
             }
         })
-        panel.addView(sh, LinearLayout.LayoutParams(-1, 0, 1))
+        panel.addView(sh, LinearLayout.LayoutParams(-1, 0, 1f))
         var position = Math.min(selectedPosition, apps.size - 1)
         for (i in apps.indices) {
             if (apps[i].activityInfo.packageName == selectedPackage) {
@@ -517,9 +517,9 @@ internal class AppLibraryDialog(
                 val card = holder.itemView
                 val params = card.layoutParams as RecyclerView.LayoutParams
                 selectedOffset = if (rtl)
-                    cat.width - cat.paddingRight - cat.layoutManager.getDecoratedRight(card) - params.rightMargin
+                    cat.width - cat.paddingRight - (cat.layoutManager?.getDecoratedRight(card) ?: 0) - params.rightMargin
                 else
-                    cat.layoutManager.getDecoratedLeft(card) - params.leftMargin - cat.paddingLeft
+                    (cat.layoutManager?.getDecoratedLeft(card) ?: 0) - params.leftMargin - cat.paddingLeft
             }
             // Advance through missing shortcuts instead of following the newly checked app
             // into the Home group. Preserve its screen slot when the catalogue is rebuilt.
@@ -545,9 +545,9 @@ internal class AppLibraryDialog(
                 val card = holder.itemView
                 val params = card.layoutParams as RecyclerView.LayoutParams
                 selectedOffset = if (rtl)
-                    cat.width - cat.paddingRight - cat.layoutManager.getDecoratedRight(card) - params.rightMargin
+                    cat.width - cat.paddingRight - (cat.layoutManager?.getDecoratedRight(card) ?: 0) - params.rightMargin
                 else
-                    cat.layoutManager.getDecoratedLeft(card) - params.leftMargin - cat.paddingLeft
+                    (cat.layoutManager?.getDecoratedLeft(card) ?: 0) - params.leftMargin - cat.paddingLeft
             }
         }
         selectedPackage = if (next >= 0) apps[next].activityInfo.packageName else app.activityInfo.packageName
@@ -623,7 +623,7 @@ internal class AppLibraryDialog(
         var menuWidth = dp(220)
         for (i in 0 until rows.childCount) {
             val title: TextView = rows.getChildAt(i).findViewById(R.id.title)
-            menuWidth = Math.max(menuWidth, Math.ceil(title.paint.measureText(title.text.toString())).toInt() + dp(58))
+            menuWidth = Math.max(menuWidth, Math.ceil(title.paint.measureText(title.text.toString()).toDouble()).toInt() + dp(58))
             title.ellipsize = TextUtils.TruncateAt.END
         }
         menuWidth = Math.min(menuWidth, panel.width - dp(24))
@@ -657,9 +657,9 @@ internal class AppLibraryDialog(
             row.setOnFocusChangeListener { v, focused -> v.setBackground(GlassSettings.background(activity, focused)) }
         }
         row.isFocusableInTouchMode = true
-        row.findViewById(R.id.icon).visibility = View.GONE
-        row.findViewById(R.id.dot).visibility = View.GONE
-        row.findViewById(R.id.status).visibility = View.GONE
+        row.findViewById<View>(R.id.icon).visibility = View.GONE
+        row.findViewById<View>(R.id.dot).visibility = View.GONE
+        row.findViewById<View>(R.id.status).visibility = View.GONE
         row.setOnClickListener { action.run() }
         rows.addView(row)
         row.setOnKeyListener { v, key, event ->

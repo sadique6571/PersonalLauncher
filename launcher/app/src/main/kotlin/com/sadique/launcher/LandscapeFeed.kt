@@ -251,7 +251,7 @@ internal class LandscapeFeed {
                     !fitsWidescreen(xmlDimension(image, "width"), xmlDimension(image, "height"))
                 ) continue
                 val title = xmlText(item, MEDIA_RSS, "title")
-                val description = xmlText(item, null, "description").replaceAll("<[^>]*>", " ")
+                val description = xmlText(item, null, "description").replace(Regex("<[^>]*>"), " ")
                 val tags = xmlText(item, MEDIA_RSS, "category")
                 val text = "$title $description $tags"
                 if (!landscapeSubject(title, "$description $tags") ||
@@ -326,7 +326,7 @@ internal class LandscapeFeed {
         }
 
         private fun publicDomainPhotoLicense(license: String): Boolean {
-            return license.matches("https?://creativecommons\\.org/publicdomain/(?:zero|mark)/1\\.0(?:/[^?#]*)?")
+            return license.matches(Regex("https?://creativecommons\\.org/publicdomain/(?:zero|mark)/1\\.0(?:/[^?#]*)?"))
         }
 
         private fun bing(market: String, archiveStart: Int): MutableList<Scene> {
@@ -497,7 +497,7 @@ internal class LandscapeFeed {
 
         private fun metadata(metadata: JSONObject, key: String): String {
             val field = metadata.optJSONObject(key)
-            return if (field == null) "" else field.optString("value").replaceAll("<[^>]*>", " ").trim()
+            return if (field == null) "" else field.optString("value").replace(Regex("<[^>]*>"), " ").trim()
         }
 
         @JvmStatic
@@ -530,17 +530,17 @@ internal class LandscapeFeed {
                 val path = uri.path
                 return when (uri.host) {
                     "live.staticflickr.com" -> uri.rawQuery == null && FLICKR_IMAGE.matcher(path).matches()
-                    "images.unsplash.com" -> path.matches("/photo-[0-9]+-[a-f0-9]+")
+                    "images.unsplash.com" -> path.matches(Regex("/photo-[0-9]+-[a-f0-9]+"))
                     "www.bing.com" -> "/th" == path && uri.query != null &&
-                        uri.query.matches("id=OHR\\.[A-Za-z0-9_.-]+_1920x1080\\.jpg")
+                        uri.query.matches(Regex("id=OHR\\.[A-Za-z0-9_.-]+_1920x1080\\.jpg"))
                     "thumb.wikimedia.org",
                     "upload.wikimedia.org" -> path.startsWith("/wikipedia/commons/") &&
-                        path.lowercase(Locale.ROOT).matches(".+\\.jpe?g")
-                    "wallspapers.org" -> path.matches("/download/[a-f0-9]{10}/fhd")
+                        path.lowercase(Locale.ROOT).matches(Regex(".+\\.jpe?g"))
+                    "wallspapers.org" -> path.matches(Regex("/download/[a-f0-9]{10}/fhd"))
                     "www.publicdomainpictures.net" ->
-                        path.matches("/pictures/[0-9]+/velka/[A-Za-z0-9_-]+\\.jpg")
-                    "npgallery.nps.gov" -> path.matches("/GetAsset/[a-f0-9-]{36}/original\\.jpg")
-                    "c.pxhere.com" -> path.matches("/photos/[a-f0-9]{2}/[a-f0-9]{2}/[a-z0-9_-]+\\.jpg!d")
+                        path.matches(Regex("/pictures/[0-9]+/velka/[A-Za-z0-9_-]+\\.jpg"))
+                    "npgallery.nps.gov" -> path.matches(Regex("/GetAsset/[a-f0-9-]{36}/original\\.jpg"))
+                    "c.pxhere.com" -> path.matches(Regex("/photos/[a-f0-9]{2}/[a-f0-9]{2}/[a-z0-9_-]+\\.jpg!d"))
                     "oceanexplorer.noaa.gov" -> path.startsWith("/wp-content/uploads/") &&
                         path.lowercase(Locale.ROOT).endsWith(".jpg")
                     else -> false

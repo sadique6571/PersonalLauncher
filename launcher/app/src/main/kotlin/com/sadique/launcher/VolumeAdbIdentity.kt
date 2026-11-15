@@ -13,7 +13,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.math.BigInteger
 import java.security.KeyFactory
-import java.security.KeyGenerator
+import javax.crypto.KeyGenerator
 import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.PrivateKey
