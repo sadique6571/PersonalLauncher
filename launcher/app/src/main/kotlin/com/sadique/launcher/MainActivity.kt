@@ -2080,14 +2080,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
             }
         }
         if (position < adapter.movableCount()) addSettingsMenuRow(rows, popup, R.string.tile_move) {
-            if (beginReorder()) {
-                val at = adapter.positionOf(key)   // beginReorder can rebuild the tiles
-                if (at >= 0) {
-                    focusTile(at)
-                    pickUp(at)
-                    Toast.makeText(this, R.string.reorder_hint, Toast.LENGTH_LONG).show()
-                }
-            }
+            reorder.startMoving(key)
         }
         if (appLibraryEnabled) addSettingsMenuRow(rows, popup, R.string.library_remove_shortcut) {
             if (LibraryApps.save(this, pkg, false)) reloadApps(false)

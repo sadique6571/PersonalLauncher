@@ -117,6 +117,15 @@ internal class LauncherReorderController(
         Toast.makeText(host, R.string.reorder_hint, Toast.LENGTH_LONG).show()
     }
 
+    fun startMoving(key: String) {
+        if (!beginReorder()) return
+        val position = adapter.positionOf(key)
+        if (position < 0) return
+        focusTile(position)
+        pickUp(position)
+        Toast.makeText(host, R.string.reorder_hint, Toast.LENGTH_LONG).show()
+    }
+
     /** The start shared by reorder and edit-dock mode. False when there is nothing to move. */
     private fun beginReorder(): Boolean {
         if (adapter.movableCount() < 2) return false
