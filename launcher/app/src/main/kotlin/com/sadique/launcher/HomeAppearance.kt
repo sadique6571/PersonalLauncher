@@ -1,5 +1,7 @@
 package com.sadique.launcher
 
+import android.graphics.Color
+
 /** Wallpaper framing and contrast rules shared by Home and its settings cards. */
 object HomeAppearance {
     @JvmStatic
@@ -37,5 +39,11 @@ object HomeAppearance {
         val left = (width - photoWidth) / 2f
         val top = if (mountains) 0f else (height - photoHeight) / 2f
         return floatArrayOf(left, top, left + photoWidth, top + photoHeight)
+    }
+
+    internal fun blend(a: Int, b: Int, part: Float): Int {
+        return Color.rgb((Color.red(a) + (Color.red(b) - Color.red(a)) * part).toInt(),
+                (Color.green(a) + (Color.green(b) - Color.green(a)) * part).toInt(),
+                (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * part).toInt())
     }
 }
