@@ -24,7 +24,6 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
-import android.text.TextUtils
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.SoundEffectConstants
@@ -157,6 +156,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     /** Optional time-of-day backdrop (config.xml, sky_intensity); 0 keeps it hidden. */
     private lateinit var sky: SkyView
     private lateinit var btnVpn: TextView
+    private lateinit var menus: LauncherMenus
     private lateinit var networkPills: LauncherNetworkPills
     private lateinit var springX: SpringAnimation
     private lateinit var springY: SpringAnimation
@@ -442,7 +442,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         lunarOffset = Lunar.offsetFor(cfg.lunarUtcOffset, Locale.getDefault())
         if (lunar) lunarDate.visibility = View.VISIBLE
         greetingName = cfg.greetingName
-        if (cfg.dateBelowClock) moveDateBelowClock()
+        if (cfg.dateBelowClock) LauncherHeaderLayout.moveDateBelowClock(this, density)
         if (shamsi) {
             shamsiDate.visibility = View.VISIBLE
             val date = findViewById<TextView>(R.id.date)
@@ -614,14 +614,13 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         btnReorder.visibility = if (cfg.reorderButton) View.VISIBLE else View.GONE
         if (!cfg.showNetworkPill) btnWifi.visibility = View.GONE
         showInputsPill = cfg.showInputsPill
-        showInputsMenuRow = cfg.showInputsPill
         btnLibraryTop = findViewById(R.id.btnLibraryTop)
         btnLibraryTop.setOnClickListener {
             onLibraryRequested()
             libraryFromTopBar = true   // closing it goes back to this button, not to the pill after the last row
         }
         btnLibraryTop.visibility = if (cfg.libraryButton && cfg.appLibrary) View.VISIBLE else View.GONE
-        addTopBarApps(cfg.topBarApps, cfg.launchActions)
+        LauncherHeaderLayout.addApps(this, cfg, btnWifi, btnVpn, density, topAppButtons, this::open)
         iconOnlyButtons = cfg.iconOnlyButtons
         topMenu = cfg.topMenu
         networkPills = LauncherNetworkPills(
@@ -636,7 +635,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
             (btnSettings as TextView).setText(R.string.settings)
             (btnSettings as TextView).setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_settings, 0, 0, 0)
             if (!iconOnlyButtons) makeIconOnly(btnSettings as TextView)
-            btnSettings.setOnClickListener { showTopMenu() }
+            btnSettings.setOnClickListener { menus.showTopMenu() }
             // The lone gear sits at the header's middle, not on its bottom line like the row of pills.
             val topButtons = findViewById<LinearLayout>(R.id.topButtons)
             val tlp = topButtons.layoutParams as RelativeLayout.LayoutParams
@@ -651,9 +650,23 @@ class MainActivity : Activity(), AppAdapter.TileListener {
             makeIconOnly(btnSettings as TextView)
         }
         if (cfg.iconOnlyInputs) makeIconOnly(btnInputs as TextView)
+        menus = LauncherMenus(
+            host = this, cfg = cfg, root = root, density = density, adapter = adapter, reorder = reorder,
+            networkLabel = { networkPills.label },
+            showInputs = this::showInputs,
+            openNetworkPill = this::openNetworkPill,
+            openLauncherSettings = {
+                startActivityForResult(Intent(this, LauncherSettingsActivity::class.java), LAUNCHER_SETTINGS_REQUEST)
+            },
+            showModuleCards = moduleCardMenus::showList,
+            reloadApps = { reloadApps(false) },
+            open = this::open,
+            glassPopup = this::glassPopup,
+            dropIn = this::dropIn,
+        )
         networkPills.captureVpnStyle(this::makeIconOnly)
         btnSettings.setOnLongClickListener {
-            showSettingsMenu()
+            menus.showSettingsMenu()
             true
         }
 
@@ -1343,39 +1356,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         shelf.hideHero()
     }
 
-    /**
-     * date_below_clock: the date column moves to its own line under the clock, in the vertical LinearLayout that holds
-     * the clock's row, and the line between them goes. In Hebrew (rtl_menu_bar) the date and the clock's row sit right.
-     */
-    private fun moveDateBelowClock() {
-        val column = findViewById<View>(R.id.date).parent as View
-        val clockRow = findViewById<View>(R.id.clock).parent as View
-        val clockColumn = clockRow.parent as LinearLayout
-        (column.parent as ViewGroup).removeView(column)
-        findViewById<View>(R.id.clockDivider).visibility = View.GONE
-        // Its own width, not the column's: in Hebrew the column is only as wide as the clock.
-        val lp = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        lp.topMargin = Math.round(4 * density)
-        if (resources.getBoolean(R.bool.rtl_menu_bar)) {
-            // Date and clock flush right; the greeting stays left and follows the clock by translation.
-            lp.gravity = Gravity.RIGHT
-            (clockRow.layoutParams as LinearLayout.LayoutParams).gravity = Gravity.RIGHT
-        }
-        clockColumn.addView(column, clockColumn.indexOfChild(clockRow) + 1, lp)
-        // The column now wraps its texts, so they must wrap too: a match_parent TextView does not ask for a new
-        // layout when its text gets longer, and the column kept the width of the day before ("TUESDAY 27 OCTOB…").
-        val texts = column as ViewGroup
-        for (i in 0 until texts.childCount) {
-            val text = texts.getChildAt(i)
-            val textLp = text.layoutParams as LinearLayout.LayoutParams
-            textLp.width = ViewGroup.LayoutParams.WRAP_CONTENT
-            // Keep each line where its own gravity put it (right in Hebrew) now that it no longer fills the column.
-            textLp.gravity = (text as TextView).gravity and Gravity.HORIZONTAL_GRAVITY_MASK
-            text.layoutParams = textLp
-        }
-    }
-
     /** The first top-bar button after Inputs that is shown, in bar order (top_bar_apps, the network pill, ...); Settings is always there. */
     private fun firstTopButton(): View {
         val bar = findViewById<ViewGroup>(R.id.topButtons)
@@ -1388,47 +1368,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
 
     /** top_bar_apps buttons, in bar order. */
     private val topAppButtons: MutableList<View> = ArrayList()
-
-    /**
-     * Puts each top_bar_apps app in the top bar as a round pill with the app's own logo, left of the network pill.
-     * The logo keeps its colours: the pill style's tint, which turns the other icons white, is cleared.
-     */
-    private fun addTopBarApps(packages: List<String>, launchActions: Map<String, String>) {
-        val bar = findViewById<ViewGroup>(R.id.topButtons)
-        val pm = packageManager
-        val size = Math.round(22 * density)
-        for (pkg in packages) {
-            var launch = pm.getLeanbackLaunchIntentForPackage(pkg)
-            if (launch == null) launch = pm.getLaunchIntentForPackage(pkg)
-            if (launch == null) continue   // not installed, or disabled
-            // Use the same configured launch_actions as tiles; retain the normal entry if unavailable.
-            launch = LaunchActions.select(pkg, launchActions, launch) { targetPackage, action ->
-                val custom = LaunchActions.intent(targetPackage, action)
-                if (pm.resolveActivity(custom, 0) != null) custom else null
-            }
-            val logo: Drawable
-            val label: CharSequence
-            try {
-                val info = pm.getApplicationInfo(pkg, 0)
-                logo = info.loadIcon(pm)
-                label = info.loadLabel(pm)
-            } catch (_: PackageManager.NameNotFoundException) {
-                continue
-            }
-            val button = layoutInflater.inflate(R.layout.top_app_button, bar, false) as TextView
-            // pillKeys finds the bar's ends by id: without one of its own, every app button would be an end.
-            button.id = View.generateViewId()
-            logo.setBounds(0, 0, size, size)
-            button.setCompoundDrawablesRelative(logo, null, null, null)
-            button.compoundDrawableTintList = null
-            button.contentDescription = label
-            val target = launch
-            button.setOnClickListener { open(Intent(target)) }
-            // After the network pill and the VPN pill; the Hebrew bar runs the other way, so before both there.
-            bar.addView(button, bar.indexOfChild(if (resources.getBoolean(R.bool.rtl_menu_bar)) btnVpn else btnWifi))
-            topAppButtons.add(button)
-        }
-    }
 
     override fun onLibraryUp() {
         if (adapter.appCount() == 0) { firstTopButton().requestFocus(); return }
@@ -1568,8 +1507,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     private var iconOnlyButtons = false
     /** config.xml top_menu: Inputs, Wi-Fi and Settings folded into one gear. */
     private var topMenu = false
-    /** show_inputs_pill as configured: top_menu clears showInputsPill, so its Inputs row reads this. */
-    private var showInputsMenuRow = true
     private var launcherSettingsButton = false
     /** The app library button in the top bar (library_button). */
     private lateinit var btnLibraryTop: View
@@ -1754,155 +1691,13 @@ class MainActivity : Activity(), AppAdapter.TileListener {
                 .setInterpolator(DecelerateInterpolator(1.6f)).start()
     }
 
-    // ---- launcher settings and module cards -------------------------------------------------------
-
-    /** top_menu: the gear's dropdown, standing in for the Inputs, Wi-Fi and Settings pills. */
-    private fun showTopMenu() {
-        val anchor = findViewById<View>(R.id.btnSettings)
-        val panel = layoutInflater.inflate(R.layout.popup_inputs, root, false)
-        val rows = panel.findViewById<LinearLayout>(R.id.rows)
-        val popup = glassPopup(panel, (220 * density).toInt())
-        // Inputs opens its own list once this one has closed.
-        if (showInputsMenuRow) addTvInputRow(this, rows, popup, R.drawable.ic_input, getString(R.string.inputs), -1) { root.post { showInputs() } }
-        addTvInputRow(this, rows, popup, R.drawable.ic_wifi, getString(R.string.quick_network), -1, this::openNetworkPill)
-        val network: CharSequence? = networkPills.label
-        if (!TextUtils.isEmpty(network)) {
-            val status = rows.getChildAt(rows.childCount - 1).findViewById<TextView>(R.id.status)
-            status.text = network
-            status.visibility = View.VISIBLE
-        }
-        addTvInputRow(this, rows, popup, R.drawable.ic_swap_vert, getString(R.string.reorder), -1, reorder::toggleReorder)
-        if (launcherSettingsButton) {
-            addTvInputRow(this, rows, popup, R.drawable.ic_home_settings_pill, getString(R.string.launcher_settings), -1) {
-                startActivityForResult(Intent(this, LauncherSettingsActivity::class.java), LAUNCHER_SETTINGS_REQUEST)
-            }
-        } else {
-            addTvInputRow(this, rows, popup, R.drawable.ic_settings, getString(R.string.settings), -1) {
-                open(systemIntent(Settings.ACTION_SETTINGS))
-            }
-        }
-        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-        popup.width = Math.max((220 * density).toInt(), Math.min(panel.measuredWidth, (360 * density).toInt()))
-        dropIn(popup, panel, anchor, if (resources.getBoolean(R.bool.rtl_menu_bar)) Gravity.START else Gravity.END)
-        rows.getChildAt(0).requestFocus()
-    }
-
-    /** The header opens launcher settings directly; hold OK keeps the extra home actions available. */
-    private fun showSettingsMenu() {
-        val anchor = findViewById<View>(R.id.btnSettings)
-        val panel = layoutInflater.inflate(R.layout.popup_inputs, root, false)
-        val rows = panel.findViewById<LinearLayout>(R.id.rows)
-        val popup = glassPopup(panel, (200 * density).toInt())
-        if (!launcherSettingsButton) addSettingsMenuRow(rows, popup, R.string.launcher_settings) {
-            startActivityForResult(Intent(this, LauncherSettingsActivity::class.java), LAUNCHER_SETTINGS_REQUEST)
-        }
-        // Firmware that ships its own settings app next to the AOSP one (Xiaomi China is one): the
-        // vendor app holds pages the AOSP settings has no row for, such as Account & Security with
-        // the ADB switch. Offered here only while one of them is installed.
-        if (SystemSettings.vendorIntent(this) != null) {
-            addSettingsMenuRow(rows, popup, R.string.native_settings) {
-                val vendor = SystemSettings.vendorIntent(this)
-                if (vendor != null) open(vendor)
-            }
-        }
-        if (moduleCards) addSettingsMenuRow(rows, popup, R.string.module_cards, moduleCardMenus::showList)
-        if (dockRow) addSettingsMenuRow(rows, popup, R.string.dock_edit, reorder::startDockEdit)
-        addSettingsMenuRow(rows, popup, R.string.reorder, reorder::toggleReorder)
-        // A launcher may not restart the TV itself; the Home key helper can open the system power menu instead.
-        if (HomeKeyService.canOpenPowerMenu()) addSettingsMenuRow(rows, popup, R.string.power_menu, HomeKeyService::openPowerMenu)
-        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-        popup.width = Math.max((200 * density).toInt(), panel.measuredWidth)
-        // Hebrew puts Settings at the left of the header: grow the menu inward from it.
-        dropIn(popup, panel, anchor, if (resources.getBoolean(R.bool.rtl_menu_bar))
-                Gravity.START else Gravity.END)
-        rows.getChildAt(0).requestFocus()
-    }
-
     /** A tile configured with launch_actions "input:<id>" (config.xml): switch to that TV input directly,
      *  the same path the Inputs menu's own rows use, instead of opening the input's owning app normally. */
     override fun onOpenInput(inputId: String) {
         inputActions.openInput(inputId)
     }
 
-    /**
-     * Hold OK on a tile: a glass menu next to it. Move starts reorder mode with this tile already picked up;
-     * Remove from Home takes the shortcut off (only with the app library on, where one press adds it back);
-     * App info opens the TV's page for the app, which is what holding OK used to do.
-     */
     override fun onTileLongPress(position: Int, card: View) {
-        if (reorder.reordering) return
-        val key = adapter.keyAt(position)
-        val pkg = adapter.packageAt(position)
-        // Empty dock slots and the Default-home tile carry the launcher's own package: no menu for them.
-        if (key == null || pkg == null || pkg == packageName) return
-        val panel = layoutInflater.inflate(R.layout.popup_inputs, root, false)
-        val rows = panel.findViewById<LinearLayout>(R.id.rows)
-        val popup = glassPopup(panel, (200 * density).toInt())
-        if (dockRow && position < adapter.movableCount()) {
-            val inDock = position < COLUMNS
-            addSettingsMenuRow(rows, popup, if (inDock) R.string.tile_replace_in_dock else R.string.tile_add_to_dock) {
-                reorder.startDockEditFor(key, inDock)
-            }
-        }
-        if (position < adapter.movableCount()) addSettingsMenuRow(rows, popup, R.string.tile_move) {
-            reorder.startMoving(key)
-        }
-        if (appLibraryEnabled) addSettingsMenuRow(rows, popup, R.string.library_remove_shortcut) {
-            if (LibraryApps.save(this, pkg, false)) reloadApps(false)
-            else Toast.makeText(this, R.string.library_save_failed, Toast.LENGTH_LONG).show()
-        }
-        // Some firmware has no App info page at all; a row that only toasts "can't open" helps nobody.
-        val info = SystemSettings.appInfo(this, pkg)
-        if (info != null) addSettingsMenuRow(rows, popup, R.string.library_app_info) { open(info) }
-        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-        popup.width = Math.max((200 * density).toInt(), panel.measuredWidth)
-        // Dock tiles sit near the bottom of the screen: open the menu above the tile when it would not fit below.
-        val at = IntArray(2)
-        card.getLocationInWindow(at)
-        val gap = (10 * density).toInt()
-        val height = panel.measuredHeight
-        if (at[1] + card.height + gap + height <= root.height) {
-            dropIn(popup, panel, card, Gravity.START)
-        } else {
-            panel.alpha = 0f
-            panel.pivotY = height.toFloat()
-            panel.scaleY = 0.92f
-            panel.translationY = 8 * density
-            popup.showAtLocation(root, Gravity.NO_GRAVITY, at[0], Math.max(0, at[1] - gap - height))
-            panel.animate().alpha(1f).scaleY(1f).translationY(0f).setDuration(220)
-                    .setInterpolator(DecelerateInterpolator(1.6f)).start()
-        }
-        rows.getChildAt(0).requestFocus()
-    }
-
-    private fun addSettingsMenuRow(rows: LinearLayout, popup: PopupWindow, title: Int, action: Runnable) {
-        val row = layoutInflater.inflate(R.layout.item_input, rows, false)
-        row.findViewById<View>(R.id.icon).visibility = View.GONE
-        row.findViewById<View>(R.id.dot).visibility = View.GONE
-        row.findViewById<View>(R.id.status).visibility = View.GONE
-        row.findViewById<TextView>(R.id.title).setText(title)
-        row.setOnClickListener {
-            popup.dismiss()
-            action.run()
-        }
-        // The OK-up after opening the menu must not activate its first row.
-        var pressed = false
-        row.setOnKeyListener { _, code, event ->
-            if (code != KeyEvent.KEYCODE_DPAD_CENTER && code != KeyEvent.KEYCODE_ENTER) {
-                false
-            } else if (event.action == KeyEvent.ACTION_DOWN) {
-                if (event.repeatCount == 0) pressed = true
-                true
-            } else {
-                val activate = pressed
-                pressed = false
-                if (activate) {
-                    popup.dismiss()
-                    action.run()
-                }
-                true
-            }
-        }
-        rows.addView(row)
+        menus.showTileMenu(position, card)
     }
 }

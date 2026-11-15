@@ -3,7 +3,6 @@ package com.sadique.launcher
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.UiModeManager
-import android.app.role.RoleManager
 import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -36,7 +35,6 @@ import android.os.Looper
 import android.os.Parcelable
 import android.os.SystemClock
 import android.provider.Settings
-import android.text.InputType
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.TextUtils
@@ -49,7 +47,6 @@ import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.widget.Button
-import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -60,7 +57,6 @@ import android.widget.Toast
 import androidx.recyclerview.widget.RecyclerView
 import java.io.File
 import java.util.Calendar
-import java.util.Collections
 import java.util.concurrent.Executors
 import java.util.function.IntConsumer
 
@@ -117,7 +113,7 @@ class PersonalHomeActivity : Activity() {
             loadWallpaper = this::loadWallpaper,
             rearrangeApps = this::rearrangeApps,
             requestWatchNextAccess = { continueWatching?.requestAccess() },
-            editProfile = this::editProfile,
+            editProfile = profileEditor::show,
             applyPerformanceProfile = this::applyPerformanceProfile,
             cachedApps = { cachedApps },
             loadApps = this::loadApps,
@@ -283,9 +279,7 @@ class PersonalHomeActivity : Activity() {
     private var firstBuild = true
     private var cachedApps: List<PersonalApp>? = null
     /** Move mode: the app being carried, and the visible package order while it moves. Null when off. */
-    private var carriedApp: PersonalApp? = null
     private var movingRendered = false
-    private var moveOrder: MutableList<String>? = null
     /** Live tiles by package, for progressive icon fill-in. Rebuilt with the grid. */
     private val tileViews = HashMap<String, View>()
     /** Package of the focused tile, restored after grid rebuilds. */
@@ -293,7 +287,6 @@ class PersonalHomeActivity : Activity() {
     /** Last day/night state; when it flips, tile surfaces are refreshed to match. */
     private var lastLight = false
     private var panel: AlertDialog? = null
-    private var profile: AlertDialog? = null
     private val idleScreensaver = Runnable {
         if (resumed && hasWindowFocus() && !GitHubUpdates.manualActive()) launch(Intent(this, LandscapeActivity::class.java))
         else armIdleScreensaver()
@@ -394,8 +387,8 @@ class PersonalHomeActivity : Activity() {
         loadAvatar()
         buildHome()
         loadWallpaper()
-        if (!prefs.getBoolean("setup", false)) handler.post { editProfile() }
-        else { handleHomeAction(intent); handler.post { maybeOfferDefaultHome() } }
+        if (!prefs.getBoolean("setup", false)) handler.post { profileEditor.show() }
+        else { handleHomeAction(intent); handler.post { profileEditor.offerDefaultHome() } }
     }
 
     private fun dp(value: Float): Int = Math.round(value * resources.displayMetrics.density)
@@ -507,7 +500,7 @@ class PersonalHomeActivity : Activity() {
         chooseSetting("Avatar shape", arrayOf("Round", "Rounded square")) { which ->
             prefs.edit().putInt("avatar_shape", which).apply()
             avatar?.apply { background = avatarSurface(isFocused); invalidateOutline() }
-            refreshProfileAvatarPreview()
+            profileEditor.refreshPreview()
         }
     }
 
@@ -723,13 +716,13 @@ class PersonalHomeActivity : Activity() {
         if (!glassOs()) avatarOutline(photo)
         if (tvGlass()) { photo.setPadding(dp(2), dp(2), dp(2), dp(2)); photo.elevation = dp(2).toFloat() }
         photo.isFocusable = false
-        photo.setOnClickListener { LauncherPin.require(this, this::editProfile) }
+        photo.setOnClickListener { LauncherPin.require(this, profileEditor::show) }
         photo.setOnFocusChangeListener { v, focus -> v.background = avatarSurface(focus) }
         val identityCard = LinearLayout(this)
         identityCard.gravity = Gravity.CENTER_VERTICAL
         // The header already supplies the glass; a second profile-card fill hid the wallpaper detail.
         if (tvGlass()) identityCard.setPadding(dp(6), dp(5), dp(14), dp(5))
-        identityCard.setOnClickListener { LauncherPin.require(this, this::editProfile) }
+        identityCard.setOnClickListener { LauncherPin.require(this, profileEditor::show) }
         if (glassOs()) {
             identityCard.id = R.id.leftBlock
             identityCard.background = null
@@ -1025,7 +1018,7 @@ class PersonalHomeActivity : Activity() {
         heading.setPadding(dp(4), dp(8), 0, dp(12))
         val grid = HomeAppGrid<PersonalApp>(this, { app -> app.info.activityInfo.packageName },
                 { app, width ->
-                    val carried = carriedApp
+                    val carried = moveSession.carriedApp
                     createAppTile(app, width, carried != null && app.info.activityInfo.packageName == carried.info.activityInfo.packageName)
                 },
                 harmonyHome)
@@ -1269,7 +1262,7 @@ class PersonalHomeActivity : Activity() {
     }
 
     private fun loadApps() {
-        if (carriedApp != null) { carriedApp = null; moveOrder = null }
+        moveSession.clear()
         artworkCatalog.load()
     }
 
@@ -1286,7 +1279,7 @@ class PersonalHomeActivity : Activity() {
                 }
             }
         }
-        if (carriedApp != null) return
+        if (moveSession.carriedApp != null) return
         val tile = tileViews[pkg]
         if (tile is HarmonyAppTile) { tile.artwork(icon, accent); tile.setTag(accent) }
         else if (tile is GlassIconTile) { tile.artwork(icon, accent); tile.setTag(accent); if (tile.isFocused) updateGlassAccent(accent) }
@@ -1349,64 +1342,14 @@ class PersonalHomeActivity : Activity() {
 
     private fun profileAsset(name: String): File = File(filesDir, HomeLibraryStore(this).assetName(name))
 
-    /** Direct move mode: long-press > Move, then arrows carry the tile, OK drops it, Back cancels. */
-    private fun startMoveMode(app: PersonalApp) {
-        val apps = cachedApps ?: return
-        val visible = orderedApps(apps)
-        val hidden = prefs.getStringSet("hidden_apps", emptySet())
-        visible.removeIf { a -> hidden?.contains(a.info.activityInfo.packageName) == true }
-        val order = ArrayList<String>()
-        moveOrder = order
-        for (a in visible) order.add(a.info.activityInfo.packageName)
-        selectedCategory = ""
-        carriedApp = app
-        renderMoveGrid()
-        Toast.makeText(this, "Arrows move · OK places · Back cancels", Toast.LENGTH_LONG).show()
-    }
-
-    private fun renderMoveGrid() {
-        movingRendered = true
-        val byPackage = LinkedHashMap<String, PersonalApp>()
-        for (app in cachedApps!!) byPackage[app.info.activityInfo.packageName] = app
-        val carried = carriedApp!!
-        appHeading?.text = "Move " + carried.name
-        val avail = gridWidth()
-        val g = grid!!
-        val columns = g.columnCount
-        val movingPkg = carried.info.activityInfo.packageName
-        val moved = ArrayList<PersonalApp>()
-        for (pkg in moveOrder!!) {
-            val app = byPackage[pkg]
-            if (app != null) moved.add(app)
-        }
-        submitHomeApps(moved, columns, avail)
-        g.rebind()
-        g.focusKey(movingPkg)
-    }
-
-    private fun commitMove() {
-        // Hidden apps keep their slots; visible ones take the new order.
-        val order = moveOrder!!
-        val visibleSet = HashSet(order)
-        val moved = order.iterator()
-        val result = ArrayList<String>()
-        for (app in orderedApps(cachedApps!!)) {
-            val pkg = app.info.activityInfo.packageName
-            result.add(if (visibleSet.contains(pkg)) moved.next() else pkg)
-        }
-        prefs.edit().putString("app_order", org.json.JSONArray(result).toString()).apply()
-        carriedApp = null
-        moveOrder = null
-        renderApps(cachedApps!!)
-        focusFirstApp()
-        Toast.makeText(this, "App order saved", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun cancelMove() {
-        carriedApp = null
-        moveOrder = null
-        renderApps(cachedApps!!)
-        focusFirstApp()
+    private val moveSession by lazy {
+        HomeMoveSession(
+            host = this, prefs = prefs, currentGrid = { grid }, currentApps = { cachedApps },
+            orderedApps = this::orderedApps, clearCategory = { selectedCategory = "" },
+            movingRendered = { movingRendered = true }, showHeading = { appHeading?.text = it },
+            gridWidth = this::gridWidth, submitHomeApps = this::submitHomeApps,
+            renderApps = this::renderApps, focusFirstApp = this::focusFirstApp,
+        )
     }
 
     /** System navigation sounds: tick on arrows, click on OK. */
@@ -1433,7 +1376,7 @@ class PersonalHomeActivity : Activity() {
                 && !PassiveHomeService.enabled(this) && VolumeKeys.control(this, event)) return true
         if (event.action == KeyEvent.ACTION_DOWN) playNavSound(event.keyCode)
         // Press effect: tile dips slightly the moment OK is pressed.
-        if (event.action == KeyEvent.ACTION_DOWN && carriedApp == null
+        if (event.action == KeyEvent.ACTION_DOWN && moveSession.carriedApp == null
                 && (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER
                 || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER)) {
             val focused = currentFocus
@@ -1441,38 +1384,8 @@ class PersonalHomeActivity : Activity() {
                 focused.animate().scaleX(0.94f).scaleY(0.94f).setDuration(80).start()
             }
         }
-        val carried = carriedApp
-        if (carried != null && event.action == KeyEvent.ACTION_DOWN) {
-            val pkg = carried.info.activityInfo.packageName
-            val order = moveOrder!!
-            val from = order.indexOf(pkg)
-            val g = grid!!
-            val cols = Math.max(1, g.columnCount)
-            val code = event.keyCode
-            if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER
-                    || code == KeyEvent.KEYCODE_NUMPAD_ENTER) {
-                commitMove()
-                return true
-            }
-            if (code == KeyEvent.KEYCODE_BACK) { cancelMove(); return true }
-            var to = -1
-            if (g.isHorizontalDock() && (code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT)) {
-                val forward = (code == KeyEvent.KEYCODE_DPAD_RIGHT) == (g.layoutDirection != View.LAYOUT_DIRECTION_RTL)
-                to = AppGridNavigation.horizontal(from, order.size, forward)
-                if (to == from) to = -1
-            } else if (g.isHorizontalDock() && (code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_DPAD_DOWN)) {
-                return true
-            } else if (code == KeyEvent.KEYCODE_DPAD_LEFT) { if (from % cols != 0) to = from - 1 }
-            else if (code == KeyEvent.KEYCODE_DPAD_RIGHT) { if (from % cols != cols - 1 && from + 1 < order.size) to = from + 1 }
-            else if (code == KeyEvent.KEYCODE_DPAD_UP) { if (from - cols >= 0) to = from - cols }
-            else if (code == KeyEvent.KEYCODE_DPAD_DOWN) { if (from + cols < order.size) to = from + cols }
-            else return super.dispatchKeyEvent(event)
-            if (to >= 0) {
-                Collections.swap(order, from, to)
-                renderMoveGrid()
-            }
-            return true
-        }
+        if (moveSession.carriedApp != null && event.action == KeyEvent.ACTION_DOWN)
+            return moveSession.dispatchDown(event) || super.dispatchKeyEvent(event)
         val g = grid
         if (g != null && g.navigateKey(event)) return true
         return super.dispatchKeyEvent(event)
@@ -1514,7 +1427,7 @@ class PersonalHomeActivity : Activity() {
             border = this::tileBorder, perfAllows = this::perfAllows, accentColor = this::accentColor,
             selectApp = { focusedPkg = it.info.activityInfo.packageName },
             updateFocusWallpaper = this::updateTileFocusWallpaper, launch = this::launch,
-            isCarryingApp = { carriedApp != null }, showOptions = this::showTileOptions,
+            isCarryingApp = { moveSession.carriedApp != null }, showOptions = this::showTileOptions,
             trackAttachment = this::trackTileAttachment,
         )
     }
@@ -1557,7 +1470,7 @@ class PersonalHomeActivity : Activity() {
     private fun showTileOptions(app: PersonalApp) {
         ThemeDialogBuilder(this).setTitle(app.name).setItems(arrayOf("App info", "Hide from launcher", "Move app", getString(R.string.h_category))) { _, which ->
             if (which == 0) launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + app.info.activityInfo.packageName)))
-            else if (which == 2) startMoveMode(app)
+            else if (which == 2) moveSession.start(app)
             else if (which == 3) HomeLibraryUi.category(this, app.info.activityInfo.packageName) { cachedApps?.let { renderApps(it) } }
             else {
                 val hidden = HashSet(prefs.getStringSet("hidden_apps", emptySet()) ?: emptySet())
@@ -1721,7 +1634,7 @@ class PersonalHomeActivity : Activity() {
                 HomeDashboard.INPUTS -> showInputs()
                 HomeDashboard.DISPLAY -> panel = TvControlPreview.show(this, true)
                 HomeDashboard.SOUND -> panel = TvControlPreview.show(this, false)
-                HomeDashboard.IDENTITY -> editProfile()
+                HomeDashboard.IDENTITY -> profileEditor.show()
                 else -> openSetting(Settings.ACTION_SETTINGS)
             }
         })
@@ -1947,154 +1860,32 @@ class PersonalHomeActivity : Activity() {
 
     override fun onUserInteraction() { super.onUserInteraction(); armIdleScreensaver() }
 
-    private var profileAvatarPreview: ImageView? = null
-
-    /** Refreshes the avatar preview inside the profile dialog, if open. */
-    private fun refreshProfileAvatarPreview() {
-        val preview = profileAvatarPreview ?: return
-        preview.background = avatarSurface(false, 96)
-        preview.invalidateOutline()
-        val bitmap = avatarBitmap
-        if (bitmap != null) preview.setImageBitmap(bitmap)
-        else preview.setImageDrawable(TvSymbols.icon(this, R.drawable.ic_person))
-    }
-
-    private fun editProfile() {
-        val current = profile
-        if (current != null && current.isShowing) return
-        val form = LinearLayout(this)
-        form.orientation = LinearLayout.VERTICAL
-        form.setPadding(dp(22), dp(10), dp(22), dp(8))
-        // Avatar preview inside the dialog (user 2026-11-01).
-        val preview = ImageView(this)
-        profileAvatarPreview = preview
-        preview.scaleType = ImageView.ScaleType.CENTER_CROP
-        preview.background = avatarSurface(false, 96)
-        avatarOutline(preview)
-        preview.contentDescription = "Profile photo"
-        refreshProfileAvatarPreview()
-        val previewRow = LinearLayout(this)
-        previewRow.gravity = Gravity.CENTER
-        previewRow.setPadding(0, 0, 0, dp(8))
-        previewRow.addView(preview, LinearLayout.LayoutParams(dp(96), dp(96)))
-        form.addView(previewRow)
-        form.addView(button("Photo shape · Round / Rounded square", this::chooseAvatarShape))
-        val name = EditText(this)
-        name.isSingleLine = true
-        name.hint = "Your name"
-        name.setText(prefs.getString("name", "Sadique Sadiq"))
-        name.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
-        name.setTextColor(ThemeStyle.foreground(prefs))
-        name.setHintTextColor(ThemeStyle.muted(prefs))
-        applyAppFont(name)
-        name.setPadding(dp(16), dp(12), dp(16), dp(12))
-        name.background = toolbarSurface(false)
-        form.addView(name)
-        // Choose / Remove side by side (user 2026-11-01).
-        val photoRow = LinearLayout(this)
-        photoRow.orientation = LinearLayout.HORIZONTAL
-        val choose = button("Choose photo") {
-            try {
-                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*")
-                        .addCategory(Intent.CATEGORY_OPENABLE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), 7)
-            } catch (unavailable: ActivityNotFoundException) {
-                Toast.makeText(this, "No photo picker available on this device", Toast.LENGTH_LONG).show()
-            } catch (unavailable: SecurityException) {
-                Toast.makeText(this, "No photo picker available on this device", Toast.LENGTH_LONG).show()
-            }
-        }
-        val remove = button("Remove photo") {
-            val photo = profileAsset("personal-avatar.png")
-            if (photo.exists() && !photo.delete()) {
-                Toast.makeText(this, "Could not remove photo", Toast.LENGTH_SHORT).show()
-                return@button
-            }
-            avatarBitmap = null
-            refreshProfile()
-            refreshProfileAvatarPreview()
-        }
-        val photoBtn = LinearLayout.LayoutParams(0, -2, 1f)
-        photoBtn.setMargins(dp(4), dp(8), dp(4), dp(4))
-        photoRow.addView(choose, photoBtn)
-        val photoBtn2 = LinearLayout.LayoutParams(0, -2, 1f)
-        photoBtn2.setMargins(dp(4), dp(8), dp(4), dp(4))
-        photoRow.addView(remove, photoBtn2)
-        form.addView(photoRow)
-        form.addView(text("Profile stays on this device. Google login is not used.", 13, MUTED))
-        // Save on the left, Later on the right (user 2026-11-01).
-        val actionRow = LinearLayout(this)
-        actionRow.orientation = LinearLayout.HORIZONTAL
-        val save = button("Save") {
-            val value = PersonalHomeModel.name(name.text.toString())
-            if (value.isEmpty()) { name.error = "Enter your name"; return@button }
-            prefs.edit().putString("name", value).putBoolean("setup", true).apply()
-            refreshProfile()
-            profile?.dismiss()
-            handler.post { maybeOfferDefaultHome() }
-        }
-        val later = button("Later") { profile?.dismiss() }
-        val saveParams = LinearLayout.LayoutParams(0, -2, 1f)
-        saveParams.setMargins(dp(4), dp(8), dp(4), 0)
-        val laterParams = LinearLayout.LayoutParams(0, -2, 1f)
-        laterParams.setMargins(dp(4), dp(8), dp(4), 0)
-        actionRow.addView(save, saveParams)
-        actionRow.addView(later, laterParams)
-        form.addView(actionRow)
-        val dialog = ThemeDialogBuilder(this).setTitle(if (prefs.getBoolean("setup", false)) "Your profile" else "Welcome · set up your Home")
-                .setView(form).create()
-        profile = dialog
-        dialog.setOnDismissListener { profileAvatarPreview = null; handler.postDelayed(notificationOffer, 1200) }
-        dialog.show()
-        GlassSettings.styleDialog(this, dialog)
+    private val profileEditor by lazy {
+        HomeProfileEditor(
+            host = this, prefs = prefs, muted = MUTED, handler = handler, notificationOffer = notificationOffer,
+            dp = this::dp, text = this::text, button = this::button, avatarSurface = this::avatarSurface,
+            avatarOutline = this::avatarOutline, chooseAvatarShape = this::chooseAvatarShape,
+            avatarBitmap = { avatarBitmap }, clearAvatar = { avatarBitmap = null },
+            applyAppFont = this::applyAppFont, toolbarSurface = this::toolbarSurface,
+            profileAsset = this::profileAsset, refreshProfile = this::refreshProfile,
+        )
     }
 
     /**
-     * Offers to make Personal Launcher the default Home. The old logic set a permanent
-     * "asked once" flag, so after an update/reinstall that reset the default-home setting
-     * the prompt never came back. Now the offer reappears whenever we are not the default
-     * (with a short snooze after "Later" so it doesn't nag every launch).
+     * Polls for updates while Home is visible and the profile and search dialogs are closed.
      */
     private val updateCheck = object : Runnable {
         override fun run() {
             if (!resumed) return
-            val currentProfile = profile
-            if ((currentProfile == null || !currentProfile.isShowing) && !homeOfferShowing && !homeSearch.isShowing)
+            if (!profileEditor.isShowing && !profileEditor.homeOfferShowing && !homeSearch.isShowing)
                 GitHubUpdates.check(this@PersonalHomeActivity, false)
             handler.postDelayed(this, 60_000L)
         }
     }
     private val notificationOffer: Runnable = Runnable(::maybeOfferNotificationAccess)
-    private var homeOfferShowing = false
     private fun maybeOfferNotificationAccess() {
-        val currentProfile = profile
-        if (!resumed || homeOfferShowing || (currentProfile != null && currentProfile.isShowing) || homeSearch.isShowing || GlassSettings.showing(this)) return
+        if (!resumed || profileEditor.homeOfferShowing || profileEditor.isShowing || homeSearch.isShowing || GlassSettings.showing(this)) return
         NotificationAccessSetup.offer(this)
-    }
-
-    private fun maybeOfferDefaultHome() {
-        if (isDestroyed || isFinishing) return
-        var alreadyDefault = false
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val rm = getSystemService(RoleManager::class.java)
-            if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_HOME))
-                alreadyDefault = rm.isRoleHeld(RoleManager.ROLE_HOME)
-        }
-        if (homeOfferShowing || (HomeAutomation.enabled(this) && VolumeAutoStart.paired(this))) return
-        if (alreadyDefault && VolumeAutoStart.paired(this)) return
-        if (!HomeSettingsActivity.available(this) && VolumeAutoStart.paired(this)) return
-        // One-time migration: drop the old permanent flag so installs that lost the
-        // default-home status on update get the offer again.
-        if (prefs.contains("home_offer_done")) prefs.edit().remove("home_offer_done").apply()
-        if (System.currentTimeMillis() < prefs.getLong("home_offer_snooze", 0)) return
-        homeOfferShowing = true
-        ThemeDialogBuilder(this)
-            .setTitle("Use as Home screen?")
-            .setMessage("Set Personal Launcher as your default launcher so the Home button opens it.")
-            .setPositiveButton("Set as default") { _, _ -> LauncherSetupUi.show(this) }
-            .setNegativeButton("Later") { _, _ -> prefs.edit().putLong("home_offer_snooze",
-                    System.currentTimeMillis() + 3L * 24 * 60 * 60 * 1000).apply() }
-            .setOnDismissListener { homeOfferShowing = false; handler.postDelayed(notificationOffer, 1200) }
-            .show()
     }
 
     private fun refreshProfile() {
@@ -2127,7 +1918,7 @@ class PersonalHomeActivity : Activity() {
                 handler.post {
                     if (isDestroyed || importEpoch != profileEpoch) return@post
                     if (wallpaper) { customWallpaper = image; prefs.edit().putString("wallpaper_mode", "custom").putInt("wallpaper_source", 0).apply(); sky?.invalidate() }
-                    else { avatarBitmap = image; refreshProfile(); refreshProfileAvatarPreview() }
+                    else { avatarBitmap = image; refreshProfile(); profileEditor.refreshPreview() }
                 }
             } catch (error: Exception) {
                 handler.post { if (!isDestroyed) Toast.makeText(this, "Could not read this photo. Choose another image.", Toast.LENGTH_LONG).show() }
@@ -2262,7 +2053,7 @@ class PersonalHomeActivity : Activity() {
         telemetry?.stop()
         appLibrary?.close()
         panel?.dismiss()
-        profile?.dismiss()
+        profileEditor.dismiss()
         homeSearch.dismiss()
         handler.removeCallbacksAndMessages(null)
         continueWatching?.stop()
