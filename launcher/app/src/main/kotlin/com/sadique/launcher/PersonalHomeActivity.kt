@@ -10,18 +10,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
-import android.graphics.Color
-import android.graphics.Point
-import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.InsetDrawable
-import android.graphics.drawable.LayerDrawable
-import android.media.AudioManager
 import android.media.tv.TvContract
 import android.media.tv.TvInputManager
 import android.net.ConnectivityManager
@@ -35,10 +29,7 @@ import android.os.Looper
 import android.os.Parcelable
 import android.os.SystemClock
 import android.provider.Settings
-import android.text.SpannableString
-import android.text.Spanned
 import android.text.TextUtils
-import android.text.style.ForegroundColorSpan
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -54,7 +45,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.recyclerview.widget.RecyclerView
 import java.io.File
-import java.util.Calendar
 import java.util.Collections
 import java.util.concurrent.Executors
 import java.util.function.IntConsumer
@@ -76,6 +66,14 @@ class PersonalHomeActivity : Activity() {
     private fun weatherWidgetEnabled(): Boolean = ((harmony() && tv) || prefs.getBoolean("weather_widget", ThemeStyle.id(prefs) == ThemeStyle.GLASS)) && !prefs.getBoolean("apps_only", false)
     private fun clockAlignment(): Int = WeatherWidgetLayout.clockAlignment(weatherWidgetEnabled(), ThemeStyle.clockAlignment(prefs))
     private lateinit var homeWeatherController: HomeWeatherController
+    private lateinit var homeSurfaces: HomeSurfaces
+    private lateinit var homeNetwork: HomeNetworkStatus
+    private lateinit var homeLabelScheme: HomeLabelScheme
+    private lateinit var homeTileGeometry: HomeTileGeometry
+    private lateinit var homePerformance: HomePerformance
+    private lateinit var homeTileFocus: HomeTileFocus
+    private lateinit var homeHarmonyNav: HomeHarmonyNav
+    private lateinit var homeWallpaper: HomeCustomWallpaper
     private val homeBingWallpaper = HomeBingWallpaper(this)
     private val homePreferences = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if ("ambient_strength" == key) updateAmbient()
@@ -146,58 +144,13 @@ class PersonalHomeActivity : Activity() {
     private var bluetoothStatus: TextView? = null
     private var islamicDate: TextView? = null
     private var focusedSpotlight: TextView? = null
-    private var spotlightName = ""
-    private var spotlightCategory = ""
     private var bluetooth: GlassBluetooth? = null
     private var telemetry: GlassTelemetry? = null
     private var appLibrary: AppLibraryDialog? = null
-    private var glassAccent = 0xffe50914.toInt()
     private fun harmony(): Boolean = ThemeStyle.harmony(prefs)
     private fun glassOs(): Boolean = ThemeStyle.id(prefs) == ThemeStyle.GLASS || harmony()
-    private fun glassDefaults() {
-        if (ThemeStyle.id(prefs) == ThemeStyle.GLASS && !prefs.getBoolean("glass_os_defaults_v1", false))
-            prefs.edit().putBoolean("glass_os_defaults_v1", true).putString("wallpaper_mode", "solid")
-                .putInt("wallpaper_source", 0).putInt("header_bg_mode", 0).putBoolean("header_glass_v2", true).putInt("clock_size", 82)
-                .putBoolean("focus_glow", true).putInt("ambient_strength", 100).apply()
-        if (ThemeStyle.id(prefs) == ThemeStyle.GLASS && !prefs.getBoolean("glass_resume_v3", false))
-            prefs.edit().putBoolean("glass_resume_v3", true).putBoolean("continue_watching", true).apply()
-        if (ThemeStyle.id(prefs) == ThemeStyle.GLASS && !prefs.getBoolean("glass_reference_v2", false))
-            prefs.edit().putBoolean("glass_reference_v2", true).putInt("header_bg_mode", 1).putBoolean("header_glass_v2", true).apply()
-        // Dedicated opt-in profile: no change to previously saved styles or TV services.
-        if (harmony() && !prefs.getBoolean("harmony_defaults_v1", false))
-            prefs.edit().putBoolean("harmony_defaults_v1", true)
-                .putString("wallpaper_mode", "mountains").putInt("wallpaper_source", 1)
-                .putInt("background_dim", 16).putInt("header_bg_mode", 0).putBoolean("header_glass_v2", true)
-                .putInt("clock_size", 88).putInt("clock_align", 0).putInt("clock_style", 0)
-                .putBoolean("weather_widget", true).putBoolean("clock_seconds", false)
-                .putBoolean("clock_shadow", true).putBoolean("focus_glow", false)
-                .putInt("tv_columns", 4).putInt("tile_corners", 2).putInt("tile_spacing", 1)
-                .putInt("glass_alpha", 58).putInt("glass_finish", 0).putInt("glass_edge", 1)
-                .putBoolean("panel_transparency", true).apply()
-    }
     /** Lightweight English service shortcuts with D-pad return to the app dock. */
-    private fun harmonyShortcuts(): View {
-        val links = LinearLayout(this)
-        links.orientation = LinearLayout.VERTICAL
-        val apps = GlassSettings.wideCard(this, "All apps", R.drawable.ic_apps,
-                ThemeStyle.focusAccent(prefs), this::showAppLibrary)
-        val scenery = GlassSettings.wideCard(this, "Scenery", R.drawable.ic_picture,
-                ThemeStyle.focusAccent(prefs)) { launch(Intent(this, LandscapeActivity::class.java)) }
-        for (entry in arrayOf(apps, scenery)) {
-            entry.setOnKeyListener { _, key, event ->
-                if (event.action == KeyEvent.ACTION_DOWN && key == KeyEvent.KEYCODE_DPAD_DOWN && grid != null) {
-                    grid?.focusKey(focusedPkg)
-                    true
-                } else {
-                    false
-                }
-            }
-            val params = LinearLayout.LayoutParams(-1, dp(64))
-            params.setMargins(0, dp(3), 0, dp(3))
-            links.addView(entry, params)
-        }
-        return links
-    }
+    private fun harmonyShortcuts(): View = homeHarmonyNav.harmonyShortcuts()
     private fun harmonyHero(): View {
         val hero = HarmonyHomeHero(
             this, prefs, resumed, this::dp, this::text, this::greetingText, this::harmonyHeroKey,
@@ -212,44 +165,13 @@ class PersonalHomeActivity : Activity() {
         return hero.container
     }
 
-    private fun harmonyHeroKey(key: Int, event: KeyEvent): Boolean {
-        val horizontal = key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT
-        if (!horizontal && key != KeyEvent.KEYCODE_DPAD_UP && key != KeyEvent.KEYCODE_DPAD_DOWN) return false
-        if (event.action != KeyEvent.ACTION_DOWN || event.isCanceled) return true
-        if (key == KeyEvent.KEYCODE_DPAD_UP) {
-            searchButton?.requestFocus()
-        } else if (key == KeyEvent.KEYCODE_DPAD_DOWN) {
-            focusHarmonyBelowHero()
-        } else {
-            val rtl = page?.layoutDirection == View.LAYOUT_DIRECTION_RTL
-            val target: View? = if ((key == KeyEvent.KEYCODE_DPAD_RIGHT) != rtl) weatherWidget else harmonyClock
-            if (target != null && target.isShown) target.requestFocus()
-        }
-        return true
-    }
+    private fun harmonyHeroKey(key: Int, event: KeyEvent): Boolean = homeHarmonyNav.harmonyHeroKey(key, event)
 
-    private fun focusHarmonyHero(): Boolean {
-        val clock = harmonyClock
-        if (clock != null && clock.isShown && clock.requestFocus()) return true
-        val widget = weatherWidget
-        return widget != null && widget.isShown && widget.requestFocus()
-    }
+    private fun focusHarmonyHero(): Boolean = homeHarmonyNav.focusHarmonyHero()
 
-    private fun focusHarmonyBelowHero(): Boolean {
-        val g = grid
-        if (g == null || g.appCount() == 0) return false
-        g.focusKey(focusedPkg)
-        return true
-    }
+    private fun fixedHarmonyDock(): Boolean = homeHarmonyNav.fixedHarmonyDock()
 
-    private fun fixedHarmonyDock(): Boolean {
-        return harmony() && tv && !prefs.getBoolean("apps_only", false)
-    }
-
-    private fun focusBelowToolbar() {
-        val g = grid
-        if (g != null && (!g.isHorizontalDock() || !focusHarmonyHero())) g.focusKey(focusedPkg)
-    }
+    private fun focusBelowToolbar() = homeHarmonyNav.focusBelowToolbar()
     private var customWallpaper: Bitmap? = null
     private val clockContrast = HomeClockContrast()
     private var liquidBackdrop: LiquidBackdrop? = null
@@ -329,18 +251,7 @@ class PersonalHomeActivity : Activity() {
     }
 
     /** Re-applies backgrounds so tiles match the current day/night theme without a rebuild. */
-    private fun refreshTileSurfaces() {
-        for (entry in tileViews.entries) {
-            val tile = entry.value
-            val focused = tile.isFocused
-            val tag = tile.tag
-            val accent = if (tag is Int) tag else CYAN
-            if (tile is HarmonyAppTile) tile.appearance(focused)
-            else if (tile is GlassIconTile) tile.appearance(accent, focused)
-            else { tile.background = appSurface(accent, focused); tile.foreground = tileBorder(accent, focused) }
-        }
-        sky?.invalidate()
-    }
+    private fun refreshTileSurfaces() = homeTileFocus.refreshTileSurfaces()
 
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
@@ -367,19 +278,17 @@ class PersonalHomeActivity : Activity() {
             weatherWidget = { weatherWidget },
         )
         prefs.registerOnSharedPreferenceChangeListener(homePreferences)
-        if (!prefs.getBoolean("bing_daily_home_v67", false)) {
-            prefs.edit().putBoolean("bing_daily_home_v67", true)
-                    .putInt("wallpaper_source", 1).putString("wallpaper_mode", "mountains").apply()
-        }
-        if (!prefs.getBoolean("reference_layout_v42", false)) {
-            prefs.edit().putBoolean("reference_layout_v42", true).putString("theme_mode", "dark")
-                    .apply()
-        }
-        if (!prefs.getBoolean("reference_layout_v43", false)) {
-            prefs.edit().putBoolean("reference_layout_v43", true).putInt("background_dim", 0).apply()
-        }
+        HomeThemeDefaults.migrate(prefs)
         val modes = getSystemService(UiModeManager::class.java)
         tv = modes != null && modes.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
+        homeSurfaces = HomeSurfaces(this, prefs, this::dp, this::glassOs)
+        homeNetwork = HomeNetworkStatus(this, prefs, this::dp, this::glassOs, { connectivity }, { networkStatus }, { avatar }, { homeWeatherController.refresh() })
+        homeLabelScheme = HomeLabelScheme(prefs, tv, this::dp, this::glassOs, clockContrast, { sky }, { liquidBackdrop }, { headerBackdrop }, { userName }, { greeting }, { homeWeather }, { networkStatus }, { time }, { ampm }, { date }, { islamicDate }, { appHeading })
+        homeTileGeometry = HomeTileGeometry(this, prefs, tv, this::dp, { pageWidth }, { appBody }, { grid?.columnCount ?: 4 })
+        homePerformance = HomePerformance(this, prefs) { sky }
+        homeTileFocus = HomeTileFocus(this, prefs, tv, this::dp, this::glassOs, { effect -> homePerformance.allows(effect) }, homeSurfaces, tileViews, { sky }, { appHeading }, { avatar }, { focusedSpotlight })
+        homeHarmonyNav = HomeHarmonyNav(this, prefs, tv, this::dp, this::launch, this::showAppLibrary, { grid }, { focusedPkg }, { searchButton }, { weatherWidget }, { harmonyClock }, { page })
+        homeWallpaper = HomeCustomWallpaper(this, prefs, worker, handler, { profileEpoch }, { isDestroyed }, this::profileAsset, { customWallpaper = it }, { sky }, this::adaptTextColors)
         homeSearch = HomeSearch(
             this, prefs, tv, MUTED, { cachedApps }, this::dp, this::text, this::applyAppFont,
             this::toolbarSurface, this::tryLaunch, this::launch,
@@ -411,10 +320,7 @@ class PersonalHomeActivity : Activity() {
     /** Int overload for the call sites that pass sizes: same rounding as dp(float). */
     private fun dp(value: Int): Int = dp(value.toFloat())
 
-    private fun appearanceDaylight(): Float {
-        val now = Calendar.getInstance()
-        return HomeAppearance.daylight(prefs.getString("theme_mode", "dark"), now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE))
-    }
+    private fun appearanceDaylight(): Float = homeSurfaces.appearanceDaylight()
 
     private fun applyAppearance() {
         // Recreate surfaces as well as the wallpaper; changing only the canvas left cards unchanged.
@@ -438,76 +344,26 @@ class PersonalHomeActivity : Activity() {
         handler.postDelayed(buildHomeTask, 250)
     }
 
-    /**
-     * Width the app grid can actually use: the page content width minus the
-     * appBody panel's side padding. Sizing tiles from pageWidth alone overflowed
-     * the panel and clipped the rightmost column (portrait and landscape).
-     */
-    private fun gridWidth(): Int {
-        val body = appBody
-        val pad = if (body == null) dp(16) else body.paddingLeft + body.paddingRight
-        return Math.max(dp(120), pageWidth - pad)
-    }
+    /** Width the app grid can actually use (see HomeTileGeometry). */
+    private fun gridWidth(): Int = homeTileGeometry.gridWidth()
 
     /** Logo size inside tiles from settings: small / normal / large. */
-    private fun logoScale(): Float {
-        return floatArrayOf(0.8f, 1f, 1.2f)[Math.max(0, Math.min(2, prefs.getInt("logo_size", 1)))]
-    }
+    private fun logoScale(): Float = homeSurfaces.logoScale()
 
     /** Current theme accent color: Midnight Cyan, Sunset Orange, Deep Purple, or Custom. */
-    private fun accentColor(): Int {
-        if (ThemeStyle.custom(prefs) || harmony()) return GlassSettings.themeAccent(this)
-        return when (prefs.getInt("theme_name", 0)) {
-            1 -> 0xffff9a5c.toInt() // Sunset Orange
-            2 -> 0xffb388ff.toInt() // Deep Purple
-            3 -> prefs.getInt("custom_accent", CYAN)
-            else -> CYAN // Midnight Cyan
-        }
-    }
+    private fun accentColor(): Int = homeSurfaces.accentColor()
 
     /** Tile corner radius from settings: sharp / rounded / round. */
-    private fun tileRadius(): Int {
-        return dp(HomeGeometry.tileRadius(prefs.getInt("tile_corners", 1)))
-    }
+    private fun tileRadius(): Int = homeSurfaces.tileRadius()
 
-    private fun surface(focused: Boolean): GradientDrawable = surface(focused, false)
-    private fun appSurface(focused: Boolean): GradientDrawable = surface(focused, true)
-    private fun appSurface(accent: Int, focused: Boolean): GradientDrawable = if (glassOs()) GlassAppCard.surface(this, accent, focused, tileRadius()) else appSurface(focused)
-    private fun surface(focused: Boolean, drawer: Boolean): GradientDrawable {
-        if (TvGlassStyle.enabled(prefs)) return if (drawer)
-                TvGlassStyle.drawerCard(tileRadius(), dp(1), focused, prefs)
-                else TvGlassStyle.surface(tileRadius(), dp(if (focused) 2 else 1), focused, prefs)
-        val shape = GradientDrawable()
-        val day = appearanceDaylight()
-        // Theme-tinted glass (user 2026-11-01): the dark base takes the theme's hue.
-        val accent = accentColor()
-        val tint = 0.3f
-        val night = HomeAppearance.blend(if (focused) 0xff153d5b.toInt() else 0xff092038.toInt(), accent, tint)
-        val dayC = HomeAppearance.blend(if (focused) 0xff407596.toInt() else 0xff335975.toInt(), accent, tint)
-        shape.setColor(HomeAppearance.blend(night, dayC, day))
-        // Glass intensity (user 2026-11-01): 0=airy, 100=solid. Focused stays a touch brighter.
-        val intensity = Math.max(0, Math.min(100, prefs.getInt("glass_alpha", 70)))
-        shape.setAlpha(PanelTransparency.alpha(ClassicGlassAlpha.card(intensity, focused), prefs, drawer))
-        shape.cornerRadius = tileRadius().toFloat()
-        shape.setStroke(dp(if (focused) 3 else 1), if (focused) accent else 0xff28435e.toInt())
-        return shape
-    }
+    private fun surface(focused: Boolean): GradientDrawable = homeSurfaces.surface(focused)
+    private fun appSurface(focused: Boolean): GradientDrawable = homeSurfaces.appSurface(focused)
+    private fun appSurface(accent: Int, focused: Boolean): GradientDrawable = homeSurfaces.appSurface(accent, focused)
+    private fun surface(focused: Boolean, drawer: Boolean): GradientDrawable = homeSurfaces.surface(focused, drawer)
 
-    private fun text(value: String, size: Int, color: Int): TextView {
-        // Outline removed 2026-11-01 (user: "buri lag rahi hai") — plain text with drop shadow only.
-        val view = TextView(this)
-        view.text = value
-        view.setTextSize(size.toFloat())
-        view.setTextColor(ThemeStyle.contentColor(prefs, color))
-        applyAppFont(view)
-        return view
-    }
+    private fun text(value: String, size: Int, color: Int): TextView = homeSurfaces.text(value, size, color)
 
-    private fun toolbarSurface(focused: Boolean): GradientDrawable {
-        val shape = surface(focused)
-        shape.cornerRadius = dp(if (tvGlass()) 24 else 16).toFloat()
-        return shape
-    }
+    private fun toolbarSurface(focused: Boolean): GradientDrawable = homeSurfaces.toolbarSurface(focused)
 
     private fun iconAction(title: String, resource: Int, action: Runnable): ImageButton {
         val icon = ImageButton(this)
@@ -574,7 +430,7 @@ class PersonalHomeActivity : Activity() {
     }
 
     private fun buildHome() {
-        glassDefaults()
+        HomeThemeDefaults.glassDefaults(prefs)
         telemetry?.stop()
         telemetry = null
         weatherWidget?.active(false)
@@ -621,7 +477,7 @@ class PersonalHomeActivity : Activity() {
             previous = oldSky,
             favoriteFile = { profileAsset("favorite_wallpaper.jpg") },
             customWallpaper = { customWallpaper },
-            gradientAccent = { if (gradientWallpaper()) glassAccent else null },
+            gradientAccent = { if (gradientWallpaper()) homeTileFocus.glassAccent else null },
             clockGlowAccent = {
                 if (clockVisible() && !(harmony() && tv) && prefs.getBoolean("clock_glow", false))
                     accentColor()
@@ -933,53 +789,14 @@ class PersonalHomeActivity : Activity() {
     }
 
     /** Loads today's Bing wallpaper when the online source is selected. */
-    private fun updateOnlineWallpaper() {
-        val skyView = sky
-        if (skyView == null || prefs.getInt("wallpaper_source", 0) != 1) return
-        skyView.loadOnlinePhoto(0)
-    }
+    private fun updateOnlineWallpaper() = homeWallpaper.updateOnlineWallpaper()
 
     /** Refreshes the Continue Watching row (banner rows were removed 2026-11-01). */
     private fun updateContentRows() {
         continueWatching?.reload()
     }
 
-    private fun updateNetwork() {
-        val status = networkStatus ?: return
-        val conn = connectivity
-        val active = conn?.activeNetwork
-        val caps = if (active == null) null else conn?.getNetworkCapabilities(active)
-        val online = caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-        val wifi = caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-        status.text = if (ThemeStyle.custom(prefs)) "" else if (online) "Connected" else if (caps == null) "Disconnected" else "No internet access"
-        status.contentDescription = if (online) "Network connected" else if (caps == null) "Network disconnected" else "Network without internet"
-        status.tooltipText = if (online) (if (wifi) "Wi-Fi · Internet available" else "Internet available") else "No internet"
-        val color = if (online) 0xff59e493.toInt() else 0xffff6c78.toInt()
-        status.setTextColor(if (ThemeStyle.custom(prefs)) HeaderAppearance.foreground(prefs) else color)
-        val iconId = if (wifi || caps == null) R.drawable.ic_wifi
-                else if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) R.drawable.ic_ethernet else R.drawable.ic_internet
-        val icon = TvSymbols.icon(this, iconId)
-        icon?.setTint(if (ThemeStyle.custom(prefs)) HeaderAppearance.foreground(prefs) else color)
-        icon?.setBounds(0, 0, dp(28), dp(24))
-        status.setCompoundDrawables(icon, null, null, null)
-        status.contentDescription = if (online) "Internet available. Open Wi-Fi settings" else "No validated internet access. Open Wi-Fi settings"
-        if (glassOs()) {
-            val transport = if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) "Ethernet" else if (wifi || caps == null) "Wi-Fi" else "Internet"
-            status.text = "● " + transport + " • " + if (online) "Online" else "No Internet"
-            status.setTextSize(11f)
-            icon?.setBounds(0, 0, dp(18), dp(18))
-            status.setCompoundDrawables(icon, null, null, null)
-            status.setTextColor(if (online) 0xffdcfce7.toInt() else 0xfffee2e2.toInt())
-            val state = GradientDrawable()
-            state.setColor(if (online) 0x8014532d.toInt() else 0x947f1d1d.toInt())
-            state.cornerRadius = dp(999).toFloat()
-            state.setStroke(dp(if (status.isFocused) 2 else 1), if (online) 0xb322c55e.toInt() else 0xccef4444.toInt())
-            status.background = state
-            val photo = avatar
-            if (photo is AppAccentAvatar) photo.online(online)
-        }
-        homeWeatherController.refresh()
-    }
+    private fun updateNetwork() = homeNetwork.update()
 
     private val artworkCatalog by lazy {
         HomeArtworkCatalog(
@@ -1130,20 +947,6 @@ class PersonalHomeActivity : Activity() {
         focusFirstApp()
     }
 
-    /** System navigation sounds: tick on arrows, click on OK. */
-    private fun playNavSound(keyCode: Int) {
-        val audio = getSystemService(AudioManager::class.java) ?: return
-        var fx = -1
-        when (keyCode) {
-            KeyEvent.KEYCODE_DPAD_UP -> fx = AudioManager.FX_FOCUS_NAVIGATION_UP
-            KeyEvent.KEYCODE_DPAD_DOWN -> fx = AudioManager.FX_FOCUS_NAVIGATION_DOWN
-            KeyEvent.KEYCODE_DPAD_LEFT -> fx = AudioManager.FX_FOCUS_NAVIGATION_LEFT
-            KeyEvent.KEYCODE_DPAD_RIGHT -> fx = AudioManager.FX_FOCUS_NAVIGATION_RIGHT
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> fx = AudioManager.FX_KEY_CLICK
-        }
-        if (fx != -1) audio.playSoundEffect(fx)
-    }
-
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val key = event.keyCode
         if (settingsRemoteKeys.contains(key) && !SettingsKeyPolicy.isNumberEntryKey(key)) {
@@ -1152,7 +955,7 @@ class PersonalHomeActivity : Activity() {
         }
         if (VolumeKeys.direction(event.keyCode) != 0
                 && !PassiveHomeService.enabled(this) && VolumeKeys.control(this, event)) return true
-        if (event.action == KeyEvent.ACTION_DOWN) playNavSound(event.keyCode)
+        if (event.action == KeyEvent.ACTION_DOWN) HomeNavSounds.play(this, event.keyCode)
         // Press effect: tile dips slightly the moment OK is pressed.
         if (event.action == KeyEvent.ACTION_DOWN && carriedApp == null
                 && (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER
@@ -1200,33 +1003,12 @@ class PersonalHomeActivity : Activity() {
     }
 
     private val demoPlacement: Runnable = Runnable(::placeDemoCards)
-    private fun placeDemoCards() {
-        val g = grid
-        if (isDestroyed || g == null || !ThemeStyle.custom(prefs) || !tv || g.childCount == 0) return
-        val row = g.getChildAt(0).height
-        val top = Math.max(dp(10), Math.min(g.height / 4, g.height - row * 2 - dp(14)))
-        if (g.paddingTop != top) g.setPadding(0, top, 0, dp(14))
-    }
+    private fun placeDemoCards() = homeTileGeometry.placeDemoCards(grid, isDestroyed)
 
-    private fun referenceCardHeight(cellWidth: Int): Int = referenceCardHeight(cellWidth, grid?.columnCount ?: 4)
-    private fun referenceCardHeight(cellWidth: Int, columns: Int): Int {
-        val spacing = Math.max(0, Math.min(2, prefs.getInt("tile_spacing", 1)))
-        val margin = (if (tvGlass()) intArrayOf(dp(6), dp(10), dp(16)) else intArrayOf(dp(4), dp(8), dp(14)))[spacing]
-        val widthDp = Math.round((GlassDockLayout.compactCellWidth(cellWidth * columns, columns) - margin * 2) / resources.displayMetrics.density)
-        var height = GlassDockLayout.iconTileHeight(widthDp, resources.configuration.screenHeightDp, referenceCaptionHeight())
-        if (harmony()) height = HarmonyVisionLayout.dockTileHeightDp(resources.configuration.screenHeightDp)
-        return dp(height)
-    }
-    private fun referenceCaptionHeight(): Int = GlassDockLayout.captionHeight(prefs.getInt("app_label_size", 16), resources.configuration.fontScale)
-    private fun referenceDockHeight(): Int {
-        if (harmony()) return dp(HarmonyVisionLayout.dockHeightDp(resources.configuration.screenHeightDp))
-        val available = if (pageWidth > 0) gridWidth() else dp(Math.max(160, resources.configuration.screenWidthDp - if (tv) 64 else 32))
-        val cols = if (harmony()) HarmonyVisionLayout.dockColumns(Math.round(available / resources.displayMetrics.density)) else PersonalHomeModel.columns(Math.round(available / resources.displayMetrics.density), prefs.getInt(if (tv) "tv_columns" else "phone_columns", 0), prefs.getBoolean("large_tiles", false))
-        val card = referenceCardHeight(available / cols, cols)
-        val spacing = Math.max(0, Math.min(2, prefs.getInt("tile_spacing", 1)))
-        val margin = intArrayOf(6, 8, 12)[spacing]
-        return card + dp(GlassDockLayout.reflectionHeight(Math.round(card / resources.displayMetrics.density)) + margin * 2 + 44)
-    }
+    private fun referenceCardHeight(cellWidth: Int): Int = homeTileGeometry.referenceCardHeight(cellWidth)
+    private fun referenceCardHeight(cellWidth: Int, columns: Int): Int = homeTileGeometry.referenceCardHeight(cellWidth, columns)
+    private fun referenceCaptionHeight(): Int = homeTileGeometry.referenceCaptionHeight()
+    private fun referenceDockHeight(): Int = homeTileGeometry.referenceDockHeight()
     private val tileFactory by lazy {
         HomeTileFactory(
             host = this, prefs = prefs, tv = tv, dp = this::dp, text = this::text,
@@ -1245,35 +1027,7 @@ class PersonalHomeActivity : Activity() {
         return tileFactory.create(app, width, moving, grid!!)
     }
 
-    private fun updateTileFocusWallpaper(tile: View, app: PersonalApp, focus: Boolean) {
-        if (focus) {
-            if (glassOs()) { spotlightName = app.name; spotlightCategory = appCategory(app); updateGlassAccent(app.accent) }
-            if (!TvGlassStyle.enabled(prefs)) appHeading?.text = app.name
-            appHeading?.setTextColor(ThemeStyle.foreground(prefs))
-            val position = IntArray(2)
-            val origin = IntArray(2)
-            tile.getLocationInWindow(position)
-            val skyView = sky
-            if (skyView != null) {
-                skyView.getLocationInWindow(origin)
-                skyView.focusX = position[0] - origin[0] + tile.width / 2f
-                skyView.focusY = position[1] - origin[1] + tile.height / 2f
-                skyView.focusRadius = tile.width.toFloat()
-                skyView.focusAccent = if (prefs.getBoolean("focus_glow", true)) app.accent else 0
-                if (!tv) {
-                    // Parallax: wallpaper drifts slightly opposite to the focused tile,
-                    // vertical only — never sideways. (User 2026-11-01.)
-                    val cy = position[1] + tile.height / 2f
-                    val size = Point()
-                    windowManager.defaultDisplay.getSize(size)
-                    skyView.animate().translationX(0f)
-                            .translationY(if (perfAllows("parallax")) (size.y / 2f - cy) / size.y * dp(36) else 0f)
-                            .setDuration(350).start()
-                }
-            }
-        } else sky?.focusAccent = 0
-        sky?.invalidate()
-    }
+    private fun updateTileFocusWallpaper(tile: View, app: PersonalApp, focus: Boolean) = homeTileFocus.updateTileFocusWallpaper(tile, app, focus)
 
     private fun showTileOptions(app: PersonalApp) {
         ThemeDialogBuilder(this).setTitle(app.name).setItems(arrayOf("App info", "Hide from launcher", "Move app", getString(R.string.h_category))) { _, which ->
@@ -1386,27 +1140,8 @@ class PersonalHomeActivity : Activity() {
     }
 
     private fun updateAmbient() { sky?.invalidate() }
-    private fun updateGlassAccent(color: Int) {
-        glassAccent = color
-        val photo = avatar
-        if (photo is AppAccentAvatar) photo.accent(color)
-        sky?.invalidate()
-        updateSpotlight()
-    }
-    private fun appCategory(app: PersonalApp): String {
-        val value = ApplicationInfo.getCategoryTitle(this, app.info.activityInfo.applicationInfo.category)
-        return value?.toString() ?: "App"
-    }
-    private fun updateSpotlight() {
-        val spotlight = focusedSpotlight ?: return
-        val name = if (spotlightName.isEmpty()) getString(R.string.h_your_apps) else spotlightName
-        val caption = "●  " + name + if (spotlightCategory.isEmpty()) "" else "  • " + spotlightCategory
-        val text = SpannableString(caption)
-        text.setSpan(ForegroundColorSpan(glassAccent), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        val secondary = caption.indexOf("  • ")
-        if (secondary >= 0) text.setSpan(ForegroundColorSpan(MUTED), secondary, caption.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        spotlight.text = text
-    }
+    private fun updateGlassAccent(color: Int) = homeTileFocus.updateGlassAccent(color)
+    private fun updateSpotlight() = homeTileFocus.updateSpotlight()
     private fun updateBluetooth() {
         val status = bluetoothStatus
         val bt = bluetooth
@@ -1466,27 +1201,10 @@ class PersonalHomeActivity : Activity() {
      * Applies the performance profile. In Light mode, disables expensive effects:
      * crossfade, parallax, entrance cascade, clock seconds, auto-scroll, and shadows.
      */
-    private fun applyPerformanceProfile() {
-        val tier = MemoryProfile.effectiveTier(this, prefs)
-        if (tier == MemoryProfile.TIER_LIGHT) {
-            // Light mode defaults: static, minimal.
-            // Note: we don't force-overwrite user prefs here; the drawing code
-            // checks MemoryProfile.allow*() at draw time. This just ensures
-            // the crossfade buffer isn't allocated.
-            sky?.releaseTransient()
-        }
-    }
+    private fun applyPerformanceProfile() = homePerformance.applyProfile()
 
     /** Returns true if the named effect is allowed in the current performance tier. */
-    private fun perfAllows(effect: String): Boolean {
-        val tier = MemoryProfile.effectiveTier(this, prefs)
-        return when (effect) {
-            "crossfade" -> MemoryProfile.allowCrossfade(tier)
-            "parallax" -> MemoryProfile.allowParallax(tier)
-            "autoscroll" -> MemoryProfile.allowAutoScroll(tier)
-            else -> true
-        }
-    }
+    private fun perfAllows(effect: String): Boolean = homePerformance.allows(effect)
 
     /** Off, glass or frosted: independently saved for each visual style. */
     private fun headerBgMode(): Int = HeaderAppearance.mode(prefs)
@@ -1517,10 +1235,7 @@ class PersonalHomeActivity : Activity() {
     }
 
     /** Applies the launcher-wide font to a TextView. */
-    private fun applyAppFont(view: TextView) {
-        view.typeface = Typeface.create(
-                ThemeStyle.fontFamily(prefs), Typeface.NORMAL)
-    }
+    private fun applyAppFont(view: TextView) = homeSurfaces.applyAppFont(view)
 
     /** Submenu helper with per-row icons. */
     private fun clockVisible(): Boolean {
@@ -1589,59 +1304,14 @@ class PersonalHomeActivity : Activity() {
         Toast.makeText(this, "Theme settings reset to defaults", Toast.LENGTH_SHORT).show()
     }
 
-    private fun hasFavoriteWallpaper(): Boolean {
-        return profileAsset("favorite_wallpaper.jpg").isFile
-    }
+    private fun hasFavoriteWallpaper(): Boolean = homeWallpaper.hasFavoriteWallpaper()
 
-    private fun loadWallpaper() {
-        if ("custom" != prefs.getString("wallpaper_mode", "mountains")) return
-        val epoch = profileEpoch
-        val file = profileAsset("personal-wallpaper.jpg")
-        worker.execute {
-            val image = ProfileAssets.load(this, file, false)
-            handler.post { if (!isDestroyed && epoch == profileEpoch) { customWallpaper = image; sky?.invalidate(); adaptTextColors() } }
-        }
-    }
+    private fun loadWallpaper() = homeWallpaper.loadWallpaper()
 
     /** Fixed label style for all wallpaper-backed text (user 2026-11-01). */
-    private fun adaptVisibleTextColors() {
-        // Fixed style for every label (user 2026-11-01): white + black outline + drop shadow.
-        applyLabelScheme(userName, false, false)
-        applyLabelScheme(greeting, false, true)
-        applyLabelScheme(homeWeather, false, true)
-        applyLabelScheme(networkStatus, false, true)
-        applyLabelScheme(time, false, false)
-        applyLabelScheme(ampm, false, false)
-        applyLabelScheme(date, false, true)
-        applyLabelScheme(islamicDate, false, true)
-        applyLabelScheme(appHeading, false, false)
-    }
+    private fun adaptVisibleTextColors() = homeLabelScheme.adaptVisible()
 
-    /** Fixed label style (2026-11-01): white text with a black outline halo and drop shadow,
-     *  readable on any wallpaper. Replaces the old per-label adaptive colors. */
-    private fun applyLabelScheme(label: TextView?, dark: Boolean, muted: Boolean) {
-        if (label == null) return
-        if (glassOs() && label === networkStatus) return
-        if (glassOs() && label === ampm) { label.setTextColor(Color.WHITE); return }
-        label.setTextColor(if (ThemeStyle.custom(prefs)) (if (muted) ThemeStyle.muted(prefs) else ThemeStyle.foreground(prefs)) else (if (muted) 0xE6FFFFFF.toInt() else 0xFFFFFFFF.toInt()))
-        val clockLabel = label === time || label === ampm || label === date || label === islamicDate
-        val headerLabel = label === userName || label === greeting || label === homeWeather || label === networkStatus
-        if (headerLabel) label.setTextColor(HeaderAppearance.foreground(prefs))
-        if (glassOs() && label === networkStatus) return
-        if (clockLabel) label.setTextColor(clockContrast.ink)
-        if (clockLabel && !prefs.getBoolean("clock_shadow", true)) label.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
-        else {
-            val darkInk = if (clockLabel) clockContrast.ink != 0xffffffff.toInt() else headerLabel && ThemeStyle.light(prefs) && headerBgMode() != 0
-            label.setShadowLayer(dp(if (clockLabel) 5 else 2).toFloat(), 0f, dp(if (clockLabel) 2 else 1).toFloat(), if (darkInk) 0x99ffffff.toInt() else 0xe6000000.toInt())
-        }
-    }
-
-    private fun adaptTextColors() {
-        liquidBackdrop?.refresh()
-        headerBackdrop?.refresh()
-        clockContrast.update(sky, prefs, tv, dp(150).toFloat())
-        adaptVisibleTextColors()
-    }
+    private fun adaptTextColors() = homeLabelScheme.adaptTextColors()
 
     /** Applies the current light/dark text scheme to every wallpaper-backed label. */
     private fun chooseSetting(title: String, options: Array<String>, selected: IntConsumer) {
@@ -1887,18 +1557,7 @@ class PersonalHomeActivity : Activity() {
         }
     }
 
-    private fun tileBorder(accent: Int, focused: Boolean): Drawable? {
-        if (ThemeStyle.custom(prefs)) return null // The shared path surface owns the matching edge.
-        val border = GradientDrawable()
-        border.setColor(Color.TRANSPARENT)
-        border.cornerRadius = tileRadius().toFloat()
-        val thickness = if (focused) intArrayOf(2, 3, 5)[Math.max(0, Math.min(2, prefs.getInt("focus_border", 1)))] else 1
-        border.setStroke(dp(thickness), if (tvGlass()) (if (focused) 0xfff4f8ff.toInt() else TvGlassStyle.edge(prefs)) else (if (focused) accent else 0x4028435e))
-        val bevel = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0x20ffffff, 0x00ffffff, 0x28000000))
-        bevel.cornerRadius = tileRadius().toFloat()
-        return LayerDrawable(arrayOf<Drawable>(bevel, border))
-    }
+    private fun tileBorder(accent: Int, focused: Boolean): Drawable? = homeSurfaces.tileBorder(accent, focused)
 
     companion object {
         private val CYAN = 0xff40d9ff.toInt()
