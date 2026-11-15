@@ -13,7 +13,7 @@ import androidx.recyclerview.widget.RecyclerView
  * focused tile, and hiding it when focus leaves the grid. Everything it needs from Home's config is fixed
  * when Home is built, so it takes plain values; only the adapter arrives as a callback.
  */
-class MainGlassHighlight(
+internal class MainGlassHighlight(
     private val glass: GlassView,
     private val root: FrameLayout,
     private val grid: RecyclerView,

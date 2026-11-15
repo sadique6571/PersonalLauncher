@@ -9,7 +9,7 @@ import androidx.recyclerview.widget.RecyclerView
  * D-pad navigation across the app grid: the row ends that swallow a key, the jump to the App library
  * footer, and the way back up from it. The Activity keeps the TileListener overrides and delegates here.
  */
-class MainTileNavigation(
+internal class MainTileNavigation(
     private val currentAdapter: () -> AppAdapter,
     private val grid: RecyclerView,
     private val gridFocus: LauncherGridFocus,

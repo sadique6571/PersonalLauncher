@@ -14,7 +14,7 @@ import android.widget.TextView
  * The top bar's pills: what the network and VPN pills open, whether the Inputs pill has anything to list,
  * the icon-only pill shape, and the pill refresh that runs after the first frame back on Home.
  */
-class MainTopPills(
+internal class MainTopPills(
     private val context: Context,
     private val handler: Handler,
     private val root: FrameLayout,
