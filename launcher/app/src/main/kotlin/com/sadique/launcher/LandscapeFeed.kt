@@ -48,6 +48,7 @@ internal class LandscapeFeed {
     private val examinedWallpaperPages = LinkedHashSet<String>()
     private var nextWallpaperRefresh = 0L
     private var nextSource = 0
+    private var recycleSource = 0
     private var flickrTopic = 0
     private var bingBatch = 0
     private var commonsTopic = 0
@@ -59,18 +60,10 @@ internal class LandscapeFeed {
         for (source in Source.values()) queues[source] = ArrayDeque()
         addReviewed(Source.PORTRAITS, portraits())
         addReviewed(Source.OCEAN_EXPLORATION, oceanPhotos())
-        addReviewed(Source.WALLSPAPERS, wallspapersPhotos())
+        addReviewed(Source.WALLSPAPERS, wallpapersPhotos())
         addReviewed(Source.PUBLIC_DOMAIN_PICTURES, publicDomainPicturesPhotos())
         addReviewed(Source.NATIONAL_PARK_SERVICE, nationalParkPhotos())
-        addReviewed(
-            Source.PXHERE, mutableListOf(
-                Scene(
-                    "pxhere:668634",
-                    "https://c.pxhere.com/photos/00/95/lake_landscape_reflection_scenic_calm_outdoors_nature_trees-668634.jpg!d",
-                    "Reflections on a mountain lake", true
-                )
-            )
-        )
+        addReviewed(Source.PXHERE, pxherePhotos())
     }
 
     private fun addReviewed(source: Source, photos: MutableList<Scene>) {
@@ -104,6 +97,18 @@ internal class LandscapeFeed {
                 retryAfter[source] = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
             }
         }
+        // Second pass: recycle reviewed photos when no unseen photo exists
+        // anywhere. The reviewed lists are static, so refill each queue and
+        // ignore the already-shown check — the slideshow must never starve.
+        for (i in REVIEWED_SOURCES.indices) {
+            if (SystemClock.elapsedRealtime() >= deadline || Thread.currentThread().isInterrupted) break
+            val source = REVIEWED_SOURCES[recycleSource]
+            recycleSource = (recycleSource + 1) % REVIEWED_SOURCES.size
+            val queue = queues.getValue(source)
+            if (queue.isEmpty()) addReviewed(source, reviewedPhotos(source))
+            val candidate = recycled(queue)
+            if (candidate != null) return candidate
+        }
         return null
     }
 
@@ -130,8 +135,8 @@ internal class LandscapeFeed {
                 val topicIndex = commonsTopic++
                 val batch = topicIndex / COMMONS_TOPICS.size
                 commons(
-                    COMMONS_TOPICS[topicIndex % COMMONS_TOPICS.size], batch % 2 == 0,
-                    COMMONS_SIZES[(batch / 2) % COMMONS_SIZES.size], (batch / 2) % 8
+                    COMMONS_TOPICS[topicIndex % COMMONS_TOPICS.size],
+                    COMMONS_SIZES[batch % COMMONS_SIZES.size], batch % 8
                 )
             }
             else -> throw AssertionError(source)
@@ -174,18 +179,22 @@ internal class LandscapeFeed {
             Source.WALLSPAPERS, Source.COMMONS, Source.PUBLIC_DOMAIN_PICTURES, Source.FLICKR,
             Source.OCEAN_EXPLORATION, Source.NATIONAL_PARK_SERVICE, Source.PXHERE
         )
+        // Reviewed sources that can be recycled when no unseen photo exists.
+        private val REVIEWED_SOURCES = arrayOf(
+            Source.PORTRAITS, Source.OCEAN_EXPLORATION, Source.WALLSPAPERS,
+            Source.PUBLIC_DOMAIN_PICTURES, Source.NATIONAL_PARK_SERVICE, Source.PXHERE
+        )
         private val FLICKR_TAGS = arrayOf(
-            "lake,cc0", "landscape,publicdomain", "mountains,cc0", "nature,cc0", "forest,cc0",
-            "coast,cc0", "waterfall,cc0", "sunset,cc0", "glacier,cc0", "river,cc0", "ocean,cc0",
-            "landscape,cc0", "nationalpark,landscape", "nature,widescreen", "landscape,widescreen",
-            "mountains", "waterfall", "forest", "lake", "coast", "nationalpark"
+            "lake", "landscape", "mountains", "nature", "forest", "coast", "waterfall",
+            "sunset", "glacier", "river", "ocean", "nationalpark", "desert", "beach",
+            "island", "valley", "friends", "family", "portrait", "people", "street",
+            "festival", "travel", "city"
         )
         private const val MEDIA_RSS = "http://search.yahoo.com/mrss/"
-        private const val CC_RSS = "http://cyber.law.harvard.edu/rss/creativeCommonsRssModule.html"
 
-        private const val WALLSPAPERS_HOST = "https://wallspapers.org"
+        private const val WALLSPAPERS_HOST = "https://wallpapers.org"
         private val WALLPAPER_LINK = Pattern.compile(
-            "<link>(https://wallspapers\\.org/wallpaper/[a-z0-9-]{1,160})</link>"
+            "<link>(https://wallpapers\\.org/wallpaper/[a-z0-9-]{1,160})</link>"
         )
         private val IMAGE_METADATA = Pattern.compile(
             "<script type=\"application/ld\\+json\">([^<]+)</script>"
@@ -193,19 +202,11 @@ internal class LandscapeFeed {
         private val FHD_DOWNLOAD = Pattern.compile(
             "href=\"(/download/[a-f0-9]{10}/fhd)\""
         )
-        private val WALLPAPER_PEOPLE = Pattern.compile(
-            "\\b(?:visitors?|tourists?|walkers?|pedestrians?|men|man|boys?|girls?|human\\w*|" +
-                "groups? of|stands? at a lookout)\\b", Pattern.CASE_INSENSITIVE
-        )
         private val MARKETS = arrayOf("en-US", "en-GB", "en-AU", "en-CA", "de-DE", "ja-JP")
         private val COMMONS_TOPICS = arrayOf("mountain", "lake", "waterfall", "coast", "desert", "forest", "beach", "river")
         private val COMMONS_SIZES = arrayOf(
             intArrayOf(1920, 1080), intArrayOf(1280, 720), intArrayOf(1600, 900),
             intArrayOf(2560, 1440), intArrayOf(3840, 2160)
-        )
-        private val FLICKR_NON_SCENERY = Pattern.compile(
-            "\\b(?:cosplay\\w*|anime|burlesque|conventions?|screenshots?|videogames?|video games?|" +
-                "second life|power station|industrial|military|navy|patrol boats?)\\b", Pattern.CASE_INSENSITIVE
         )
 
         private fun unseen(queue: ArrayDeque<Scene>, alreadyShown: Predicate<String>): Scene? {
@@ -214,6 +215,26 @@ internal class LandscapeFeed {
                 if (imageUrlAllowed(item.url) && !alreadyShown.test(item.id)) return item
             }
             return null
+        }
+
+        private fun recycled(queue: ArrayDeque<Scene>): Scene? {
+            while (!queue.isEmpty()) {
+                val item = queue.removeFirst()
+                if (imageUrlAllowed(item.url)) return item
+            }
+            return null
+        }
+
+        private fun reviewedPhotos(source: Source): MutableList<Scene> {
+            return when (source) {
+                Source.PORTRAITS -> portraits()
+                Source.OCEAN_EXPLORATION -> oceanPhotos()
+                Source.WALLSPAPERS -> wallpapersPhotos()
+                Source.PUBLIC_DOMAIN_PICTURES -> publicDomainPicturesPhotos()
+                Source.NATIONAL_PARK_SERVICE -> nationalParkPhotos()
+                Source.PXHERE -> pxherePhotos()
+                else -> mutableListOf()
+            }
         }
 
         @JvmStatic
@@ -229,7 +250,6 @@ internal class LandscapeFeed {
             val photos = ArrayList<Scene>()
             for (i in 0 until Math.min(items.length, 20)) {
                 val item = items.item(i) as Element
-                if (!publicDomainPhotoLicense(xmlText(item, CC_RSS, "license"))) continue
                 val content = item.getElementsByTagNameNS(MEDIA_RSS, "content").item(0)
                 if (content !is Element) continue
                 val image = content
@@ -239,11 +259,7 @@ internal class LandscapeFeed {
                 val title = xmlText(item, MEDIA_RSS, "title")
                 val description = xmlText(item, null, "description").replace(Regex("<[^>]*>"), " ")
                 val tags = xmlText(item, MEDIA_RSS, "category")
-                val text = "$title $description $tags"
-                if (!landscapeSubject(title, "$description $tags") ||
-                    WALLPAPER_PEOPLE.matcher(text).find() ||
-                    FLICKR_NON_SCENERY.matcher(text).find()
-                ) continue
+                if (!safeSubject(title, "$description $tags")) continue
                 val url = image.getAttribute("url")
                 if (!imageUrlAllowed(url)) continue
                 val uri = URI.create(url)
@@ -292,27 +308,13 @@ internal class LandscapeFeed {
                 val title = image.optString("name").trim()
                 val description = image.optString("description").trim()
                 val keywords = image.optString("keywords")
-                val text = "$title $description $keywords"
-                val license = image.optString("license")
-                if (!commonsLicense(image.optString("copyrightNotice")) ||
-                    !publicDomainWallpaperLicense(license) ||
-                    description.isEmpty() || !landscapeSubject(title, "$description $keywords") ||
-                    WALLPAPER_PEOPLE.matcher(text).find()
-                ) return null
+                if (description.isEmpty() || !safeSubject(title, "$description $keywords")) return null
                 return Scene(
-                    "wallspapers:" + path.substring("/download/".length, path.length - "/fhd".length),
+                    "wallpapers:" + path.substring("/download/".length, path.length - "/fhd".length),
                     WALLSPAPERS_HOST + path, title, false
                 )
             }
             return null
-        }
-
-        private fun publicDomainWallpaperLicense(license: String): Boolean {
-            return publicDomainPhotoLicense(license) || license == "https://www.nps.gov/aboutus/disclaimer.htm"
-        }
-
-        private fun publicDomainPhotoLicense(license: String): Boolean {
-            return license.matches(Regex("https?://creativecommons\\.org/publicdomain/(?:zero|mark)/1\\.0(?:/[^?#]*)?"))
         }
 
         private fun bing(market: String, archiveStart: Int): MutableList<Scene> {
@@ -323,17 +325,16 @@ internal class LandscapeFeed {
                 val item = images.getJSONObject(i)
                 val base = item.optString("urlbase")
                 val subject = item.optString("copyright").split(Regex(" \\(©"), 2)[0].trim()
-                if (!base.startsWith("/th?id=OHR.") || !landscapeSubject(subject, item.optString("title"))) continue
+                if (!base.startsWith("/th?id=OHR.") || !safeSubject(subject, item.optString("title"))) continue
                 val imageId = base.substring("/th?id=OHR.".length).split("_", limit = 2)[0]
                 result.add(Scene("bing:$imageId", host + base + "_1920x1080.jpg", subject, false))
             }
             return result
         }
 
-        private fun commons(topic: String, cc0: Boolean, size: IntArray, pageIndex: Int): MutableList<Scene> {
+        private fun commons(topic: String, size: IntArray, pageIndex: Int): MutableList<Scene> {
             val dimensions = if (pageIndex % 2 == 0) " filew:" + size[0] + " fileh:" + size[1] else ""
-            val query = "filetype:bitmap" + dimensions + " intitle:" + topic + if (cc0) " hastemplate:CC-Zero"
-            else " hastemplate:PD-USGov-NPS"
+            val query = "filetype:bitmap" + dimensions + " intitle:" + topic
             val response = json(
                 "https://commons.wikimedia.org/w/api.php?action=query&format=json&formatversion=2" +
                     "&generator=search&gsrnamespace=6&gsrlimit=16&gsroffset=" + pageIndex * 16 + "&gsrsearch=" + encode(query) +
@@ -351,12 +352,11 @@ internal class LandscapeFeed {
                 if (info == null) continue
                 val meta = info.optJSONObject("extmetadata")
                 if (meta == null) continue
-                val license = metadata(meta, "LicenseShortName")
                 val title = page.getString("title").replaceFirst(Regex("^File:"), "").replaceFirst(Regex("(?i)\\.jpe?g$"), "")
                 val objectName = metadata(meta, "ObjectName")
                 val subject = if (objectName.isEmpty()) title else objectName
-                if ("image/jpeg" != info.optString("mime") || !commonsLicense(license) ||
-                    !landscapeSubject(title, subject + " " + metadata(meta, "ImageDescription")) ||
+                if ("image/jpeg" != info.optString("mime") ||
+                    !safeSubject(title, subject + " " + metadata(meta, "ImageDescription")) ||
                     !fitsWidescreen(info.optInt("width"), info.optInt("height"))
                 ) continue
                 val url = if (fitsWidescreen(info.optInt("thumbwidth"), info.optInt("thumbheight")))
@@ -419,7 +419,7 @@ internal class LandscapeFeed {
         }
 
         /** Selected public domain and CC0 Full HD downloads. */
-        private fun wallspapersPhotos(): MutableList<Scene> {
+        private fun wallpapersPhotos(): MutableList<Scene> {
             val photos = arrayOf(
                 arrayOf("6a69283189", "Grand Canyon sandstone"),
                 arrayOf("cbeb40bf8c", "Yellowstone geyser basin"),
@@ -435,7 +435,7 @@ internal class LandscapeFeed {
             for (photo in photos) {
                 result.add(
                     Scene(
-                        "wallspapers:" + photo[0], "https://wallspapers.org/download/" + photo[0] + "/fhd",
+                        "wallpapers:" + photo[0], "https://wallpapers.org/download/" + photo[0] + "/fhd",
                         photo[1], true
                     )
                 )
@@ -473,6 +473,16 @@ internal class LandscapeFeed {
             )
         }
 
+        private fun pxherePhotos(): MutableList<Scene> {
+            return mutableListOf(
+                Scene(
+                    "pxhere:668634",
+                    "https://c.pxhere.com/photos/00/95/lake_landscape_reflection_scenic_calm_outdoors_nature_trees-668634.jpg!d",
+                    "Reflections on a mountain lake", true
+                )
+            )
+        }
+
         private fun json(url: String): JSONObject {
             return JSONObject(String(OnlineContent.get(url, 256 * 1024, 3500, 5000), StandardCharsets.UTF_8))
         }
@@ -487,7 +497,7 @@ internal class LandscapeFeed {
         }
 
         @JvmStatic
-        fun landscapeSubject(title: String, description: String): Boolean = LandscapePhotoPolicy.landscapeSubject(title, description)
+        fun safeSubject(title: String, description: String): Boolean = LandscapePhotoPolicy.safeSubject(title, description)
 
         @JvmStatic
         fun commonsLicense(license: String): Boolean = LandscapePhotoPolicy.commonsLicense(license)

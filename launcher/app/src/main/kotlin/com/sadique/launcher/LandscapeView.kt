@@ -53,6 +53,7 @@ class LandscapeView(context: Context) : FrameLayout(context) {
     private var running = false
     private var registered = false
     private var photoBusy = false
+    private var bundledFallbackIndex = 0
     private var weatherBusy = false
     private var hasPhoto = false
     private var networkOnline = false
@@ -347,6 +348,25 @@ class LandscapeView(context: Context) : FrameLayout(context) {
             } catch (unavailable: Exception) {
                 Log.w("PersonalLandscape", "Photo history unavailable", unavailable)
             }
+            if (result == null) {
+                // Last resort: cycle a bundled photo so the slideshow never sticks
+                // on one picture. Uses no history, so it also covers a broken
+                // photo database and a device with no network at all.
+                try {
+                    val index = bundledFallbackIndex
+                    bundledFallbackIndex = (bundledFallbackIndex + 1) % OFFLINE_RESOURCES.size
+                    resources.openRawResource(OFFLINE_RESOURCES[index]).use { input ->
+                        val bytes = OnlineContent.readBounded(input, LandscapeHistory.RESERVE_PHOTO_LIMIT)
+                        val fallback = ScreensaverPrefetch.decode(bytes)
+                        if (fallback != null) {
+                            result = fallback
+                            subject = OFFLINE_SUBJECTS[index]
+                        }
+                    }
+                } catch (ignored: Exception) {
+                    Log.d("PersonalLandscape", "Bundled photo fallback unavailable", ignored)
+                }
+            }
             val image = result
             val caption = subject
             handler.post {
@@ -372,8 +392,8 @@ class LandscapeView(context: Context) : FrameLayout(context) {
     }
 
     /**
-     * Downloads the next unseen photo straight from the feeds, with the same
-     * decode, face and duplicate checks as the prefetch job. Runs only on the
+     * Downloads the next photo straight from the feeds, with the same
+     * decode and duplicate checks as the prefetch job. Runs only on the
      * single photo worker thread. Returns the bitmap and its caption, or a
      * null bitmap when nothing could be downloaded in time.
      */
@@ -394,8 +414,10 @@ class LandscapeView(context: Context) : FrameLayout(context) {
                 val image = ScreensaverPrefetch.decode(bytes) ?: continue
                 var accepted = false
                 try {
-                    if (!scene.reviewed && !ScreensaverPrefetch.clearLandscape(image)) continue
-                    accepted = history.remember(scene.id, bytes, ScreensaverPrefetch.fingerprint(image))
+                    // A recycled scene is already in the shown history — showing it
+                    // again is the point, so skip the dedup record instead of
+                    // rejecting it.
+                    accepted = if (history.contains(scene.id)) true else history.remember(scene.id, bytes, ScreensaverPrefetch.fingerprint(image))
                     if (accepted) return image to scene.subject
                 } finally {
                     if (!accepted) image.recycle()

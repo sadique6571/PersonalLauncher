@@ -10,17 +10,11 @@ internal object LandscapePhotoPolicy {
     private val UNSUITABLE = Pattern.compile(
         "\\b(?:kiss\\w*|couples?|romance|romantic|wedding\\w*|brides?|grooms?|nud\\w*|erotic\\w*|" +
             "sexual\\w*|intimate|lingerie|swimwear|bikinis?|painting\\w*|illustration\\w*|" +
-            "nasa|astronaut\\w*|space station|from space|satellite|cira|orbital|artwork\\w*|composites?|people|persons?|families|family|women|woman|children|hikers?|crowds?|portraits?|lovers?|hugging|embracing|group photo)\\b",
+            "nasa|astronaut\\w*|space station|from space|satellite|cira|orbital|artwork\\w*|composites?|lovers?|hugging|embracing)\\b",
         Pattern.CASE_INSENSITIVE
     )
-    private val NATURE = Pattern.compile(
-        "\\b(?:mountains?|lakes?|waterfalls?|forests?|parks?|glaciers?|islands?|coasts?|" +
-            "canyons?|deserts?|valleys?|rivers?|reefs?|oceans?|cliffs?|dunes?|peaks?|beach(?:es)?|harbou?rs?|grasslands?|" +
-            "volcano\\w*|waterways?|aurora\\w*|meadows?|wetlands?|landscapes?)\\b", Pattern.CASE_INSENSITIVE
-    )
-    fun landscapeSubject(title: String, description: String): Boolean {
-        return title.trim().isNotEmpty() && NATURE.matcher("$title $description").find() &&
-            !UNSUITABLE.matcher("$title $description").find()
+    fun safeSubject(title: String, description: String): Boolean {
+        return title.trim().isNotEmpty() && !UNSUITABLE.matcher("$title $description").find()
     }
 
     fun commonsLicense(license: String): Boolean {
@@ -50,7 +44,7 @@ internal object LandscapePhotoPolicy {
                 "thumb.wikimedia.org",
                 "upload.wikimedia.org" -> path.startsWith("/wikipedia/commons/") &&
                     path.lowercase(Locale.ROOT).matches(Regex(".+\\.jpe?g"))
-                "wallspapers.org" -> path.matches(Regex("/download/[a-f0-9]{10}/fhd"))
+                "wallpapers.org" -> path.matches(Regex("/download/[a-f0-9]{10}/fhd"))
                 "www.publicdomainpictures.net" ->
                     path.matches(Regex("/pictures/[0-9]+/velka/[A-Za-z0-9_-]+\\.jpg"))
                 "npgallery.nps.gov" -> path.matches(Regex("/GetAsset/[a-f0-9-]{36}/original\\.jpg"))
