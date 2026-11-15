@@ -42,11 +42,11 @@ class CpuUsageSamplerTest {
         source.stat = "cpu 80 0 0 60"
         val sample = sampler.sample()
         assertTrue(sample.system)
-        assertEquals(50, sample.percent, 0.001)
+        assertEquals(50.0, sample.percent, 0.001)
         source.stat = "cpu 30 0 0 20"
         assertFalse(sampler.sample().ready())
         source.stat = "cpu 80 0 0 70"
-        assertEquals(50, sampler.sample().percent, 0.001)
+        assertEquals(50.0, sampler.sample().percent, 0.001)
     }
 
     @Test fun restrictedProcFallsBackToRealIdleCounters() {
@@ -58,7 +58,7 @@ class CpuUsageSamplerTest {
         source.idle += 2000000
         val sample = sampler.sample()
         assertTrue(sample.system)
-        assertEquals(50, sample.percent, 0.001)
+        assertEquals(50.0, sample.percent, 0.001)
         assertEquals(1, source.procCalls)
     }
 
@@ -74,10 +74,10 @@ class CpuUsageSamplerTest {
         source.cpu = 400
         val sample = sampler.sample()
         assertFalse(sample.system)
-        assertEquals(10, sample.percent, 0.001)
+        assertEquals(10.0, sample.percent, 0.001)
         source.wall = 2000
         source.cpu = 800
-        assertEquals(10, sampler.sample().percent, 0.001)
+        assertEquals(10.0, sampler.sample().percent, 0.001)
         assertEquals(1, source.procCalls)
         assertEquals(1, source.idleCalls)
     }
@@ -93,6 +93,6 @@ class CpuUsageSamplerTest {
         assertFalse(sampler.sample().ready())
         source.wall = 2000
         source.idle += 1000000
-        assertEquals(50, sampler.sample().percent, 0.001)
+        assertEquals(50.0, sampler.sample().percent, 0.001)
     }
 }

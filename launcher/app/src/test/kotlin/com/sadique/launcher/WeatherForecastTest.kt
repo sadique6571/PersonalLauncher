@@ -21,7 +21,7 @@ class WeatherForecastTest {
     }
     @Test fun optionalObservationsStayMissingRatherThanZero() {
         val f = WeatherForecast.parse(CURRENT); assertEquals(24.0, f.temperature, 0.0); assertFalse(f.day)
-        assertTrue(Double.isNaN(f.feels)); assertTrue(Double.isNaN(f.humidity)); assertTrue(Double.isNaN(f.wind))
+        assertTrue(f.feels.isNaN()); assertTrue(f.humidity.isNaN()); assertTrue(f.wind.isNaN())
         assertTrue(f.hours.isEmpty()); assertTrue(f.days.isEmpty())
         try { WeatherForecast.parse("{\"current\":{}}"); fail() } catch (expected: IllegalArgumentException) { }
     }
@@ -40,7 +40,7 @@ class WeatherForecastTest {
         for (d in 10 until 20) { dates.put("2026-11-" + d); low.put(10); high.put(20) }
         json.put("daily", JSONObject().put("time", dates).put("temperature_2m_min", low).put("temperature_2m_max", high))
         val f = WeatherForecast.parse(json.toString()); assertEquals(12, f.hours.size); assertEquals("2026-11-10T10:00", f.hours[0].time)
-        assertTrue(Double.isNaN(f.hours[0].rain)); assertEquals(7, f.days.size)
+        assertTrue(f.hours[0].rain.isNaN()); assertEquals(7, f.days.size)
         val restored = WeatherForecast.decode(f.encode()); assertEquals(f.hours.size, restored.hours.size); assertEquals(7, restored.days.size); assertFalse(restored.day)
     }
     @Test fun fallbackHasActualCurrentDataAndNoInventedForecast() {
