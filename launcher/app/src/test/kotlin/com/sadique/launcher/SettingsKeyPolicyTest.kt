@@ -2,7 +2,6 @@ package com.sadique.launcher
 
 import android.view.KeyEvent
 import java.util.Arrays
-import java.util.Map
 import org.junit.Test
 import org.junit.Assert.*
 

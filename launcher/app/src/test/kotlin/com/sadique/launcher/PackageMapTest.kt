@@ -4,7 +4,6 @@ import org.junit.Test
 
 import java.util.Arrays
 import java.util.Collections
-import java.util.Map
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

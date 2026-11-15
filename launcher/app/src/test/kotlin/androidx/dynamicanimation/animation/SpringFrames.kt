@@ -10,7 +10,7 @@ object SpringFrames {
     @JvmStatic
     fun toSettle(stiffness: Float, dampingRatio: Float, minimumVisibleChange: Float, distancePx: Float): Int {
         val spring = SpringForce(0f).setStiffness(stiffness).setDampingRatio(dampingRatio)
-        spring.setValueThreshold(minimumVisibleChange * 0.75f)   // DynamicAnimation.THRESHOLD_MULTIPLIER
+        spring.setValueThreshold(minimumVisibleChange * 0.75)   // DynamicAnimation.THRESHOLD_MULTIPLIER
         var value = -distancePx.toDouble()
         var velocity = 0.0
         for (frame in 1..120) {

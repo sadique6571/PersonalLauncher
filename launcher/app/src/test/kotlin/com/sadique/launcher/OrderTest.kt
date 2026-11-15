@@ -5,8 +5,6 @@ import org.junit.Test
 import java.util.ArrayList
 import java.util.Arrays
 import java.util.Collections
-import java.util.List
-import java.util.Map
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -16,7 +14,7 @@ import org.junit.Assert.assertTrue
 class OrderTest {
 
     private companion object {
-        private val DOCK: List<String> = Arrays.asList("com.plexapp.android", "com.netflix.ninja")
+        private val DOCK: List<String> = listOf("com.plexapp.android", "com.netflix.ninja")
     }
 
     @Test

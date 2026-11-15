@@ -3,8 +3,6 @@ package com.sadique.launcher
 import android.accessibilityservice.AccessibilityService
 import java.util.ArrayList
 import java.util.Arrays
-import java.util.List
-import java.util.Map
 import org.junit.Test
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

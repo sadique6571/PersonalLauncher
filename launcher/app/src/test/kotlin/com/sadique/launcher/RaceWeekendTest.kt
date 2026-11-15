@@ -8,8 +8,6 @@ import org.junit.Assert.assertTrue
 import java.time.Duration
 import java.time.Instant
 import java.util.Arrays
-import java.util.Collections
-import java.util.List
 
 import org.junit.Test
 
@@ -25,7 +23,7 @@ class RaceWeekendTest {
                         RaceWeekend.Session("FP2", Instant.parse("2026-10-23T21:00:00Z")),
                         RaceWeekend.Session("FP3", Instant.parse("2026-10-24T17:30:00Z")),
                         RaceWeekend.Session("Qualifying", Instant.parse("2026-10-24T21:00:00Z"))))
-        private val CALENDAR: List<RaceWeekend.Race> = Collections.singletonList(AUSTIN)
+        private val CALENDAR: List<RaceWeekend.Race> = listOf(AUSTIN)
     }
 
     @Test

@@ -125,7 +125,7 @@ class LibraryAppsTest {
         apps.add("org.z.example"); apps.add("com.a.example")
         assertEquals("com.a.example\norg.z.example\n", LibraryApps.encode(apps))
         assertEquals(apps, LibraryApps.decode(LibraryApps.encode(apps)))
-        assertEquals(Collections.emptySet(), LibraryApps.decode(""))
+        assertEquals(Collections.emptySet<String>(), LibraryApps.decode(""))
     }
 
     @Test fun duplicateAndMalformedRecordsAreRejected() {

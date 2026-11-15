@@ -17,10 +17,10 @@ class HomeAppearanceTest {
     }
 
     @Test fun portraitKeepsTheSkyWithoutFullHeightMagnification() {
-        val frame = HomeAppearance.frame(393, 850, 1280, 720, 170, true)
+        val frame = HomeAppearance.frame(393, 850, 1280, 720, 170f, true)
         val height = frame[3] - frame[1]
         assertTrue(height < 400)
-        assertEquals(0, frame[1], 0.1f)
+        assertEquals(0f, frame[1], 0.1f)
         assertTrue(frame[1] + height * 0.49f > 140)
         assertTrue(frame[0] <= 0 && frame[2] >= 393)
     }
@@ -33,19 +33,19 @@ class HomeAppearanceTest {
     }
 
     @Test fun televisionShowsFullSkyAndDoesNotZoomToAlignRidgeWithClock() {
-        val frame = HomeAppearance.frame(960, 540, 1280, 720, 160, true)
+        val frame = HomeAppearance.frame(960, 540, 1280, 720, 160f, true)
         assertArrayEquals(floatArrayOf(0f, 0f, 960f, 540f), frame, 0.1f)
         assertTrue((frame[3] - frame[1]) * 0.49f > 160)
     }
 
     @Test fun landscapeAndCustomPhotosCoverTheirViewportWithoutDistortion() {
         for (mountains in booleanArrayOf(true, false)) {
-            val frame = HomeAppearance.frame(960, 540, 1280, 720, 160, mountains)
+            val frame = HomeAppearance.frame(960, 540, 1280, 720, 160f, mountains)
             assertTrue(frame[0] <= 0 && frame[1] <= 0)
             assertTrue(frame[2] >= 960 && frame[3] >= 540)
             assertEquals(1280f / 720, (frame[2] - frame[0]) / (frame[3] - frame[1]), 0.001f)
         }
-        val custom = HomeAppearance.frame(393, 850, 1280, 720, 170, false)
+        val custom = HomeAppearance.frame(393, 850, 1280, 720, 170f, false)
         assertTrue(custom[1] <= 0 && custom[3] >= 850)
     }
 }

@@ -34,12 +34,12 @@ class LandscapeModelTest {
         val url = LandscapeModel.weatherUrl(LandscapeModel.LATITUDE, LandscapeModel.LONGITUDE, false)
         assertTrue(url.contains("latitude=30.81&longitude=73.45"))
         assertTrue(url.contains("temperature_unit=celsius"))
-        assertTrue(LandscapeModel.weatherUrl(0, 0, true).contains("temperature_unit=fahrenheit"))
+        assertTrue(LandscapeModel.weatherUrl(0.0, 0.0, true).contains("temperature_unit=fahrenheit"))
     }
 
     @Test(expected = IllegalArgumentException::class)
     fun invalidCoordinatesAreRejected() {
-        LandscapeModel.weatherUrl(Double.NaN, 0, false)
+        LandscapeModel.weatherUrl(Double.NaN, 0.0, false)
     }
 
     @Test fun weatherCodesDoNotInventSunshine() {
