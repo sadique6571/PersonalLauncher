@@ -12,16 +12,12 @@ import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import android.content.pm.ResolveInfo
 import android.content.res.Configuration
 import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Outline
-import android.graphics.Paint
 import android.graphics.Point
 import android.graphics.Typeface
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.InsetDrawable
@@ -41,14 +37,10 @@ import android.os.Parcelable
 import android.os.SystemClock
 import android.provider.Settings
 import android.text.InputType
-import android.text.Layout
 import android.text.SpannableString
 import android.text.Spanned
-import android.text.StaticLayout
-import android.text.TextPaint
 import android.text.TextUtils
 import android.text.style.ForegroundColorSpan
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -67,12 +59,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.recyclerview.widget.RecyclerView
 import java.io.File
-import java.text.SimpleDateFormat
-import java.time.DateTimeException
-import java.time.LocalDate
 import java.util.Calendar
 import java.util.Collections
-import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.function.IntConsumer
 
@@ -1197,91 +1185,20 @@ class PersonalHomeActivity : Activity() {
     }
 
     /** Time-based greeting, e.g. "Subah Bakhair". */
-    private fun greetingText(): String {
-        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        if (glassOs()) return if (hour >= 5 && hour < 12) "Good morning" else if (hour < 17 && hour >= 12) "Good afternoon" else if (hour >= 17 && hour < 22) "Good evening" else "Good night"
-        if (hour >= 5 && hour < 12) return "Subah Bakhair"
-        if (hour >= 12 && hour < 17) return "Dopahar Bakhair"
-        if (hour >= 17 && hour < 22) return "Shaam Bakhair"
-        return "Shab Bakhair"
-    }
+    private val clockDisplay by lazy { HomeClockDisplay(this, prefs, this::dp) }
+
+    private fun greetingText(): String = clockDisplay.greetingText()
 
     private fun updateClock() {
-        val now = Calendar.getInstance()
-        val seconds = prefs.getBoolean("clock_seconds", false)
-        val is24 = prefs.getBoolean("time_24h", false)
-        var value: String
-        val ampmText: String
-        if (is24) {
-            value = String.format(Locale.getDefault(), "%02d:%02d",
-                    now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE))
-            if (seconds) value += String.format(Locale.getDefault(), ":%02d", now.get(Calendar.SECOND))
-            ampmText = ""
-        } else {
-            val h12 = if (now.get(Calendar.HOUR) == 0) 12 else now.get(Calendar.HOUR)
-            value = String.format(Locale.getDefault(), "%02d:%02d", h12, now.get(Calendar.MINUTE))
-            if (seconds) value += String.format(Locale.getDefault(), ":%02d", now.get(Calendar.SECOND))
-            ampmText = if (now.get(Calendar.AM_PM) == Calendar.AM) "AM" else "PM"
-        }
-        fitClockText(value)
-        val ampmView = ampm
-        if (ampmView != null) {
-            ampmView.text = ampmText
-            val analog = prefs.getInt("clock_style", 0) == 1
-            ampmView.visibility = if (analog) View.INVISIBLE else if (ampmText.isEmpty()) View.GONE else View.VISIBLE
-        }
-        date?.text = SimpleDateFormat("EEE, d MMM yyyy", Locale.ENGLISH).format(now.time)
-        harmonyDateValue?.text = SimpleDateFormat("EEE, d MMM", Locale.ENGLISH).format(now.time)
-        harmonyGreetingValue?.text = greetingText()
-        val quoteView = harmonyQuoteValue
-        if (quoteView != null && prefs.getBoolean("harmony_daily_quote", true)) {
-            val today = HarmonyDailyWords.forCalendar(now)
-            if (!today.contentEquals(quoteView.text)) quoteView.text = today
-        }
-        val islamicView = islamicDate
-        if (islamicView != null) try {
-            val today = LocalDate.of(now.get(Calendar.YEAR), now.get(Calendar.MONTH) + 1, now.get(Calendar.DAY_OF_MONTH))
-            islamicView.text = HijriCalendar.format(today, prefs.getInt("hijri_adjustment", 0))
-        } catch (unavailable: DateTimeException) {
-            islamicView.text = "Islamic date unavailable"
-        }
-        val skyView = sky
-        if (skyView != null) {
-            skyView.minute = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-            skyView.clockStyle = 0 // The independent SweepAnalogClock draws analog mode in every theme.
-            skyView.invalidate()
-        }
-        greeting?.text = greetingText()
+        clockDisplay.update(
+            this::fitClockText, ampm, date, harmonyDateValue, harmonyGreetingValue, harmonyQuoteValue,
+            islamicDate, sky, greeting,
+        )
     }
 
-    /**
-     * Sizes the clock text so the whole string always fits. AM/PM lives in its
-     * own view now, so there is no span left to mismeasure. Measured precisely
-     * with a StaticLayout, then scaled down only if needed; never below 26sp.
-     */
     private fun fitClockText(text: CharSequence) {
-        val timeView = time ?: return
-        val density = resources.displayMetrics.density
-        val screenW = resources.displayMetrics.widthPixels
-        var maxWidth = (if (pageWidth > 0) pageWidth else screenW) - dp(24)
-        if (maxWidth <= 0) maxWidth = screenW - dp(24)
-        val parent = timeView.parent
-        if ((glassOs() || weatherWidgetEnabled()) && parent is View && parent.width > 0)
-            maxWidth = Math.max(dp(70), parent.width - dp(if (clockDatesInline) 260 else 80))
-        val paint = TextPaint()
-        paint.typeface = timeView.typeface
-        var sizePx = clockTextSize * density
-        paint.textSize = sizePx
-        val layout = StaticLayout.Builder.obtain(
-                text, 0, text.length, paint, Int.MAX_VALUE)
-                .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-                .setIncludePad(false)
-                .build()
-        var w = 0f
-        for (i in 0 until layout.lineCount) w = Math.max(w, layout.getLineWidth(i))
-        if (w > maxWidth && w > 0) sizePx = Math.max(sizePx * maxWidth / w, 26 * density)
-        timeView.setTextSize(TypedValue.COMPLEX_UNIT_PX, sizePx)
-        timeView.text = text
+        val view = time ?: return
+        clockDisplay.fit(view, text, pageWidth, clockTextSize, glassOs() || weatherWidgetEnabled(), clockDatesInline)
     }
 
     /** Per-second ticker, only active when clock seconds are enabled. */
@@ -1343,138 +1260,17 @@ class PersonalHomeActivity : Activity() {
         homeWeatherController.refresh()
     }
 
-    @Volatile
-    private var appGeneration = 0
+    private val artworkCatalog by lazy {
+        HomeArtworkCatalog(
+            host = this, prefs = prefs, tv = tv, appWorker = appWorker, handler = handler, fallbackAccent = CYAN,
+            appsOnHome = { cachedApps }, tileVisible = tileViews::containsKey,
+            renderApps = this::renderApps, updateTileIcon = this::updateTileIcon, accentColor = this::accentColor,
+        )
+    }
+
     private fun loadApps() {
         if (carriedApp != null) { carriedApp = null; moveOrder = null }
-        val generation = ++appGeneration
-        val prior = cachedApps
-        appWorker.execute {
-            val found = ArrayList<ResolveInfo>()
-            if (tv) found.addAll(packageManager.queryIntentActivities(
-                    Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER), 0))
-            found.addAll(packageManager.queryIntentActivities(
-                    Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0))
-            val packages = HashSet<String>()
-            val apps = ArrayList<PersonalApp>()
-            val previous = HashMap<String, PersonalApp>()
-            val snapshot = prior
-            if (snapshot != null) for (app in snapshot) previous[app.info.activityInfo.packageName] = app
-            // Phase 1: labels only — the grid renders immediately with letter placeholders.
-            for (info in found) {
-                if (generation != appGeneration) return@execute
-                val pkg = info.activityInfo.packageName
-                if (pkg == packageName || !packages.add(pkg)) continue
-                try {
-                    val label = info.loadLabel(packageManager).toString()
-                    val old = previous[pkg]
-                    if (old != null && old.iconReady && old.name == label
-                            && java.util.Objects.equals(old.info.activityInfo.applicationInfo.sourceDir, info.activityInfo.applicationInfo.sourceDir)) {
-                        apps.add(PersonalApp(label, info, old.icon, old.accent, true))
-                    } else {
-                        apps.add(PersonalApp(label, info, letterIcon(label), CYAN, false))
-                    }
-                } catch (removedDuringQuery: RuntimeException) {
-                    // A package can be replaced or removed between queryIntentActivities and loading its resources.
-                }
-            }
-            apps.sortWith { a, b -> a.name.compareTo(b.name, ignoreCase = true) }
-            handler.post {
-                if (!isDestroyed && generation == appGeneration && !sameApps(cachedApps, apps)) renderApps(apps)
-            }
-        }
-    }
-
-    /** Only bound/visible tiles request artwork. Serial work and generation checks bound concurrency. */
-    private fun requestAppIcon(app: PersonalApp) {
-        if (app.iconReady || app.iconRequest.pending(appGeneration) || isDestroyed) return
-        val generation = appGeneration
-        app.iconRequest.begin(generation)
-        appWorker.execute {
-            if (generation != appGeneration || isDestroyed) return@execute
-            val pkg = app.info.activityInfo.packageName
-            try {
-                if (harmony()) {
-                    val nativeIcon = app.info.loadIcon(packageManager)
-                    handler.post {
-                        if (!app.iconRequest.finish(generation)) return@post
-                        if (!isDestroyed && generation == appGeneration)
-                            updateTileIcon(pkg, nativeIcon, ThemeStyle.accent(prefs))
-                    }
-                    return@execute
-                }
-                val cache = IconCache(this)
-                val pm = packageManager
-                val version = IconCache.version(pm, pkg)
-                val cachedCard = cache.load(pkg, version)
-                val finished: Bitmap
-                val finishedAccent: Int
-                if (cachedCard != null) {
-                    finished = cachedCard
-                    finishedAccent = cache.accent(pkg, version, CYAN)
-                } else {
-                    var logo = app.info.loadIcon(pm)
-                    if (pkg == "com.google.android.youtube.tv" || pkg == "com.google.android.youtube") logo = getDrawable(R.drawable.logo_youtube)!!
-                    if (pkg == "com.netflix.ninja" || pkg == "com.netflix.mediaclient") logo = getDrawable(R.drawable.logo_netflix)!!
-                    if (cache.mark()) logo = DemoBrandMark.choose(pkg, logo)
-                    val artwork = AppArtwork.create(resources, logo, cache.logoScale(), cache.mark())
-                    finished = (artwork.image as BitmapDrawable).bitmap
-                    finishedAccent = artwork.accent
-                    cache.save(pkg, version, finished, finishedAccent)
-                }
-                handler.post {
-                    if (!app.iconRequest.finish(generation)) return@post
-                    if (!isDestroyed && generation == appGeneration) {
-                        updateTileIcon(pkg, BitmapDrawable(resources, finished), finishedAccent)
-                        trimAppIcons()
-                    }
-                }
-            } catch (removed: RuntimeException) { handler.post { app.iconRequest.finish(generation) } }
-        }
-    }
-
-    private fun trimAppIcons() {
-        val apps = cachedApps ?: return
-        var bytes = 0L
-        for (app in apps) {
-            val icon = app.icon
-            if (icon is BitmapDrawable) bytes += icon.bitmap.allocationByteCount
-        }
-        val budget = MemoryProfile.iconCacheBytes(MemoryProfile.effectiveTier(this, prefs))
-        for (app in apps) {
-            if (bytes <= budget) break
-            if (!app.iconReady || tileViews.containsKey(app.info.activityInfo.packageName)) continue
-            val icon = app.icon
-            if (icon is BitmapDrawable) bytes -= icon.bitmap.allocationByteCount
-            app.icon = null
-            app.iconReady = false // Visible tiles will reload from disk; never recycle a drawn bitmap.
-        }
-    }
-
-    /** Cheap letter placeholder so the grid is useful before icons finish. Runs on the worker thread. */
-    private fun letterIcon(name: String): Drawable {
-        val square = harmony()
-        val bitmap = Bitmap.createBitmap(if (square) 96 else 160, if (square) 96 else 90, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        if (square) {
-            paint.color = 0xff537d9a.toInt()
-            canvas.drawRoundRect(5f, 5f, 91f, 91f, 21f, 21f, paint)
-            paint.color = 0xfff5fbff.toInt()
-            paint.textSize = 47f
-            paint.typeface = Typeface.DEFAULT_BOLD
-            paint.textAlign = Paint.Align.CENTER
-            val letter = if (name.isEmpty()) "?" else name.substring(0, 1).uppercase(Locale.ROOT)
-            canvas.drawText(letter, 48f, 64f, paint)
-        } else {
-            if (!ThemeStyle.custom(prefs)) canvas.drawColor(0xff0d2036.toInt())
-            paint.color = if (ThemeStyle.custom(prefs)) accentColor() else 0x6640d9ff
-            paint.textSize = 44f
-            paint.textAlign = Paint.Align.CENTER
-            val letter = if (name.isEmpty()) "?" else name.substring(0, 1).uppercase(Locale.ROOT)
-            canvas.drawText(letter, 80f, 60f, paint)
-        }
-        return BitmapDrawable(resources, bitmap)
+        artworkCatalog.load()
     }
 
     /** Swaps a finished icon into the live tile and the cached App. Runs on the UI thread. */
@@ -1724,7 +1520,7 @@ class PersonalHomeActivity : Activity() {
     }
 
     private fun createAppTile(app: PersonalApp, width: Int, moving: Boolean): View {
-        requestAppIcon(app)
+        artworkCatalog.requestIcon(app)
         return tileFactory.create(app, width, moving, grid!!)
     }
 
@@ -2023,7 +1819,7 @@ class PersonalHomeActivity : Activity() {
         val priorLogo = prefs.getInt("logo_size", 1)
         val priorMark = ThemeStyle.id(prefs) != ThemeStyle.CLASSIC
         val wasHarmony = harmony()
-        appGeneration++ // Reject artwork started for the previous style, even if its palette was similar.
+        artworkCatalog.invalidate() // Reject artwork started for the previous style, even if its palette was similar.
         prefs.edit().putInt("visual_style", style).apply()
         ThemeStyle.demoDefaults(prefs, tv)
         val reload = wasHarmony != harmony() || priorLogo != prefs.getInt("logo_size", 1) || priorMark != (ThemeStyle.id(prefs) != ThemeStyle.CLASSIC)
@@ -2059,7 +1855,7 @@ class PersonalHomeActivity : Activity() {
         }
         editor.apply()
         ThemeStyle.demoDefaults(prefs, tv)
-        appGeneration++
+        artworkCatalog.invalidate()
         val apps = cachedApps
         if (apps != null) {
             for (app in apps) {
@@ -2483,7 +2279,7 @@ class PersonalHomeActivity : Activity() {
         // background and download the photo again on every return.
         if (MemoryTrimPolicy.shouldRelease(level, resumed)) {
             sky?.releaseTransient()
-            trimAppIcons()
+            artworkCatalog.trimIcons()
         }
     }
 
@@ -2504,17 +2300,6 @@ class PersonalHomeActivity : Activity() {
         private val CYAN = 0xff40d9ff.toInt()
         private val TEXT = 0xfff0f7ff.toInt()
         private val MUTED = 0xffa4bcd6.toInt()
-
-        private fun sameApps(before: List<PersonalApp>?, after: List<PersonalApp>): Boolean {
-            if (before == null || before.size != after.size) return false
-            for (i in before.indices) {
-                val a = before[i]
-                val b = after[i]
-                if (a.icon !== b.icon || a.name != b.name || a.info.activityInfo.packageName != b.info.activityInfo.packageName
-                        || a.info.activityInfo.name != b.info.activityInfo.name) return false
-            }
-            return true
-        }
 
 
     }

@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
@@ -25,8 +24,6 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
-import android.text.SpannableString
-import android.text.Spanned
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.KeyEvent
@@ -51,7 +48,6 @@ import androidx.recyclerview.widget.RecyclerView
 import java.time.LocalDate
 import java.util.ArrayList
 import java.util.Arrays
-import java.util.Calendar
 import java.util.Collections
 import java.util.HashSet
 import java.util.Locale
@@ -105,15 +101,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
 
 
 
-        private fun liftTowardsWhite(argb: Int, amount: Float): Int {
-            var r = (argb shr 16) and 0xFF
-            var g = (argb shr 8) and 0xFF
-            var b = argb and 0xFF
-            r += ((255 - r) * amount).toInt()
-            g += ((255 - g) * amount).toInt()
-            b += ((255 - b) * amount).toInt()
-            return 0xFF000000.toInt() or (r shl 16) or (g shl 8) or b
-        }
+
     }
 
     private var rtlAppGrid = false
@@ -150,8 +138,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     /** config show_inputs_pill: false keeps the Inputs pill hidden even when the TV has inputs. */
     private var showInputsPill = true
     private lateinit var btnWifi: TextView
-    /** The network pill's icon as last set, so a refresh that changes nothing does not lay the top bar out again. */
-    private var wifiIcon = 0
     /** The pills have been filled in once; later resumes refresh them after the first frame. */
     private var pillsShown = false
     private lateinit var shamsiDate: TextView
@@ -170,16 +156,8 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     private var greetingName = ""
     /** Optional time-of-day backdrop (config.xml, sky_intensity); 0 keeps it hidden. */
     private lateinit var sky: SkyView
-    private lateinit var vpnApp: String
-    /** vpn_pill: the VPN shown as its own pill (btnVpn) instead of a badge in the network pill. Off with top_menu. */
-    private var vpnPill = false
     private lateinit var btnVpn: TextView
-    /** The VpnBadge pill state btnVpn shows, so a refresh that changes nothing does not restyle it. */
-    private var vpnPillState = VpnBadge.PILL_HIDDEN
-    /** icon_only_vpn: the VPN pill is a round lock button; off, it keeps the plain glass look saved here. */
-    private var iconOnlyVpn = false
-    private var vpnPlainBackground: Drawable.ConstantState? = null
-    private var vpnPlainInk: ColorStateList? = null
+    private lateinit var networkPills: LauncherNetworkPills
     private lateinit var springX: SpringAnimation
     private lateinit var springY: SpringAnimation
     private var glassTargetX = 0f
@@ -301,11 +279,11 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
-            handler.post { updateWifiLabel() }
+            handler.post { networkPills.refresh() }
         }
 
         override fun onLost(network: Network) {
-            handler.post { updateWifiLabel() }
+            handler.post { networkPills.refresh() }
         }
 
         /** wifi_status_warnings follows validation; signal-strength updates also land here, so skip those. */
@@ -317,7 +295,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
             if (validated && startPending != null) handler.post(openWhenOnline)
             if (validated == lastValidated) return
             lastValidated = validated
-            if (wifiNoInternetTint != null) handler.post { updateWifiLabel() }
+            if (networkPills.warnsAboutInternet) handler.post { networkPills.refresh() }
         }
     }
     /** Shows the Inputs pill once the TV registers an input: at boot HDMI inputs can appear after Home is shown. */
@@ -333,11 +311,11 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     /** Listens for any VPN coming up or going down, even one this app's traffic is excluded from. */
     private val vpnCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
-            handler.post { updateWifiLabel() }
+            handler.post { networkPills.refresh() }
         }
 
         override fun onLost(network: Network) {
-            handler.post { updateWifiLabel() }
+            handler.post { networkPills.refresh() }
         }
     }
     private val packageFilter = IntentFilter()
@@ -365,7 +343,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
             sportsPanel.update()
             // The pill follows the network callbacks and each return to Home; only the diya's flame follows the
             // signal level, so only it needs this minute's binder calls (about 7 ms on the UI thread).
-            if (festive) updateWifiLabel()
+            if (festive) networkPills.refresh()
             sky.update()
             wallpaperPlayer.update()
             handler.postDelayed(this, MINUTE_MS)
@@ -472,8 +450,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
             lunarDate.setTextSize(11f)
             date.setPadding(0, (4 * density).toInt(), 0, 0)
         }
-        vpnApp = cfg.vpnApp
-        vpnPill = cfg.vpnPill && !cfg.topMenu
         btnVpn = findViewById(R.id.btnVpn)
         moduleCards = cfg.moduleCards
         hiddenApps = HashSet(cfg.hiddenApps)
@@ -648,15 +624,9 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         addTopBarApps(cfg.topBarApps, cfg.launchActions)
         iconOnlyButtons = cfg.iconOnlyButtons
         topMenu = cfg.topMenu
-        wifiIconOnly = iconOnlyButtons && cfg.wifiLabelWidth <= 0
-        if (cfg.wifiStatusColor) {
-            wifiPlainTint = btnWifi.compoundDrawableTintList
-            wifiOnlineTint = getColorStateList(R.color.pill_icon_online)
-            if (cfg.wifiStatusWarnings) {
-                wifiNoInternetTint = getColorStateList(R.color.pill_icon_no_internet)
-                wifiOfflineTint = getColorStateList(R.color.pill_icon_offline)
-            }
-        }
+        networkPills = LauncherNetworkPills(
+            this, cfg, btnWifi, btnVpn, density, { if (festive) diya else null }, this::firstTopButton,
+        )
         if (cfg.topMenu) {
             // One gear: Inputs and Wi-Fi move into its dropdown. The Wi-Fi pill stays hidden but keeps its
             // label up to date, which the menu's Wi-Fi row shows.
@@ -681,12 +651,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
             makeIconOnly(btnSettings as TextView)
         }
         if (cfg.iconOnlyInputs) makeIconOnly(btnInputs as TextView)
-        iconOnlyVpn = vpnPill && cfg.iconOnlyVpn
-        if (iconOnlyVpn) {
-            vpnPlainBackground = btnVpn.background.constantState
-            vpnPlainInk = btnVpn.compoundDrawableTintList
-            makeIconOnly(btnVpn)
-        }
+        networkPills.captureVpnStyle(this::makeIconOnly)
         btnSettings.setOnLongClickListener {
             showSettingsMenu()
             true
@@ -898,7 +863,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         if (pillsShown) {
             refreshPillsAfterNextDraw()
         } else {
-            updateWifiLabel()
+            networkPills.refresh()
             updateInputsButton()
             pillsShown = true
         }
@@ -1576,50 +1541,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     }
 
     private fun updateGreeting() {
-        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        var res: Int
-        // Locale-specific day parts (app language on Android 13+).
-        // Indonesian: Pagi 00-10, Siang 10-15, Sore 15-18, Malam 18-24.
-        // Spain (es-ES) and Catalan: "Buenas tardes" into the evening; "Buenas noches" from 21.
-        // Latin American Spanish (es-MX, es-AR, …) keeps the default hours: evening strings are also
-        // «Buenas noches», and there «Buenas noches» from ~17 matches local use better than Spain's 21.
-        val locale = resources.configuration.locales[0]
-        val lang = locale.language
-        val country = locale.country
-        if ("in" == lang || "id" == lang) {
-            if (hour < 10) res = R.string.good_morning
-            else if (hour < 15) res = R.string.good_afternoon
-            else if (hour < 18) res = R.string.good_evening
-            else res = R.string.good_night
-        } else if (("es" == lang && "ES" == country) || "ca" == lang) {
-            if (hour < 6) res = R.string.good_night
-            else if (hour < 12) res = R.string.good_morning
-            else if (hour < 21) res = R.string.good_afternoon
-            else res = R.string.good_night
-        } else if ("da" == lang) {
-            // Danish day parts: "God morgen" until 11, then "God formiddag" to noon.
-            if (hour < 5) res = R.string.good_night
-            else if (hour < 11) res = R.string.good_morning
-            else if (hour < 12) res = R.string.good_forenoon
-            else if (hour < 18) res = R.string.good_afternoon
-            else if (hour < 22) res = R.string.good_evening
-            else res = R.string.good_night
-        } else {
-            if (hour < 5) res = R.string.good_night
-            else if (hour < 12) res = R.string.good_morning
-            else if (hour < 17) res = R.string.good_afternoon
-            else if (hour < 22) res = R.string.good_evening
-            else res = R.string.good_night
-        }
-        val festiveGreeting = if (festive) festival.greetingText(resources) else ""
-        if (festiveGreeting.isNotEmpty()) {
-            greeting.text = festiveGreeting
-            greeting.setTextColor(liftTowardsWhite(festival.accentColor(), 0.25f))
-        } else {
-            greeting.text = if (greetingName.isEmpty()) getString(res)
-                    else getString(R.string.greeting_with_name, getString(res), greetingName)
-            greeting.setTextColor(greetingColor)
-        }
+        LauncherGreeting.update(this, greeting, greetingName, greetingColor, festive, festival)
         if (shamsi) shamsiDate.text = Shamsi.today(resources)
         if (lunar) lunarDate.text = Lunar.today(resources, lunarOffset)
     }
@@ -1632,7 +1554,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
                 // from onResume would run first: the frame is only scheduled after onResume returns.
                 handler.post {
                     if (!isDestroyed) {
-                        updateWifiLabel()
+                        networkPills.refresh()
                         updateInputsButton()
                     }
                 }
@@ -1642,110 +1564,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         root.invalidate()   // a resume that changes nothing on screen still draws once, so the refresh runs
     }
 
-    /** Shows the Wi-Fi network name on the button when we can read it, otherwise the connection type. */
-    private fun updateWifiLabel() {
-        var text = getString(R.string.wifi)
-        var vpn = false
-        var online = false
-        var validated = false
-        var icon = R.drawable.ic_wifi
-        // The diya's flame: 0 is out (offline), 1 to 4 follow the Wi-Fi signal, Ethernet burns steady at 4.
-        var flame = 0
-        var steady = false
-        try {
-            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-            var wifi = false
-            var ethernet = false
-            // All networks, not just the active one: with a VPN up the active network is the VPN itself.
-            for (net in cm?.allNetworks ?: emptyArray<Network>()) {
-                val caps = cm?.getNetworkCapabilities(net)
-                if (caps == null) continue
-                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
-                    vpn = true
-                    continue
-                }
-                if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue
-                online = true
-                // Android reached the internet through it; a captive portal stays unvalidated until login.
-                if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) validated = true
-                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) ethernet = true
-                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) wifi = true
-            }
-            if (!online) {
-                text = getString(R.string.offline)
-                vpn = false
-            } else if (ethernet) {
-                text = getString(R.string.ethernet)
-                icon = R.drawable.ic_ethernet
-                flame = 4
-                steady = true
-            } else if (wifi) {
-                val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-                val info = wm?.connectionInfo
-                var ssid: String? = info?.ssid
-                flame = if (info != null) Math.max(1, Math.min(4, WifiManager.calculateSignalLevel(info.rssi, 5))) else 3
-                if (ssid != null) {
-                    ssid = ssid.replace("\"", "").trim()
-                    if (ssid.isNotEmpty() && !ssid.contains("unknown") && ssid != "0x") text = ssid
-                }
-            }
-        } catch (_: Exception) {
-        }
-        // With a VPN app configured, a VPN that is down matters too: show a red "VPN off" capsule then.
-        val vpnDown = !vpn && online && vpnApp.isNotEmpty()
-        if (vpnPill) updateVpnPill(vpn)
-        if ((vpn || vpnDown) && !vpnPill) {
-            // Network name, then the green lock-and-VPN (or red "VPN off") capsule drawn in place of the word.
-            val badge = getString(if (vpn) R.string.vpn else R.string.vpn_off)
-            val span = VpnBadge(if (vpn) getDrawable(R.drawable.ic_lock) else null, density)
-            // The pill has a maximum width and ellipsizes at the end, which would cut the badge off after
-            // a long network name, so shorten the name to whatever room the badge leaves. The Wi-Fi icon and its
-            // gap are counted by hand: until the pill has a resolved layout direction (the first call, from
-            // onResume, runs before that) getTotalPaddingStart/End leave the compound drawables out, which
-            // left the name about 31dp too much room and the badge cut off.
-            val paint = btnWifi.paint
-            val compound = btnWifi.compoundDrawablesRelative
-            val firstDrawable = compound[0]
-            val iconRoom = if (firstDrawable != null) firstDrawable.intrinsicWidth + btnWifi.compoundDrawablePadding else 0
-            val room = (btnWifi.maxWidth - btnWifi.paddingStart - btnWifi.paddingEnd - iconRoom
-                    - span.getSize(paint, badge, 0, badge.length, null)).toFloat() - paint.measureText(" ") - 2 * density
-            val name = TextUtils.ellipsize(text, paint, Math.max(0f, room), TextUtils.TruncateAt.END).toString()
-            // A long badge ("VPN отключён") can leave room for a stub like "MT…", which says nothing and, after
-            // rounding, can push the badge itself out of the pill. Show the badge alone then. On Ethernet the
-            // icon already names the link, and "Ethernet" cut to "Ethe…" or not depended on the font size (#961),
-            // so Ethernet always shows the icon and the badge alone.
-            // The space stays even then: a line holding only the span gets no font metrics and collapses.
-            val stub = name.length < text.length && name.length < 5
-            text = if (stub || icon == R.drawable.ic_ethernet) "" else name
-            val label = SpannableString("$text $badge")
-            label.setSpan(span, text.length + 1, label.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            if (!TextUtils.equals(btnWifi.text, label)) btnWifi.text = label
-        } else if (!TextUtils.equals(btnWifi.text, text)) {
-            btnWifi.text = text
-        }
-        if (wifiIconOnly) {
-            btnWifi.contentDescription = btnWifi.text
-            btnWifi.text = null
-        }
-        val d = diya
-        if (festive && d != null) {
-            if (online && flame == 0) flame = 3   // online some other way (cellular, USB tethering)
-            d.setSteady(steady)
-            d.setFlame(flame)
-        } else {
-            if (icon != wifiIcon) {
-                wifiIcon = icon
-                btnWifi.setCompoundDrawablesRelativeWithIntrinsicBounds(icon, 0, 0, 0)
-            }
-            var tint: ColorStateList? = if (online) wifiOnlineTint else wifiPlainTint
-            // wifi_status_warnings: orange while connected but not validated (a captive portal), red while offline.
-            if (wifiNoInternetTint != null) tint = if (!online) wifiOfflineTint else if (validated) wifiOnlineTint else wifiNoInternetTint
-            if (wifiOnlineTint != null && btnWifi.compoundDrawableTintList != tint) {
-                btnWifi.compoundDrawableTintList = tint
-            }
-        }
-    }
-
     /** config.xml icon_only_buttons. */
     private var iconOnlyButtons = false
     /** config.xml top_menu: Inputs, Wi-Fi and Settings folded into one gear. */
@@ -1753,14 +1571,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     /** show_inputs_pill as configured: top_menu clears showInputsPill, so its Inputs row reads this. */
     private var showInputsMenuRow = true
     private var launcherSettingsButton = false
-    /** icon_only_buttons without wifi_label_width: the Wi-Fi pill shows no network name. */
-    private var wifiIconOnly = false
-    /** config.xml wifi_status_color: the Wi-Fi icon's green while online and its usual pill colours; null while off. */
-    private var wifiOnlineTint: ColorStateList? = null
-    private var wifiPlainTint: ColorStateList? = null
-    /** wifi_status_warnings (with wifi_status_color): orange without internet, red offline; null while off. */
-    private var wifiNoInternetTint: ColorStateList? = null
-    private var wifiOfflineTint: ColorStateList? = null
     /** The app library button in the top bar (library_button). */
     private lateinit var btnLibraryTop: View
     /** The open library came from that button: closing it returns there instead of scrolling to the grid's end. */
@@ -1815,15 +1625,8 @@ class MainActivity : Activity(), AppAdapter.TileListener {
      * vpn_pill the VPN app has its own pill, so this one always opens Wi-Fi settings.
      */
     private fun openNetworkPill() {
-        val i = if (vpnPill) null else vpnAppIntent()
+        val i = if (networkPills.vpnPill) null else networkPills.vpnAppIntent()
         open(i ?: systemIntent(Settings.ACTION_WIFI_SETTINGS))
-    }
-
-    /** vpn_app's launch intent, or null when none is set or it is not installed. */
-    private fun vpnAppIntent(): Intent? {
-        if (vpnApp.isEmpty()) return null
-        val i = packageManager.getLeanbackLaunchIntentForPackage(vpnApp)
-        return i ?: packageManager.getLaunchIntentForPackage(vpnApp)
     }
 
     /**
@@ -1831,7 +1634,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
      * Android's VPN settings when the theme turned the library off.
      */
     private fun openVpnPill() {
-        val i = vpnAppIntent()
+        val i = networkPills.vpnAppIntent()
         if (i != null || !appLibraryEnabled) {
             open(i ?: systemIntent(Settings.ACTION_VPN_SETTINGS))
             return
@@ -1839,44 +1642,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         onLibraryRequested()
         libraryFromVpnPill = true
     }
-
-    /** vpn_pill: the pill outlined in green with a lock while a VPN is up, outlined in red "VPN off" while it is not;
-     *  solid with a white ring only while focused. */
-    private fun updateVpnPill(vpn: Boolean) {
-        val state = VpnBadge.pillState(vpn, vpnAppIntent() != null)
-        if (state == VpnBadge.PILL_HIDDEN) {
-            if (btnVpn.visibility == View.GONE) return
-            val focused = btnVpn.hasFocus()
-            btnVpn.visibility = View.GONE
-            if (focused) (if (btnWifi.visibility == View.VISIBLE) btnWifi else firstTopButton()).requestFocus()
-            return
-        }
-        if (state != vpnPillState) {
-            vpnPillState = state
-            val up = state == VpnBadge.PILL_UP
-            // The state colour at rest (the pill is an outline then), the contrasting ink on the solid focused fill.
-            val ink = ColorStateList(
-                    arrayOf(intArrayOf(android.R.attr.state_focused), intArrayOf()),
-                    intArrayOf(VpnBadge.pillInkColor(up, true), VpnBadge.pillInkColor(up, false)))
-            if (iconOnlyVpn) {
-                // An open lock on the plain glass button, or the closed lock outlined in green like the pill (solid
-                // while focused); the words go to talkback.
-                btnVpn.contentDescription = getString(if (up) R.string.vpn else R.string.vpn_off)
-                btnVpn.background = if (up) VpnBadge.pillBackground(true, density) else vpnPlainBackground!!.newDrawable()
-                btnVpn.setCompoundDrawablesRelativeWithIntrinsicBounds(VpnBadge.iconOnlyLock(up), 0, 0, 0)
-                btnVpn.compoundDrawableTintList = if (up) ink else vpnPlainInk
-                btnVpn.visibility = View.VISIBLE
-                return
-            }
-            btnVpn.setText(if (up) R.string.vpn else R.string.vpn_off)
-            btnVpn.setTextColor(ink)
-            btnVpn.background = VpnBadge.pillBackground(up, density)
-            btnVpn.setCompoundDrawablesRelativeWithIntrinsicBounds(if (up) R.drawable.ic_lock else 0, 0, 0, 0)
-            btnVpn.compoundDrawableTintList = ink
-        }
-        btnVpn.visibility = View.VISIBLE
-    }
-
 
     /** Every settings entry shares the standard intent and the vendor fallback (SystemSettings). */
     private fun systemIntent(standardAction: String): Intent {
@@ -2000,7 +1765,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         // Inputs opens its own list once this one has closed.
         if (showInputsMenuRow) addTvInputRow(this, rows, popup, R.drawable.ic_input, getString(R.string.inputs), -1) { root.post { showInputs() } }
         addTvInputRow(this, rows, popup, R.drawable.ic_wifi, getString(R.string.quick_network), -1, this::openNetworkPill)
-        val network: CharSequence? = if (wifiIconOnly) btnWifi.contentDescription else btnWifi.text
+        val network: CharSequence? = networkPills.label
         if (!TextUtils.isEmpty(network)) {
             val status = rows.getChildAt(rows.childCount - 1).findViewById<TextView>(R.id.status)
             status.text = network
