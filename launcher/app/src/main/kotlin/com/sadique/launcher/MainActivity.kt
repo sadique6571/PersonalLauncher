@@ -10,7 +10,6 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Rect
-import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.media.tv.TvInputManager
 import android.net.ConnectivityManager
@@ -24,7 +23,6 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
-import android.text.TextUtils
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.SoundEffectConstants
@@ -32,11 +30,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.animation.AnimationUtils
-import android.view.animation.DecelerateInterpolator
 import android.view.animation.LayoutAnimationController
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.PopupWindow
 import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -234,8 +230,9 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     private val tileRefresh = TileRefresh()
     /** PackageManager's change counter at the last rebuild, to catch a package broadcast that never arrived. */
     private var packageSequence = 0
-    /** The Inputs or Module cards dropdown while one is open, so onPause can close it. */
-    private var openPopup: PopupWindow? = null
+    private val popups by lazy {
+        LauncherPopups(this, root, density, reducedMotion, LAUNCHER_SETTINGS_REQUEST, this::open)
+    }
     private lateinit var btnReorder: View
     /** dock_apps as loaded (config.xml or a theme): a saved Order only applies while these are unchanged. */
     private lateinit var dockApps: List<String>
@@ -244,9 +241,16 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     private var appLibrary: AppLibraryDialog? = null
     private var appLibrarySelection = false
     private var libraryOkOpens = false
-    private var libraryFocusPending = false
-    private var pendingFocusScroll: RecyclerView.OnScrollListener? = null
 
+    private val gridFocus = LauncherGridFocus(
+        host = this,
+        gridView = { grid },
+        currentAdapter = { adapter },
+        animationsEnabled = { animations },
+        libraryClosed = { appLibrary == null },
+        firstTopButton = this::firstTopButton,
+        onTileFocused = this::onTileFocused,
+    )
     private val handler = Handler(Looper.getMainLooper())
     private val reorder = LauncherReorderController(
         host = this,
@@ -261,7 +265,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         defaultAccent = { if (festive) festival.accentColor() else 0 },
         setButtonActive = { btnReorder.isActivated = it },
         reloadTiles = this::reloadTiles,
-        focusTile = this::focusTile,
+        focusTile = gridFocus::focusTile,
         openLibrary = this::onLibraryRequested,
     )
     private val moduleCardMenus = ModuleCardMenus(
@@ -272,8 +276,8 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         canPrompt = { moduleCards && tilesReady && !reorder.reordering },
         reloadTiles = this::reloadTiles,
         restoreFocus = this::restoreFocus,
-        glassPopup = this::glassPopup,
-        dropIn = this::dropIn,
+        glassPopup = { panel, width -> popups.glassPopup(panel, width) },
+        dropIn = { popup, panel, anchor, gravity -> popups.dropIn(popup, panel, anchor, gravity) },
     )
     private val launcherStats = LauncherStats(this, handler, { stats }, { showStats })
     /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
@@ -667,7 +671,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
                 true
             } else if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
                 // Back to the dock tile Up came from, not wherever the focus finder lands.
-                focusTile(if (singleRow) lastFocused else lastFocused % COLUMNS)
+                gridFocus.focusTile(if (singleRow) lastFocused else lastFocused % COLUMNS)
                 true
             } else {
                 val firstButton = if (btnInputs.visibility == View.VISIBLE) R.id.btnInputs else firstTopButton().id
@@ -806,7 +810,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         } else {
             // Still on screen (the quick panel was over it, or Home was already in front): the tiles are current,
             // so only go back to the first one; rebuilding would replay the entrance animation for nothing.
-            grid.post { focusTile(0) }
+            grid.post { gridFocus.focusTile(0) }
         }
     }
 
@@ -925,7 +929,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
      *                 on a return to the same tiles it would only mark a change that didn't happen.
      */
     private fun reloadApps(animate: Boolean, rebuild: Boolean, entrance: Boolean) {
-        cancelPendingFocusScroll()
+        gridFocus.cancelPendingFocusScroll()
         val footer = grid.findViewHolderForAdapterPosition(adapter.appCount())
         val restoreLibrary = adapter.isLibraryAt(adapter.appCount()) && footer != null
                 && footer.itemView.findViewById<View>(R.id.btnLibrary) != null
@@ -948,7 +952,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
 
         if (restoreFocus) {
             // Keep a focused footer at the end even when the app count changes.
-            if (restoreLibrary) grid.post { focusLibrary() }
+            if (restoreLibrary) grid.post { gridFocus.focusLibrary() }
             else restoreFocus()
         } else {
             // A package change must not steal focus from a top button or the Inputs popup.
@@ -1003,13 +1007,13 @@ class MainActivity : Activity(), AppAdapter.TileListener {
      * reload() the view that holds focus may no longer show the app it had.
      */
     private fun restoreFocus() {
-        val returnToLibrary = libraryFocusPending
+        val returnToLibrary = gridFocus.libraryFocusPending
         val returnKey = lastFocusedKey
         val returnSlot = lastFocused
         grid.post {
             val pos = adapter.positionOf(returnKey)
-            if (returnToLibrary || libraryFocusPending) focusLibrary()
-            else focusTile(if (pos >= 0) pos else returnSlot)
+            if (returnToLibrary || gridFocus.libraryFocusPending) gridFocus.focusLibrary()
+            else gridFocus.focusTile(if (pos >= 0) pos else returnSlot)
             tilesReady = true
             startPendingSettingsReorder()
             moduleCardMenus.showPrompt()
@@ -1041,11 +1045,11 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         launcherStats.stop()
         sportsPanel.stop()
         diya?.stop()
-        cancelPendingFocusScroll()
+        gridFocus.cancelPendingFocusScroll()
         // Nothing of ours stays on screen over another app; an undecided prompt simply returns next time.
         moduleCardMenus.dismissPrompt()
         appLibrary?.close()
-        openPopup?.dismiss()
+        popups.current?.dismiss()
     }
 
     override fun onStop() {
@@ -1081,7 +1085,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
             startPendingSettingsReorder()
-            if (libraryFocusPending && appLibrary == null) focusLibrary()
+            if (gridFocus.libraryFocusPending && appLibrary == null) gridFocus.focusLibrary()
             moduleCardMenus.showPrompt()
         }
     }
@@ -1131,7 +1135,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         // Vendor keys (TCL Netflix button, 4062) never reach the key services, only the focused window.
         if (event.keyCode >= 1000 && RemoteKeys.handle(this, event, homeAppKeys[event.keyCode], null)) return true
         if (handleSettingsKey(event)) return true
-        if (tileMenuEnabled && !reorder.reordering && openPopup == null && !moduleCardMenus.promptShowing
+        if (tileMenuEnabled && !reorder.reordering && popups.current == null && !moduleCardMenus.promptShowing
                 && event.keyCode == KeyEvent.KEYCODE_MENU) {
             val position = reorder.focusedTilePosition()
             if (position >= 0 && position < adapter.appCount()
@@ -1153,13 +1157,13 @@ class MainActivity : Activity(), AppAdapter.TileListener {
 
     override fun onLibraryRequested() {
         appLibrary?.close()
-        openPopup?.dismiss()
-        libraryFocusPending = false
+        popups.current?.dismiss()
+        gridFocus.libraryFocusPending = false
         libraryFromTopBar = false
         libraryFromVpnPill = false
         val library = AppLibraryDialog(this, animations, reducedMotion, appLibrarySelection, libraryOkOpens, adapter::containsPackage, { reloadApps(false) }, {
             appLibrary = null
-            openPopup = null
+            popups.current = null
             if (libraryFromTopBar) {
                 libraryFromTopBar = false
                 btnLibraryTop.requestFocus()
@@ -1170,15 +1174,15 @@ class MainActivity : Activity(), AppAdapter.TileListener {
                 if (fromVpnPill && btnVpn.visibility == View.VISIBLE) {
                     btnVpn.requestFocus()
                 } else {
-                    libraryFocusPending = true
+                    gridFocus.libraryFocusPending = true
                     grid.post {
-                        if (libraryFocusPending && appLibrary == null && hasWindowFocus() && !isFinishing) focusLibrary()
+                        if (gridFocus.libraryFocusPending && appLibrary == null && hasWindowFocus() && !isFinishing) gridFocus.focusLibrary()
                     }
                 }
             }
         }, libraryExcludedApps)
         appLibrary = library
-        openPopup = library.popup
+        popups.current = library.popup
         library.show()
     }
 
@@ -1266,7 +1270,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
 
     /** Refits the glass to the focused holder once the grid layout and tile dimensions settle. */
     private fun refitGlass() {
-        if (isDestroyed || adapter.appCount() == 0 || libraryFocusPending) return
+        if (isDestroyed || adapter.appCount() == 0 || gridFocus.libraryFocusPending) return
         val pos = Math.max(0, Math.min(lastFocused, adapter.appCount() - 1))
         val vh = grid.findViewHolderForAdapterPosition(pos)
         val card: View? = vh?.itemView?.findViewById(R.id.card)
@@ -1300,7 +1304,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
             val forward = if (rtlAppGrid) keyCode == KeyEvent.KEYCODE_DPAD_LEFT else keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
             val last = adapter.focusablePosition(count - 1)
             if (forward && position >= last) {
-                if (adapter.isLibraryAt(count)) focusLibrary()
+                if (adapter.isLibraryAt(count)) gridFocus.focusLibrary()
                 return true
             }
             return !forward && position == 0
@@ -1310,7 +1314,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
             val forward = if (rtlAppGrid) keyCode == KeyEvent.KEYCODE_DPAD_LEFT else keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
             if (forward && position == adapter.focusablePosition(count - 1) && adapter.isLibraryAt(count)) {
-                focusLibrary()
+                gridFocus.focusLibrary()
                 return true
             }
             // In the dock, the last app is the row's end: the empty slots after it take no focus.
@@ -1325,12 +1329,12 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         } else {
             val lastRowStart = ((count - 1) / COLUMNS) * COLUMNS
             if (position >= lastRowStart) {
-                if (adapter.isLibraryAt(count)) focusLibrary()
+                if (adapter.isLibraryAt(count)) gridFocus.focusLibrary()
                 return true
             }
             target = Math.min(position + COLUMNS, count - 1)
         }
-        focusTile(target)
+        gridFocus.focusTile(target)
         // The default focus search clicks for Left/Right; Up/Down are handled here, so click for them too.
         grid.playSoundEffect(if (keyCode == KeyEvent.KEYCODE_DPAD_UP)
                 SoundEffectConstants.NAVIGATION_UP else SoundEffectConstants.NAVIGATION_DOWN)
@@ -1338,7 +1342,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     }
 
     override fun onLibraryFocused() {
-        libraryFocusPending = false
+        gridFocus.libraryFocusPending = false
         hideGlass()
         shelf.hideHero()
     }
@@ -1433,95 +1437,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     override fun onLibraryUp() {
         if (adapter.appCount() == 0) { firstTopButton().requestFocus(); return }
         val lastRow = ((adapter.appCount() - 1) / COLUMNS) * COLUMNS
-        focusTile(Math.min(lastRow + lastFocused % COLUMNS, adapter.appCount() - 1))
-    }
-
-    private fun focusLibrary() {
-        cancelPendingFocusScroll()
-        val position = adapter.appCount()
-        if (!adapter.isLibraryAt(position)) return
-        val holder = grid.findViewHolderForAdapterPosition(position)
-        if (holder != null) {
-            val button = holder.itemView.findViewById<View>(R.id.btnLibrary)
-            val visible = Rect()
-            if (button.getGlobalVisibleRect(visible) && visible.height() >= button.height) {
-                if (button.requestFocus()) libraryFocusPending = false
-                return
-            }
-        }
-        if (!animations) {
-            grid.scrollToPosition(position)
-            grid.post {
-                if (appLibrary == null && hasWindowFocus()) {
-                    val footer = grid.findViewHolderForAdapterPosition(adapter.appCount())
-                    if (footer != null && adapter.isLibraryAt(adapter.appCount())
-                            && footer.itemView.findViewById<View>(R.id.btnLibrary).requestFocus()) libraryFocusPending = false
-                }
-            }
-            return
-        }
-        pendingFocusScroll = object : RecyclerView.OnScrollListener() {
-            override fun onScrollStateChanged(rv: RecyclerView, state: Int) {
-                if (state != RecyclerView.SCROLL_STATE_IDLE) return
-                rv.removeOnScrollListener(this)
-                if (pendingFocusScroll != this) return
-                pendingFocusScroll = null
-                val footer = rv.findViewHolderForAdapterPosition(position)
-                if (footer != null && footer.itemView.findViewById<View>(R.id.btnLibrary).requestFocus())
-                    libraryFocusPending = false
-            }
-        }
-        grid.addOnScrollListener(pendingFocusScroll!!)
-        grid.smoothScrollToPosition(position)
-    }
-
-    private fun cancelPendingFocusScroll() {
-        if (pendingFocusScroll != null) {
-            grid.removeOnScrollListener(pendingFocusScroll!!)
-            pendingFocusScroll = null
-            grid.stopScroll()
-        }
-    }
-
-    private fun focusTile(position: Int) {
-        libraryFocusPending = false
-        cancelPendingFocusScroll()
-        if (adapter.appCount() == 0) {
-            if (adapter.isLibraryAt(0)) focusLibrary()
-            else firstTopButton().requestFocus()
-            return
-        }
-        val pos = adapter.focusablePosition(Math.max(0, Math.min(position, adapter.appCount() - 1)))
-        val vh = grid.findViewHolderForAdapterPosition(pos)
-        if (vh != null) {
-            val card = vh.itemView.findViewById<View>(R.id.card)
-            // Already focused (e.g. back from an app): no focus change fires, so restore the glass by hand.
-            if (card.isFocused) onTileFocused(pos, card)
-            else card.requestFocus()
-            return
-        }
-        // Not laid out yet: scroll there, then focus once the scroll settles.
-        if (!animations) {
-            grid.scrollToPosition(pos)
-            grid.post {
-                val h = grid.findViewHolderForAdapterPosition(pos)
-                if (h != null) h.itemView.findViewById<View>(R.id.card).requestFocus()
-            }
-            return
-        }
-        pendingFocusScroll = object : RecyclerView.OnScrollListener() {
-            override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
-                if (newState != RecyclerView.SCROLL_STATE_IDLE) return
-                rv.removeOnScrollListener(this)
-                if (pendingFocusScroll != this) return
-                pendingFocusScroll = null
-                val h = rv.findViewHolderForAdapterPosition(pos)
-                val target = if (h != null) h.itemView.findViewById<View>(R.id.card) else rv.getChildAt(0)
-                target?.requestFocus()
-            }
-        }
-        grid.addOnScrollListener(pendingFocusScroll!!)
-        grid.smoothScrollToPosition(pos)
+        gridFocus.focusTile(Math.min(lastRow + lastFocused % COLUMNS, adapter.appCount() - 1))
     }
 
     // ---- top bar ---------------------------------------------------------------------------------
@@ -1725,97 +1641,23 @@ class MainActivity : Activity(), AppAdapter.TileListener {
             mappedSource = inputActions::mappedSource,
             openInput = inputActions::openInput,
             open = this::open,
-            glassPopup = this::glassPopup,
-            dropIn = this::dropIn,
+            glassPopup = { panel, width -> popups.glassPopup(panel, width) },
+            dropIn = { popup, panel, anchor, gravity -> popups.dropIn(popup, panel, anchor, gravity) },
         ).show()
     }
 
-    private fun glassPopup(panel: View, width: Int): PopupWindow {
-        val popup = PopupWindow(panel, width, ViewGroup.LayoutParams.WRAP_CONTENT, true)
-        popup.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))   // needed for Back to dismiss
-        popup.isOutsideTouchable = true
-        popup.animationStyle = 0
-        popup.elevation = 0f
-        popup.setOnDismissListener {
-            if (openPopup === popup) openPopup = null
-        }
-        openPopup = popup
-        return popup
-    }
-
-    /** Drop in: fade and unfold from the top edge, hanging under the anchor pill. */
-    private fun dropIn(popup: PopupWindow, panel: View, anchor: View, gravity: Int) {
-        panel.alpha = 0f
-        panel.pivotY = 0f
-        panel.scaleY = 0.92f
-        panel.translationY = -8 * density
-        popup.showAsDropDown(anchor, 0, (10 * density).toInt(), gravity)
-        panel.animate().alpha(1f).scaleY(1f).translationY(0f).setDuration(if (reducedMotion) Motion.REDUCED_MS.toLong() else 220L)
-                .setInterpolator(DecelerateInterpolator(1.6f)).start()
-    }
-
-    // ---- launcher settings and module cards -------------------------------------------------------
-
-    /** top_menu: the gear's dropdown, standing in for the Inputs, Wi-Fi and Settings pills. */
     private fun showTopMenu() {
-        val anchor = findViewById<View>(R.id.btnSettings)
-        val panel = layoutInflater.inflate(R.layout.popup_inputs, root, false)
-        val rows = panel.findViewById<LinearLayout>(R.id.rows)
-        val popup = glassPopup(panel, (220 * density).toInt())
-        // Inputs opens its own list once this one has closed.
-        if (showInputsMenuRow) addTvInputRow(this, rows, popup, R.drawable.ic_input, getString(R.string.inputs), -1) { root.post { showInputs() } }
-        addTvInputRow(this, rows, popup, R.drawable.ic_wifi, getString(R.string.quick_network), -1, this::openNetworkPill)
-        val network: CharSequence? = networkPills.label
-        if (!TextUtils.isEmpty(network)) {
-            val status = rows.getChildAt(rows.childCount - 1).findViewById<TextView>(R.id.status)
-            status.text = network
-            status.visibility = View.VISIBLE
-        }
-        addTvInputRow(this, rows, popup, R.drawable.ic_swap_vert, getString(R.string.reorder), -1, reorder::toggleReorder)
-        if (launcherSettingsButton) {
-            addTvInputRow(this, rows, popup, R.drawable.ic_home_settings_pill, getString(R.string.launcher_settings), -1) {
-                startActivityForResult(Intent(this, LauncherSettingsActivity::class.java), LAUNCHER_SETTINGS_REQUEST)
-            }
-        } else {
-            addTvInputRow(this, rows, popup, R.drawable.ic_settings, getString(R.string.settings), -1) {
-                open(systemIntent(Settings.ACTION_SETTINGS))
-            }
-        }
-        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-        popup.width = Math.max((220 * density).toInt(), Math.min(panel.measuredWidth, (360 * density).toInt()))
-        dropIn(popup, panel, anchor, if (resources.getBoolean(R.bool.rtl_menu_bar)) Gravity.START else Gravity.END)
-        rows.getChildAt(0).requestFocus()
+        popups.showTopMenu(
+            showInputsMenuRow, launcherSettingsButton, networkPills.label,
+            this::showInputs, this::openNetworkPill, reorder::toggleReorder,
+        )
     }
 
-    /** The header opens launcher settings directly; hold OK keeps the extra home actions available. */
     private fun showSettingsMenu() {
-        val anchor = findViewById<View>(R.id.btnSettings)
-        val panel = layoutInflater.inflate(R.layout.popup_inputs, root, false)
-        val rows = panel.findViewById<LinearLayout>(R.id.rows)
-        val popup = glassPopup(panel, (200 * density).toInt())
-        if (!launcherSettingsButton) addSettingsMenuRow(rows, popup, R.string.launcher_settings) {
-            startActivityForResult(Intent(this, LauncherSettingsActivity::class.java), LAUNCHER_SETTINGS_REQUEST)
-        }
-        // Firmware that ships its own settings app next to the AOSP one (Xiaomi China is one): the
-        // vendor app holds pages the AOSP settings has no row for, such as Account & Security with
-        // the ADB switch. Offered here only while one of them is installed.
-        if (SystemSettings.vendorIntent(this) != null) {
-            addSettingsMenuRow(rows, popup, R.string.native_settings) {
-                val vendor = SystemSettings.vendorIntent(this)
-                if (vendor != null) open(vendor)
-            }
-        }
-        if (moduleCards) addSettingsMenuRow(rows, popup, R.string.module_cards, moduleCardMenus::showList)
-        if (dockRow) addSettingsMenuRow(rows, popup, R.string.dock_edit, reorder::startDockEdit)
-        addSettingsMenuRow(rows, popup, R.string.reorder, reorder::toggleReorder)
-        // A launcher may not restart the TV itself; the Home key helper can open the system power menu instead.
-        if (HomeKeyService.canOpenPowerMenu()) addSettingsMenuRow(rows, popup, R.string.power_menu, HomeKeyService::openPowerMenu)
-        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-        popup.width = Math.max((200 * density).toInt(), panel.measuredWidth)
-        // Hebrew puts Settings at the left of the header: grow the menu inward from it.
-        dropIn(popup, panel, anchor, if (resources.getBoolean(R.bool.rtl_menu_bar))
-                Gravity.START else Gravity.END)
-        rows.getChildAt(0).requestFocus()
+        popups.showSettingsMenu(
+            launcherSettingsButton, moduleCards, dockRow, moduleCardMenus::showList,
+            reorder::startDockEdit, reorder::toggleReorder,
+        )
     }
 
     /** A tile configured with launch_actions "input:<id>" (config.xml): switch to that TV input directly,
@@ -1824,85 +1666,9 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         inputActions.openInput(inputId)
     }
 
-    /**
-     * Hold OK on a tile: a glass menu next to it. Move starts reorder mode with this tile already picked up;
-     * Remove from Home takes the shortcut off (only with the app library on, where one press adds it back);
-     * App info opens the TV's page for the app, which is what holding OK used to do.
-     */
     override fun onTileLongPress(position: Int, card: View) {
         if (reorder.reordering) return
-        val key = adapter.keyAt(position)
-        val pkg = adapter.packageAt(position)
-        // Empty dock slots and the Default-home tile carry the launcher's own package: no menu for them.
-        if (key == null || pkg == null || pkg == packageName) return
-        val panel = layoutInflater.inflate(R.layout.popup_inputs, root, false)
-        val rows = panel.findViewById<LinearLayout>(R.id.rows)
-        val popup = glassPopup(panel, (200 * density).toInt())
-        if (dockRow && position < adapter.movableCount()) {
-            val inDock = position < COLUMNS
-            addSettingsMenuRow(rows, popup, if (inDock) R.string.tile_replace_in_dock else R.string.tile_add_to_dock) {
-                reorder.startDockEditFor(key, inDock)
-            }
-        }
-        if (position < adapter.movableCount()) addSettingsMenuRow(rows, popup, R.string.tile_move) {
-            reorder.startMoving(key)
-        }
-        if (appLibraryEnabled) addSettingsMenuRow(rows, popup, R.string.library_remove_shortcut) {
-            if (LibraryApps.save(this, pkg, false)) reloadApps(false)
-            else Toast.makeText(this, R.string.library_save_failed, Toast.LENGTH_LONG).show()
-        }
-        // Some firmware has no App info page at all; a row that only toasts "can't open" helps nobody.
-        val info = SystemSettings.appInfo(this, pkg)
-        if (info != null) addSettingsMenuRow(rows, popup, R.string.library_app_info) { open(info) }
-        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-        popup.width = Math.max((200 * density).toInt(), panel.measuredWidth)
-        // Dock tiles sit near the bottom of the screen: open the menu above the tile when it would not fit below.
-        val at = IntArray(2)
-        card.getLocationInWindow(at)
-        val gap = (10 * density).toInt()
-        val height = panel.measuredHeight
-        if (at[1] + card.height + gap + height <= root.height) {
-            dropIn(popup, panel, card, Gravity.START)
-        } else {
-            panel.alpha = 0f
-            panel.pivotY = height.toFloat()
-            panel.scaleY = 0.92f
-            panel.translationY = 8 * density
-            popup.showAtLocation(root, Gravity.NO_GRAVITY, at[0], Math.max(0, at[1] - gap - height))
-            panel.animate().alpha(1f).scaleY(1f).translationY(0f).setDuration(220)
-                    .setInterpolator(DecelerateInterpolator(1.6f)).start()
-        }
-        rows.getChildAt(0).requestFocus()
+        popups.showTileMenu(position, card, dockRow, appLibraryEnabled, adapter, reorder) { reloadApps(false) }
     }
 
-    private fun addSettingsMenuRow(rows: LinearLayout, popup: PopupWindow, title: Int, action: Runnable) {
-        val row = layoutInflater.inflate(R.layout.item_input, rows, false)
-        row.findViewById<View>(R.id.icon).visibility = View.GONE
-        row.findViewById<View>(R.id.dot).visibility = View.GONE
-        row.findViewById<View>(R.id.status).visibility = View.GONE
-        row.findViewById<TextView>(R.id.title).setText(title)
-        row.setOnClickListener {
-            popup.dismiss()
-            action.run()
-        }
-        // The OK-up after opening the menu must not activate its first row.
-        var pressed = false
-        row.setOnKeyListener { _, code, event ->
-            if (code != KeyEvent.KEYCODE_DPAD_CENTER && code != KeyEvent.KEYCODE_ENTER) {
-                false
-            } else if (event.action == KeyEvent.ACTION_DOWN) {
-                if (event.repeatCount == 0) pressed = true
-                true
-            } else {
-                val activate = pressed
-                pressed = false
-                if (activate) {
-                    popup.dismiss()
-                    action.run()
-                }
-                true
-            }
-        }
-        rows.addView(row)
-    }
 }

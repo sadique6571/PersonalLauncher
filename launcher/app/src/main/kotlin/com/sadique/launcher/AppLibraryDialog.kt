@@ -18,7 +18,6 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -97,7 +96,6 @@ internal class AppLibraryDialog(
     private val installTimes: MutableMap<String, Long> = HashMap()
     private val labels: MutableMap<String, String> = HashMap()
     private var catalogTime = 0L
-    private var actionPopup: PopupWindow? = null
     private var catalog: RecyclerView? = null
     private var shelf: FrameLayout? = null
     private var highlight: GlassView? = null
@@ -145,11 +143,18 @@ internal class AppLibraryDialog(
         popup.animationStyle = 0
         popup.setOnDismissListener {
             closed = true
-            dismissActions()
+            actions.dismiss()
             stopHighlight()
             icons.clear()
             dismissed.run()
         }
+    }
+
+    private val actions: AppLibraryActions by lazy {
+        AppLibraryActions(
+            activity, panel, reducedMotion, density, onHome,
+            this::restoreCardFocus, this::open, this::changeHome, this::close, this::label,
+        )
     }
 
     private fun stopHighlight() {
@@ -196,7 +201,7 @@ internal class AppLibraryDialog(
     }
 
     fun close() {
-        dismissActions()
+        actions.dismiss()
         if (popup.isShowing) {
             popup.dismiss()
         } else if (!closed) {
@@ -232,7 +237,7 @@ internal class AppLibraryDialog(
      * appears once the latest load has filled it, even when a refresh replaced the opening's own load.
      */
     private fun load(reveal: Boolean) {
-        dismissActions()
+        actions.dismiss()
         val load = loads.start(reveal)
         val pm = activity.packageManager
         val self = activity.packageName
@@ -431,18 +436,12 @@ internal class AppLibraryDialog(
         }
     }
 
-    private fun dismissActions() {
-        val menu = actionPopup
-        actionPopup = null
-        menu?.dismiss()
-    }
-
     private fun restoreCardFocus() {
         val cat = catalog ?: return
         if (!popup.isShowing) return
         cat.post {
             val cat2 = catalog
-            if (cat2 == null || !popup.isShowing || actionPopup != null) return@post
+            if (cat2 == null || !popup.isShowing || actions.isOpen) return@post
             val holder = cat2.findViewHolderForAdapterPosition(selectedPosition)
             holder?.itemView?.requestFocus()
         }
@@ -481,7 +480,7 @@ internal class AppLibraryDialog(
                 selectedPosition = next
             }
         }
-        dismissActions()
+        actions.dismiss()
         changed.run()
         refresh()
     }
@@ -537,89 +536,10 @@ internal class AppLibraryDialog(
     }
 
     private fun showActions(app: ResolveInfo, anchor: View) {
-        dismissActions()
-        val pkg = app.activityInfo.packageName
-        selectedPackage = pkg
+        actions.dismiss()
+        selectedPackage = app.activityInfo.packageName
         spring?.cancel()
-        val menuPanel = activity.layoutInflater.inflate(R.layout.popup_inputs, panel, false)
-        if (TvGlassStyle.enabled(ThemePreferences.get(activity))) {
-            menuPanel.background = TvGlassStyle.surface(dp(24), dp(1), false, ThemePreferences.get(activity))
-            menuPanel.clipToOutline = true
-        }
-        val rows: LinearLayout = menuPanel.findViewById(R.id.rows)
-        if (activity is PersonalHomeActivity) activity.liquidPanel(menuPanel, 24)
-        val menu = PopupWindow(menuPanel, dp(220), ViewGroup.LayoutParams.WRAP_CONTENT, true)
-        actionPopup = menu
-        menu.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        menu.isOutsideTouchable = true
-        menu.animationStyle = 0
-        menu.elevation = 0f
-        menu.setOnDismissListener {
-            if (actionPopup == menu) actionPopup = null
-            restoreCardFocus()
-        }
-        addAction(rows, R.string.library_open) { open(app) }
-        val home = onHome.test(pkg)
-        addAction(rows, if (home) R.string.library_remove_shortcut else R.string.library_add_home) { changeHome(app, !home) }
-        val info = SystemSettings.appInfo(activity, pkg)
-        if (info != null) addAction(rows, R.string.library_app_info) {
-            close()
-            try {
-                activity.startActivity(info)
-            } catch (e: ActivityNotFoundException) {
-                Toast.makeText(activity, activity.getString(R.string.cant_open, label(app)), Toast.LENGTH_SHORT).show()
-            } catch (e: SecurityException) {
-                Toast.makeText(activity, activity.getString(R.string.cant_open, label(app)), Toast.LENGTH_SHORT).show()
-            }
-        }
-        var menuWidth = dp(220)
-        for (i in 0 until rows.childCount) {
-            val title: TextView = rows.getChildAt(i).findViewById(R.id.title)
-            menuWidth = Math.max(menuWidth, Math.ceil(title.paint.measureText(title.text.toString()).toDouble()).toInt() + dp(58))
-            title.ellipsize = TextUtils.TruncateAt.END
-        }
-        menuWidth = Math.min(menuWidth, panel.width - dp(24))
-        menu.width = menuWidth
-        menuPanel.measure(View.MeasureSpec.makeMeasureSpec(menuWidth, View.MeasureSpec.EXACTLY), View.MeasureSpec.UNSPECIFIED)
-        val location = IntArray(2)
-        anchor.getLocationOnScreen(location)
-        val panelLocation = IntArray(2)
-        panel.getLocationOnScreen(panelLocation)
-        val screen = Rect(panelLocation[0], panelLocation[1],
-            panelLocation[0] + panel.width, panelLocation[1] + panel.height)
-        val x = Math.max(screen.left + dp(12), Math.min(location[0] + anchor.width - dp(12), screen.right - menuWidth - dp(12)))
-        val y = Math.max(screen.top + dp(12), Math.min(location[1] + dp(8), screen.bottom - menuPanel.measuredHeight - dp(12)))
-        menuPanel.alpha = 0f
-        menuPanel.pivotY = 0f
-        menuPanel.scaleY = 0.92f
-        menuPanel.translationY = -dp(8).toFloat()
-        menu.showAtLocation(activity.window.decorView, Gravity.TOP or Gravity.START, x, y)
-        menuPanel.animate().alpha(1f).scaleY(1f).translationY(0f).setDuration((if (reducedMotion) Motion.REDUCED_MS else 220).toLong())
-            .setInterpolator(DecelerateInterpolator(1.6f)).start()
-        rows.getChildAt(0).requestFocus()
-    }
-
-    private fun addAction(rows: LinearLayout, label: Int, action: Runnable) {
-        val row = activity.layoutInflater.inflate(R.layout.item_input, rows, false)
-        val title: TextView = row.findViewById(R.id.title)
-        title.setText(label)
-        if (ThemeStyle.custom(ThemePreferences.get(activity))) {
-            title.setTextColor(ThemeStyle.foreground(ThemePreferences.get(activity)))
-            row.background = GlassSettings.background(activity, false)
-            row.setOnFocusChangeListener { v, focused -> v.setBackground(GlassSettings.background(activity, focused)) }
-        }
-        row.isFocusableInTouchMode = true
-        row.findViewById<View>(R.id.icon).visibility = View.GONE
-        row.findViewById<View>(R.id.dot).visibility = View.GONE
-        row.findViewById<View>(R.id.status).visibility = View.GONE
-        row.setOnClickListener { action.run() }
-        rows.addView(row)
-        row.setOnKeyListener { v, key, event ->
-            val index = rows.indexOfChild(v)
-            event.action == KeyEvent.ACTION_DOWN && (key == KeyEvent.KEYCODE_DPAD_LEFT
-                || key == KeyEvent.KEYCODE_DPAD_RIGHT || key == KeyEvent.KEYCODE_DPAD_UP && index == 0
-                || key == KeyEvent.KEYCODE_DPAD_DOWN && index == rows.childCount - 1)
-        }
+        actions.show(app, anchor)
     }
 
     private fun text(value: String, size: Int, color: Int): TextView {

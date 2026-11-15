@@ -15,7 +15,6 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
-import android.graphics.Outline
 import android.graphics.Point
 import android.graphics.Typeface
 import android.graphics.drawable.Drawable
@@ -36,7 +35,6 @@ import android.os.Looper
 import android.os.Parcelable
 import android.os.SystemClock
 import android.provider.Settings
-import android.text.InputType
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.TextUtils
@@ -45,11 +43,8 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewOutlineProvider
 import android.view.ViewTreeObserver
 import android.view.WindowManager
-import android.widget.Button
-import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -117,7 +112,7 @@ class PersonalHomeActivity : Activity() {
             loadWallpaper = this::loadWallpaper,
             rearrangeApps = this::rearrangeApps,
             requestWatchNextAccess = { continueWatching?.requestAccess() },
-            editProfile = this::editProfile,
+            editProfile = homeProfile::show,
             applyPerformanceProfile = this::applyPerformanceProfile,
             cachedApps = { cachedApps },
             loadApps = this::loadApps,
@@ -255,7 +250,6 @@ class PersonalHomeActivity : Activity() {
         val g = grid
         if (g != null && (!g.isHorizontalDock() || !focusHarmonyHero())) g.focusKey(focusedPkg)
     }
-    private var avatarBitmap: Bitmap? = null
     private var customWallpaper: Bitmap? = null
     private val clockContrast = HomeClockContrast()
     private var liquidBackdrop: LiquidBackdrop? = null
@@ -293,7 +287,22 @@ class PersonalHomeActivity : Activity() {
     /** Last day/night state; when it flips, tile surfaces are refreshed to match. */
     private var lastLight = false
     private var panel: AlertDialog? = null
-    private var profile: AlertDialog? = null
+    private val homeProfile by lazy {
+        HomeProfile(
+            host = this,
+            prefs = prefs,
+            tv = tv,
+            avatar = { avatar },
+            userName = { userName },
+            surface = this::surface,
+            toolbarSurface = this::toolbarSurface,
+            text = this::text,
+            chooseSetting = this::chooseSetting,
+            profileAsset = this::profileAsset,
+            offerDefaultHome = { handler.post { maybeOfferDefaultHome() } },
+            onDismiss = { handler.postDelayed(notificationOffer, 1200) },
+        )
+    }
     private val idleScreensaver = Runnable {
         if (resumed && hasWindowFocus() && !GitHubUpdates.manualActive()) launch(Intent(this, LandscapeActivity::class.java))
         else armIdleScreensaver()
@@ -391,10 +400,10 @@ class PersonalHomeActivity : Activity() {
         if (state != null && !state.getBoolean("home_grid_has_header")
                 && state.getBoolean("home_grid_horizontal_dock") == fixedHarmonyDock())
             gridState = state.getParcelable("home_grid_state")
-        loadAvatar()
+        homeProfile.loadAvatar()
         buildHome()
         loadWallpaper()
-        if (!prefs.getBoolean("setup", false)) handler.post { editProfile() }
+        if (!prefs.getBoolean("setup", false)) handler.post { homeProfile.show() }
         else { handleHomeAction(intent); handler.post { maybeOfferDefaultHome() } }
     }
 
@@ -484,33 +493,6 @@ class PersonalHomeActivity : Activity() {
         return shape
     }
 
-    private fun avatarSurface(focused: Boolean): GradientDrawable {
-        return avatarSurface(focused, if (ThemeStyle.custom(prefs) && tv) 52 else 44)
-    }
-    private fun avatarSurface(focused: Boolean, size: Int): GradientDrawable {
-        val shape = surface(focused)
-        if (prefs.getInt("avatar_shape", 0) == 0) shape.shape = GradientDrawable.OVAL
-        else shape.cornerRadius = dp(HomeGeometry.avatarRadius(size)).toFloat()
-        return shape
-    }
-    private fun avatarOutline(photo: ImageView) {
-        photo.outlineProvider = object : ViewOutlineProvider() {
-            override fun getOutline(view: View, outline: Outline) {
-                if (prefs.getInt("avatar_shape", 0) == 0) outline.setOval(0, 0, view.width, view.height)
-                else outline.setRoundRect(0, 0, view.width, view.height,
-                        HomeGeometry.avatarRadius(Math.min(view.width, view.height)))
-            }
-        }
-        photo.clipToOutline = true
-    }
-    private fun chooseAvatarShape() {
-        chooseSetting("Avatar shape", arrayOf("Round", "Rounded square")) { which ->
-            prefs.edit().putInt("avatar_shape", which).apply()
-            avatar?.apply { background = avatarSurface(isFocused); invalidateOutline() }
-            refreshProfileAvatarPreview()
-        }
-    }
-
     private fun text(value: String, size: Int, color: Int): TextView {
         // Outline removed 2026-11-01 (user: "buri lag rahi hai") — plain text with drop shadow only.
         val view = TextView(this)
@@ -518,21 +500,6 @@ class PersonalHomeActivity : Activity() {
         view.setTextSize(size.toFloat())
         view.setTextColor(ThemeStyle.contentColor(prefs, color))
         applyAppFont(view)
-        return view
-    }
-
-    private fun button(label: String, action: Runnable): Button {
-        val view = Button(this)
-        view.text = label
-        view.setTextSize(14f)
-        view.setTextColor(ThemeStyle.foreground(prefs))
-        view.isAllCaps = false
-        view.minHeight = dp(48)
-        view.minimumWidth = 0
-        view.setPadding(dp(14), dp(8), dp(14), dp(8))
-        view.background = surface(false)
-        view.setOnFocusChangeListener { v, focus -> v.background = surface(focus) }
-        view.setOnClickListener { action.run() }
         return view
     }
 
@@ -714,114 +681,33 @@ class PersonalHomeActivity : Activity() {
         this.header = header
         header.gravity = Gravity.CENTER_VERTICAL
         applyHeaderBackground()
-        val photo: ImageView = if (glassOs()) AppAccentAvatar(this) else ImageView(this)
-        avatar = photo
-        photo.id = R.id.profileAvatar
-        photo.contentDescription = getString(R.string.h_edit_profile)
-        photo.scaleType = ImageView.ScaleType.CENTER_CROP
-        photo.background = avatarSurface(false)
-        if (!glassOs()) avatarOutline(photo)
-        if (tvGlass()) { photo.setPadding(dp(2), dp(2), dp(2), dp(2)); photo.elevation = dp(2).toFloat() }
-        photo.isFocusable = false
-        photo.setOnClickListener { LauncherPin.require(this, this::editProfile) }
-        photo.setOnFocusChangeListener { v, focus -> v.background = avatarSurface(focus) }
-        val identityCard = LinearLayout(this)
-        identityCard.gravity = Gravity.CENTER_VERTICAL
-        // The header already supplies the glass; a second profile-card fill hid the wallpaper detail.
-        if (tvGlass()) identityCard.setPadding(dp(6), dp(5), dp(14), dp(5))
-        identityCard.setOnClickListener { LauncherPin.require(this, this::editProfile) }
-        if (glassOs()) {
-            identityCard.id = R.id.leftBlock
-            identityCard.background = null
-            identityCard.isFocusable = true
-            identityCard.setOnKeyListener { _, c, e ->
-                if (c == KeyEvent.KEYCODE_DPAD_RIGHT && e.action == KeyEvent.ACTION_DOWN) { networkStatus?.requestFocus(); true }
-                else if (c == KeyEvent.KEYCODE_DPAD_DOWN && e.action == KeyEvent.ACTION_DOWN) { focusBelowToolbar(); true }
-                else c == KeyEvent.KEYCODE_DPAD_LEFT || c == KeyEvent.KEYCODE_DPAD_UP || c == KeyEvent.KEYCODE_DPAD_RIGHT || c == KeyEvent.KEYCODE_DPAD_DOWN
-            }
-            identityCard.setOnFocusChangeListener { v, f -> v.alpha = if (f) 1f else 0.88f }
-        }
-        identityCard.addView(photo, LinearLayout.LayoutParams(dp(if (glassOs()) 42 else if (ThemeStyle.custom(prefs) && tv) 52 else 44), dp(if (glassOs()) 42 else if (ThemeStyle.custom(prefs) && tv) 52 else 44)))
-        if (ThemeStyle.id(prefs) == ThemeStyle.PEARL) {
-            val rule = View(this)
-            rule.setBackgroundColor(0x7778807c)
-            val rp = LinearLayout.LayoutParams(dp(1), dp(40))
-            rp.marginStart = dp(10)
-            identityCard.addView(rule, rp)
-        }
-        val identity = LinearLayout(this)
-        identity.setPadding(dp(12), 0, dp(4), 0)
-        identity.orientation = LinearLayout.VERTICAL
-        val nameView = text("", if (tvGlass()) 20 else if (tv) 24 else 20, TEXT)
-        userName = nameView
-        nameView.maxLines = 1
-        nameView.ellipsize = TextUtils.TruncateAt.END
-        applyAppFont(nameView)
-        if (ThemeStyle.custom(prefs)) nameView.setTypeface(nameView.typeface, if (ThemeStyle.id(prefs) == ThemeStyle.DUNE) Typeface.NORMAL else Typeface.BOLD)
-        identity.addView(nameView)
-        val greetView = text(greetingText(), 13, MUTED)
-        greeting = greetView
-        applyAppFont(greetView)
-        if (prefs.getBoolean("hide_greeting", false) || (harmony() && !HarmonyVisionLayout.showSecondGreeting())) greetView.visibility = View.GONE
-        identity.addView(greetView)
-        if (glassOs()) {
-            nameView.id = R.id.profileName
-            nameView.setTextSize(19f)
-            nameView.setTypeface(nameView.typeface, Typeface.BOLD)
-            greetView.id = R.id.greeting
-            greetView.setTextSize(12f)
-            greetView.isAllCaps = false
-            greetView.setTypeface(greetView.typeface, Typeface.BOLD)
-            identity.removeView(greetView)
-            identity.addView(greetView)
-        }
-        identityCard.addView(identity, LinearLayout.LayoutParams(0, -2, 1f))
-        val identityParams = LinearLayout.LayoutParams(0, -2, 1f)
-        identityParams.marginEnd = dp(10)
-        header.addView(identityCard, identityParams)
-        val netStatus = text("", 13, MUTED)
-        networkStatus = netStatus
-        netStatus.gravity = Gravity.CENTER_VERTICAL or Gravity.CENTER
-        netStatus.compoundDrawablePadding = dp(5)
-        netStatus.isFocusable = false
-        netStatus.setOnFocusChangeListener { v, focus ->
-            if (glassOs()) updateNetwork()
-            else if (focus) v.background = surface(true)
-            else v.setBackgroundColor(Color.TRANSPARENT)
-        }
-        netStatus.setPadding(dp(if (tv) 13 else 11), dp(8), dp(if (tv) 13 else 11), dp(8))
-        netStatus.setOnClickListener { openSetting(Settings.ACTION_WIFI_SETTINGS) }
+        val headerViews = HomeHeader(
+            host = this,
+            prefs = prefs,
+            profile = homeProfile,
+            tv = tv,
+            tvGlass = tvGlass(),
+            glassOs = glassOs(),
+            harmony = harmony(),
+            text = this::text,
+            applyAppFont = this::applyAppFont,
+            surface = this::surface,
+            focusBelowToolbar = this::focusBelowToolbar,
+            updateNetwork = this::updateNetwork,
+            openWifi = { openSetting(Settings.ACTION_WIFI_SETTINGS) },
+            toolbarKey = this::toolbarKey,
+            showBluetooth = { bluetooth?.show() },
+        ).build(header, greetingText())
+        avatar = headerViews.avatar
+        userName = headerViews.name
+        greeting = headerViews.greeting
+        networkStatus = headerViews.networkStatus
+        homeWeather = headerViews.weather
+        bluetoothStatus = headerViews.bluetooth
         page.addView(header)
-        val bar = LinearLayout(this)
+        val bar = headerViews.actions
         actions = bar
-        bar.gravity = Gravity.END or Gravity.CENTER_VERTICAL
-        if (glassOs()) { bar.id = R.id.topButtons; netStatus.isFocusable = true; netStatus.setOnKeyListener { v, _, e -> toolbarKey(v, e) } }
-        bar.addView(netStatus, LinearLayout.LayoutParams(-2, dp(44)))
-        val weatherView = text("Unavailable", 13, MUTED)
-        homeWeather = weatherView
-        weatherView.gravity = Gravity.CENTER
-        weatherView.setPadding(dp(10), dp(8), dp(10), dp(8))
-        if (harmony()) weatherView.visibility = View.GONE
-        bar.addView(weatherView, 0, LinearLayout.LayoutParams(-2, dp(44)))
         if (glassOs() && !harmony()) {
-            val btStatus = text("Bluetooth", 11, 0xffdbeafe.toInt())
-            bluetoothStatus = btStatus
-            btStatus.id = R.id.btnBluetooth
-            btStatus.maxWidth = dp(130)
-            btStatus.isSingleLine = true
-            btStatus.ellipsize = TextUtils.TruncateAt.END
-            btStatus.setPadding(dp(10), dp(8), dp(10), dp(8))
-            btStatus.gravity = Gravity.CENTER
-            val btIcon = TvSymbols.icon(this, android.R.drawable.stat_sys_data_bluetooth)
-            btIcon?.setBounds(0, 0, dp(18), dp(18))
-            btStatus.compoundDrawablePadding = dp(5)
-            btStatus.setCompoundDrawables(btIcon, null, null, null)
-            btStatus.background = GlassOsUi.panel(this, 999)
-            btStatus.isFocusable = true
-            btStatus.setOnFocusChangeListener { v, f -> v.background = surface(f) }
-            btStatus.setOnClickListener { bluetooth?.show() }
-            btStatus.setOnKeyListener { v, _, e -> toolbarKey(v, e) }
-            bar.addView(btStatus, LinearLayout.LayoutParams(-2, dp(40)))
             iconAction("Apps", R.drawable.ic_apps, this::showAppLibrary)
         } else if (harmony()) {
             iconAction("All apps", R.drawable.ic_apps, this::showAppLibrary)
@@ -837,187 +723,22 @@ class PersonalHomeActivity : Activity() {
             styleStatusBar(bar)
             page.addView(bar, LinearLayout.LayoutParams(-1, -2))
         }
-        val clock = LinearLayout(this)
-        clockLayout = clock
-        clock.orientation = LinearLayout.VERTICAL
-        clock.gravity = if (weatherWidgetEnabled() || glassOs()) Gravity.START else intArrayOf(Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END)[clockAlignment()]
-        val compact = resources.configuration.screenHeightDp < 480
-        clock.setPadding(0, dp(if (compact) 0 else if (tv) if (ThemeStyle.custom(prefs)) 32 else 10 else 16), 0, dp(if (compact) 8 else 12))
-        var clockSize = prefs.getInt("clock_size", if (tv) 52 else 44)
-        // One-time migration (2026-10-31): old sizes were too big, map to new scale.
-        val oldSizes = if (tv) intArrayOf(66, 80, 96) else intArrayOf(56, 68, 80)
-        val newSizes = if (tv) intArrayOf(42, 52, 62) else intArrayOf(36, 44, 52)
-        for (i in oldSizes.indices) {
-            if (clockSize == oldSizes[i]) {
-                clockSize = newSizes[i]
-                prefs.edit().putInt("clock_size", clockSize).apply()
-                break
-            }
-        }
-        clockSize = HomeGeometry.clockSize(clockSize, compact)
-        val timeView = text("", clockSize, TEXT)
-        time = timeView
-        timeView.gravity = Gravity.CENTER
-        if (glassOs()) timeView.id = R.id.clock
-        timeView.isSingleLine = true
-        // Clock shadow for readability on bright wallpapers (toggle).
-        if (prefs.getBoolean("clock_shadow", true)) {
-            timeView.setShadowLayer(dp(8).toFloat(), 0f, dp(3).toFloat(), 0xcc000000.toInt())
-        }
-        // Use the regular family with bold weight; the light family overrides the intended weight.
-        timeView.typeface = Typeface.create(
-                ThemeStyle.clockFontFamily(prefs), if (ThemeStyle.clockBold(prefs)) Typeface.BOLD else Typeface.NORMAL)
-        // Analog mode uses a bounded independent dial, including on the Glass gradient.
-        val analogClockMode = prefs.getInt("clock_style", 0) == 1 && !harmony()
-        // AM/PM is a separate view, not a span: it can never be clipped when
-        // seconds make the string longest. (User 2026-11-01.)
-        val ampmView = text("", Math.max(14, (clockSize * 0.42f).toInt()), TEXT)
-        ampm = ampmView
-        ampmView.isSingleLine = true
-        if (prefs.getBoolean("clock_shadow", true)) {
-            ampmView.setShadowLayer(dp(4).toFloat(), 0f, dp(2).toFloat(), 0xcc000000.toInt())
-        }
-        if (analogClockMode) {
-            timeView.visibility = View.INVISIBLE
-            ampmView.visibility = View.INVISIBLE
-        }
-        // No auto-size: fitClockText() sizes precisely.
-        timeView.setAutoSizeTextTypeWithDefaults(TextView.AUTO_SIZE_TEXT_TYPE_NONE)
-        // Horizontal padding prevents clipping from the shadow layer.
-        timeView.setPadding(dp(12), dp(2), dp(4), dp(10))
-        clockTextSize = clockSize
-        // Analog face radius follows the clock size (diameter ~= digital height).
-        sky.clockRadius = dp(clockSize * 0.85f).toFloat()
-        val dateView = text("", if (ThemeStyle.custom(prefs)) if (tv) 20 else 16 else if (tv) 14 else 13, MUTED)
-        date = dateView
-        if (prefs.getBoolean("clock_shadow", true)) {
-            dateView.setShadowLayer(dp(6).toFloat(), 0f, dp(2).toFloat(), 0xcc000000.toInt())
-        }
-        dateView.gravity = if (weatherWidgetEnabled()) Gravity.START else Gravity.CENTER
-        if (glassOs()) { dateView.id = R.id.date; ampmView.id = R.id.ampm; ampmView.setTextSize(18f) }
-        val timeRow = LinearLayout(this)
-        timeRow.orientation = LinearLayout.HORIZONTAL
-        timeRow.gravity = Gravity.CENTER_VERTICAL or intArrayOf(Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END)[clockAlignment()]
-        timeRow.addView(timeView, LinearLayout.LayoutParams(-2, -2))
-        val ampmParams = LinearLayout.LayoutParams(-2, -2)
-        ampmParams.gravity = if (glassOs()) Gravity.CENTER_VERTICAL else Gravity.BOTTOM
-        ampmParams.bottomMargin = dp(if (glassOs()) 0 else 6)
-        if (glassOs()) ampmParams.marginStart = dp(8)
-        timeRow.addView(ampmView, ampmParams)
-        clock.addView(timeRow, LinearLayout.LayoutParams(-1, dp(clockSize + if (compact) 10 else 36)))
-        clock.addView(dateView)
-        if (glassOs()) {
-            timeView.typeface = Typeface.create("sans-serif", Typeface.BOLD)
-            ampmView.typeface = Typeface.create("sans-serif", Typeface.BOLD)
-            val ampmBadge = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(if (harmony()) 0xff406c92.toInt() else 0xff1b3855.toInt(), if (harmony()) 0xff183b65.toInt() else 0xff102941.toInt()))
-            ampmBadge.cornerRadius = dp(10).toFloat()
-            ampmBadge.setStroke(dp(1), 0x7796bdf5)
-            ampmView.setTextColor(Color.WHITE)
-            ampmView.setTextSize(20f)
-            ampmView.background = ampmBadge
-            ampmView.setPadding(dp(8), dp(4), dp(8), dp(4))
-            ampmView.minWidth = dp(56)
-            ampmView.minHeight = dp(36)
-            ampmView.gravity = Gravity.CENTER
-            ampmView.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
-            clock.setPadding(0, 0, 0, 0)
-            val islamicView = text("", 13, MUTED)
-            islamicDate = islamicView
-            islamicView.id = R.id.lunarDate
-            clock.addView(islamicView)
-            if (clockDatesInline) {
-                clock.removeView(dateView)
-                clock.removeView(islamicView)
-                val divider = View(this)
-                divider.id = R.id.clockDivider
-                divider.setBackgroundColor(0x38ffffff)
-                val line = LinearLayout.LayoutParams(dp(1.5f), dp(48))
-                line.setMargins(dp(12), 0, dp(12), 0)
-                timeRow.addView(divider, line)
-                val dates = LinearLayout(this)
-                dates.orientation = LinearLayout.VERTICAL
-                dateView.setTextSize(18f)
-                dateView.setTypeface(dateView.typeface, Typeface.BOLD)
-                dateView.gravity = Gravity.START
-                dates.addView(dateView)
-                dates.addView(islamicView)
-                timeRow.addView(dates, LinearLayout.LayoutParams(0, -2, 1f))
-            }
-        }
-        if (!glassOs()) {
-            val islamicView = text("", 12, MUTED)
-            islamicDate = islamicView
-            islamicView.id = R.id.lunarDate
-            clock.addView(islamicView)
-        }
-        if (analogClockMode) {
-            timeRow.visibility = View.GONE
-            clock.removeView(dateView)
-            clock.removeView(islamicDate)
-            val analogRow = LinearLayout(this)
-            analogRow.gravity = Gravity.CENTER_VERTICAL
-            analogRow.setPadding(dp(if (glassOs()) 16 else 8), 0, 0, 0)
-            val dial = SweepAnalogClock(this)
-            analogClock = dial
-            val preferred = dp(if (glassOs()) 208 else 196)
-            analogRow.addView(dial, LinearLayout.LayoutParams(preferred, preferred))
-            val dates = LinearLayout(this)
-            dates.orientation = LinearLayout.VERTICAL
-            dates.gravity = Gravity.CENTER_VERTICAL
-            dateView.setTextSize(15f)
-            dateView.gravity = Gravity.START
-            dateView.maxLines = 2
-            islamicDate?.setTextSize(13f)
-            islamicDate?.maxLines = 2
-            islamicDate?.setPadding(0, dp(10), 0, 0)
-            dates.addView(dateView, LinearLayout.LayoutParams(-1, -2))
-            dates.addView(islamicDate, LinearLayout.LayoutParams(-1, -2))
-            val dpDates = LinearLayout.LayoutParams(0, -2, 1f)
-            dpDates.marginStart = dp(16)
-            analogRow.addView(dates, dpDates)
-            clock.addView(analogRow, 0, LinearLayout.LayoutParams(-1, -2))
-            dial.active(resumed)
-            analogRow.addOnLayoutChangeListener { _, l, _, r, _, _, _, _, _ ->
-                if (r - l <= 0) return@addOnLayoutChangeListener
-                val available = Math.max(1, r - l - analogRow.paddingLeft)
-                var diameter = Math.min(preferred, Math.max(dp(144), available - dp(132)))
-                diameter = Math.min(diameter, available)
-                val lp = dial.layoutParams as LinearLayout.LayoutParams
-                if (lp.width != diameter) { lp.width = diameter; lp.height = diameter; dial.layoutParams = lp }
-                val pos = IntArray(2)
-                val origin = IntArray(2)
-                dial.getLocationInWindow(pos)
-                root.getLocationInWindow(origin)
-                sky.clockX = pos[0] - origin[0] + dial.width / 2f
-                sky.clockY = pos[1] - origin[1] + dial.height / 2f
-                sky.invalidate()
-            }
-        }
-        timeRow.addOnLayoutChangeListener { _, l, _, r, _, ol, _, orOld, _ ->
-            if (r - l != orOld - ol && timeView.text.isNotEmpty()) fitClockText(timeView.text)
-        }
-        if (glassOs() && !harmony() && !analogClockMode) {
-            val spotlight = text("", 13, 0xffffffff.toInt())
-            focusedSpotlight = spotlight
-            spotlight.isSingleLine = true
-            spotlight.ellipsize = TextUtils.TruncateAt.END
-            spotlight.setPadding(dp(13), dp(7), dp(13), dp(7))
-            spotlight.background = GlassOsUi.panel(this, 999)
-            val sp = LinearLayout.LayoutParams(-2, -2)
-            sp.topMargin = dp(8)
-            clock.addView(spotlight, sp)
-            updateSpotlight()
-        }
-        timeView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            val position = IntArray(2)
-            val origin = IntArray(2)
-            timeView.getLocationInWindow(position)
-            root.getLocationInWindow(origin)
-            sky.clockX = position[0] - origin[0] + timeView.width / 2f
-            sky.clockY = position[1] - origin[1] + timeView.height / 2f
-            sky.invalidate()
+        val clockViews = HomeClockLayout(
+            this, prefs, tv, resumed, glassOs(), harmony(), weatherWidgetEnabled(),
+            clockDatesInline, this::dp, this::text, this::clockAlignment, this::fitClockText,
+        ).build(root, sky) {
             if (clockContrast.update(sky, prefs, tv, dp(150).toFloat())) adaptVisibleTextColors()
         }
+        val clock = clockViews.container
+        clockLayout = clock
+        time = clockViews.time
+        date = clockViews.date
+        ampm = clockViews.ampm
+        islamicDate = clockViews.islamicDate
+        analogClock = clockViews.analogClock
+        clockTextSize = clockViews.textSize
+        focusedSpotlight = clockViews.spotlight
+        if (focusedSpotlight != null) updateSpotlight()
         val heading = text("Your apps", prefs.getInt("focus_title_size", if (tv) 32 else 26), TEXT)
         appHeading = heading
         heading.isSingleLine = true
@@ -1153,7 +874,7 @@ class PersonalHomeActivity : Activity() {
                 else loadApps()
             }
         }
-        refreshProfile()
+        homeProfile.refreshProfile()
         updateClock()
         updateNetwork()
         // No wallpaper-capture layer is needed behind the open app grid.
@@ -1721,7 +1442,7 @@ class PersonalHomeActivity : Activity() {
                 HomeDashboard.INPUTS -> showInputs()
                 HomeDashboard.DISPLAY -> panel = TvControlPreview.show(this, true)
                 HomeDashboard.SOUND -> panel = TvControlPreview.show(this, false)
-                HomeDashboard.IDENTITY -> editProfile()
+                HomeDashboard.IDENTITY -> homeProfile.show()
                 else -> openSetting(Settings.ACTION_SETTINGS)
             }
         })
@@ -1947,107 +1668,6 @@ class PersonalHomeActivity : Activity() {
 
     override fun onUserInteraction() { super.onUserInteraction(); armIdleScreensaver() }
 
-    private var profileAvatarPreview: ImageView? = null
-
-    /** Refreshes the avatar preview inside the profile dialog, if open. */
-    private fun refreshProfileAvatarPreview() {
-        val preview = profileAvatarPreview ?: return
-        preview.background = avatarSurface(false, 96)
-        preview.invalidateOutline()
-        val bitmap = avatarBitmap
-        if (bitmap != null) preview.setImageBitmap(bitmap)
-        else preview.setImageDrawable(TvSymbols.icon(this, R.drawable.ic_person))
-    }
-
-    private fun editProfile() {
-        val current = profile
-        if (current != null && current.isShowing) return
-        val form = LinearLayout(this)
-        form.orientation = LinearLayout.VERTICAL
-        form.setPadding(dp(22), dp(10), dp(22), dp(8))
-        // Avatar preview inside the dialog (user 2026-11-01).
-        val preview = ImageView(this)
-        profileAvatarPreview = preview
-        preview.scaleType = ImageView.ScaleType.CENTER_CROP
-        preview.background = avatarSurface(false, 96)
-        avatarOutline(preview)
-        preview.contentDescription = "Profile photo"
-        refreshProfileAvatarPreview()
-        val previewRow = LinearLayout(this)
-        previewRow.gravity = Gravity.CENTER
-        previewRow.setPadding(0, 0, 0, dp(8))
-        previewRow.addView(preview, LinearLayout.LayoutParams(dp(96), dp(96)))
-        form.addView(previewRow)
-        form.addView(button("Photo shape · Round / Rounded square", this::chooseAvatarShape))
-        val name = EditText(this)
-        name.isSingleLine = true
-        name.hint = "Your name"
-        name.setText(prefs.getString("name", "Sadique Sadiq"))
-        name.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_WORDS
-        name.setTextColor(ThemeStyle.foreground(prefs))
-        name.setHintTextColor(ThemeStyle.muted(prefs))
-        applyAppFont(name)
-        name.setPadding(dp(16), dp(12), dp(16), dp(12))
-        name.background = toolbarSurface(false)
-        form.addView(name)
-        // Choose / Remove side by side (user 2026-11-01).
-        val photoRow = LinearLayout(this)
-        photoRow.orientation = LinearLayout.HORIZONTAL
-        val choose = button("Choose photo") {
-            try {
-                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*")
-                        .addCategory(Intent.CATEGORY_OPENABLE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), 7)
-            } catch (unavailable: ActivityNotFoundException) {
-                Toast.makeText(this, "No photo picker available on this device", Toast.LENGTH_LONG).show()
-            } catch (unavailable: SecurityException) {
-                Toast.makeText(this, "No photo picker available on this device", Toast.LENGTH_LONG).show()
-            }
-        }
-        val remove = button("Remove photo") {
-            val photo = profileAsset("personal-avatar.png")
-            if (photo.exists() && !photo.delete()) {
-                Toast.makeText(this, "Could not remove photo", Toast.LENGTH_SHORT).show()
-                return@button
-            }
-            avatarBitmap = null
-            refreshProfile()
-            refreshProfileAvatarPreview()
-        }
-        val photoBtn = LinearLayout.LayoutParams(0, -2, 1f)
-        photoBtn.setMargins(dp(4), dp(8), dp(4), dp(4))
-        photoRow.addView(choose, photoBtn)
-        val photoBtn2 = LinearLayout.LayoutParams(0, -2, 1f)
-        photoBtn2.setMargins(dp(4), dp(8), dp(4), dp(4))
-        photoRow.addView(remove, photoBtn2)
-        form.addView(photoRow)
-        form.addView(text("Profile stays on this device. Google login is not used.", 13, MUTED))
-        // Save on the left, Later on the right (user 2026-11-01).
-        val actionRow = LinearLayout(this)
-        actionRow.orientation = LinearLayout.HORIZONTAL
-        val save = button("Save") {
-            val value = PersonalHomeModel.name(name.text.toString())
-            if (value.isEmpty()) { name.error = "Enter your name"; return@button }
-            prefs.edit().putString("name", value).putBoolean("setup", true).apply()
-            refreshProfile()
-            profile?.dismiss()
-            handler.post { maybeOfferDefaultHome() }
-        }
-        val later = button("Later") { profile?.dismiss() }
-        val saveParams = LinearLayout.LayoutParams(0, -2, 1f)
-        saveParams.setMargins(dp(4), dp(8), dp(4), 0)
-        val laterParams = LinearLayout.LayoutParams(0, -2, 1f)
-        laterParams.setMargins(dp(4), dp(8), dp(4), 0)
-        actionRow.addView(save, saveParams)
-        actionRow.addView(later, laterParams)
-        form.addView(actionRow)
-        val dialog = ThemeDialogBuilder(this).setTitle(if (prefs.getBoolean("setup", false)) "Your profile" else "Welcome · set up your Home")
-                .setView(form).create()
-        profile = dialog
-        dialog.setOnDismissListener { profileAvatarPreview = null; handler.postDelayed(notificationOffer, 1200) }
-        dialog.show()
-        GlassSettings.styleDialog(this, dialog)
-    }
-
     /**
      * Offers to make Personal Launcher the default Home. The old logic set a permanent
      * "asked once" flag, so after an update/reinstall that reset the default-home setting
@@ -2057,8 +1677,7 @@ class PersonalHomeActivity : Activity() {
     private val updateCheck = object : Runnable {
         override fun run() {
             if (!resumed) return
-            val currentProfile = profile
-            if ((currentProfile == null || !currentProfile.isShowing) && !homeOfferShowing && !homeSearch.isShowing)
+            if (!homeProfile.isShowing && !homeOfferShowing && !homeSearch.isShowing)
                 GitHubUpdates.check(this@PersonalHomeActivity, false)
             handler.postDelayed(this, 60_000L)
         }
@@ -2066,8 +1685,7 @@ class PersonalHomeActivity : Activity() {
     private val notificationOffer: Runnable = Runnable(::maybeOfferNotificationAccess)
     private var homeOfferShowing = false
     private fun maybeOfferNotificationAccess() {
-        val currentProfile = profile
-        if (!resumed || homeOfferShowing || (currentProfile != null && currentProfile.isShowing) || homeSearch.isShowing || GlassSettings.showing(this)) return
+        if (!resumed || homeOfferShowing || homeProfile.isShowing || homeSearch.isShowing || GlassSettings.showing(this)) return
         NotificationAccessSetup.offer(this)
     }
 
@@ -2097,20 +1715,6 @@ class PersonalHomeActivity : Activity() {
             .show()
     }
 
-    private fun refreshProfile() {
-        val name = prefs.getString("name", "Sadique Sadiq")
-        userName?.text = if (name.isNullOrEmpty()) "Your name" else name
-        val bitmap = avatarBitmap
-        val photo = avatar
-        if (bitmap != null) photo?.setImageBitmap(bitmap)
-        else photo?.setImageDrawable(TvSymbols.icon(this, R.drawable.ic_person))
-    }
-
-    private fun loadAvatar() {
-        // The bounded local avatar must be ready before Home binds its first frame.
-        avatarBitmap = ProfileAssets.load(this, profileAsset("personal-avatar.png"), true)
-    }
-
     /** Export settings to JSON via document picker. Excludes secrets. */
     override fun onActivityResult(request: Int, result: Int, data: Intent?) {
         super.onActivityResult(request, result, data)
@@ -2127,7 +1731,7 @@ class PersonalHomeActivity : Activity() {
                 handler.post {
                     if (isDestroyed || importEpoch != profileEpoch) return@post
                     if (wallpaper) { customWallpaper = image; prefs.edit().putString("wallpaper_mode", "custom").putInt("wallpaper_source", 0).apply(); sky?.invalidate() }
-                    else { avatarBitmap = image; refreshProfile(); refreshProfileAvatarPreview() }
+                    else homeProfile.setAvatar(image)
                 }
             } catch (error: Exception) {
                 handler.post { if (!isDestroyed) Toast.makeText(this, "Could not read this photo. Choose another image.", Toast.LENGTH_LONG).show() }
@@ -2262,7 +1866,7 @@ class PersonalHomeActivity : Activity() {
         telemetry?.stop()
         appLibrary?.close()
         panel?.dismiss()
-        profile?.dismiss()
+        homeProfile.dismiss()
         homeSearch.dismiss()
         handler.removeCallbacksAndMessages(null)
         continueWatching?.stop()
