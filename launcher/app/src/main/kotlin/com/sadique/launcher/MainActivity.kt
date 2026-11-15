@@ -10,10 +10,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
-import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -27,7 +25,6 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.media.tv.TvContract
-import android.media.tv.TvInputInfo
 import android.media.tv.TvInputManager
 import android.net.ConnectivityManager
 import android.net.Network
@@ -36,9 +33,7 @@ import android.net.NetworkRequest
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.os.Handler
-import android.os.HandlerThread
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
@@ -70,9 +65,6 @@ import androidx.dynamicanimation.animation.SpringAnimation
 import androidx.dynamicanimation.animation.SpringForce
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import java.io.BufferedReader
-import java.io.FileReader
-import java.io.IOException
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -104,7 +96,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         @JvmField
         var COLUMNS = 4
         private const val MINUTE_MS = 60_000L
-        private const val STATS_MS = 10_000L
         /**
          * 2025-01-01. TVs without a clock battery boot at the epoch (08:00 in China) and keep it until network
          * time arrives; the clock, date and greeting stay hidden before then.
@@ -119,30 +110,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         private var lastPetalShower: LocalDate? = null
         /** Blue the glass turns while reorder mode is on. */
         private val REORDER_ACCENT = 0xFF6EC1FF.toInt()
-        // -1: need another sample. -2: this source cannot be read (Android 9 hides /proc/stat from apps).
-        private const val CPU_UNREADABLE = -2
         private val RACE_RED = 0xFFFF3B2F.toInt()
-
-        /** One quiet line, e.g. "CPU 8%  ·  Memory 430 MB free  ·  Storage 3.1 GB free". Runs off the main thread. */
-        private fun appendStat(line: StringBuilder, part: String) {
-            if (line.isNotEmpty()) line.append("  ·  ")
-            line.append(part)
-        }
-
-        private fun readFirstLine(path: String): String? {
-            try {
-                BufferedReader(FileReader(path)).use { r -> return r.readLine() }
-            } catch (_: IOException) {
-                return null
-            }
-        }
-
-        private fun formatGb(res: Resources, bytes: Long): String {
-            if (bytes <= 0) return ""
-            val gb = bytes / (1024.0 * 1024 * 1024)
-            return if (gb >= 10) res.getString(R.string.storage_gb_whole, gb)
-            else res.getString(R.string.storage_gb_decimal, gb)
-        }
 
         private fun setFestiveIcon(pill: TextView, icon: Drawable) {
             // The pills tint their icons to follow focus; the festive ones keep their own colours.
@@ -169,10 +137,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
             return 0xFF000000.toInt() or (r shl 16) or (g shl 8) or b
         }
 
-        private fun fold(view: View, folded: MutableList<View>) {
-            view.visibility = View.GONE
-            folded.add(view)
-        }
     }
 
     private var rtlAppGrid = false
@@ -393,6 +357,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     private var pendingFocusScroll: RecyclerView.OnScrollListener? = null
 
     private val handler = Handler(Looper.getMainLooper())
+    private val launcherStats = LauncherStats(this, handler, { stats }, { showStats })
     /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
@@ -1091,7 +1056,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
             updateInputsButton()
             pillsShown = true
         }
-        if (showStats) startStats()
+        if (showStats) launcherStats.start()
         gameDay?.start()
         sky.update()
         wallpaperPlayer.start()
@@ -1269,7 +1234,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         handler.removeCallbacks(minuteTick)
         handler.removeCallbacks(openWhenOnline)
         startPending = null   // leaving Home before the network came back: the boot's app stays closed
-        stopStats()
+        launcherStats.stop()
         gameDay?.stop()
         handler.removeCallbacks(turnTick)
         diya?.stop()
@@ -2164,183 +2129,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         else glass.alpha = 0f
     }
 
-    // ---- optional system stats (config.xml show_stats) --------------------------------------------
-
-    /** Background reader. Started only while Home is resumed and show_stats is on. */
-    private var statsThread: HandlerThread? = null
-    /** The current run's handler; a run whose handler is no longer this one stops (volatile: read off-thread). */
-    @Volatile
-    private var statsBg: Handler? = null
-
-    private fun startStats() {
-        if (statsThread != null) return
-        stats?.visibility = View.VISIBLE
-        cpuTotalPrev = -1
-        idlePrev = -1
-        procStatDead = false
-        val thread = HandlerThread("stats")
-        statsThread = thread
-        thread.start()
-        // Each start gets its own handler, held by its task: stopStats on the main thread can clear the field
-        // at any moment without the reader tripping over it.
-        val bg = Handler(thread.looper)
-        statsBg = bg
-        bg.post(object : Runnable {
-            override fun run() {
-                if (statsBg != bg) return
-                val line = readStatsLine()
-                handler.post {
-                    val s = stats
-                    if (showStats && s != null && statsBg == bg) s.text = line
-                }
-                if (statsBg == bg) bg.postDelayed(this, STATS_MS)
-            }
-        })
-    }
-
-    private fun stopStats() {
-        if (statsThread == null) return
-        statsBg!!.removeCallbacksAndMessages(null)
-        statsThread!!.quit()
-        statsThread = null
-        statsBg = null
-        // Paused (the quick panel or an app on top): keep the last line on screen. Taking it away moved the grid up
-        // under a glass highlight that stayed put.
-        if (!showStats) stats?.visibility = View.GONE
-    }
-
-    private fun readStatsLine(): String {
-        var cpu = cpuPercent()
-        if (cpu < 0) {
-            try {
-                Thread.sleep(200)             // second sample, so the first line already has a CPU figure
-            } catch (_: InterruptedException) {
-                Thread.currentThread().interrupt()
-                return ""
-            }
-            cpu = cpuPercent()
-        }
-        // Android 8 and later hide /proc/stat from apps on many TVs: then the line leaves CPU out rather than
-        // showing a dash that never fills in.
-        val line = StringBuilder()
-        if (cpu >= 0) line.append(getString(R.string.stats_cpu, cpu))
-        val mem = memUsedOfTotalMb()
-        if (mem != null) appendStat(line, getString(R.string.stats_memory, mem[0], mem[1]))
-        val free = formatGb(resources, Environment.getDataDirectory().freeSpace)
-        if (free.isNotEmpty()) appendStat(line, getString(R.string.stats_storage, free))
-        return StatsText.forLocale(line.toString(), resources.configuration.locales[0])
-    }
-
-    private var cpuTotalPrev = -1L
-    private var cpuIdlePrev = -1L
-    private var procStatDead = false
-    private var idlePrev = -1L
-    private var wallPrev = -1L
-
-    private fun cpuPercent(): Int {
-        if (!procStatDead) {
-            val fromStat = cpuFromProcStat()
-            if (fromStat != CPU_UNREADABLE) return fromStat
-            procStatDead = true
-            idlePrev = -1
-        }
-        return cpuFromIdle()
-    }
-
-    private fun cpuFromProcStat(): Int {
-        val s = readFirstLine("/proc/stat")
-        if (s == null || !s.startsWith("cpu")) return CPU_UNREADABLE
-        val t = s.trim().split("\\s+".toRegex())
-        if (t.size < 5) return CPU_UNREADABLE
-        try {
-            val user = java.lang.Long.parseLong(t[1])
-            val nice = java.lang.Long.parseLong(t[2])
-            val sys = java.lang.Long.parseLong(t[3])
-            val idle = java.lang.Long.parseLong(t[4])
-            val iowait = if (t.size > 5) java.lang.Long.parseLong(t[5]) else 0
-            val irq = if (t.size > 6) java.lang.Long.parseLong(t[6]) else 0
-            val soft = if (t.size > 7) java.lang.Long.parseLong(t[7]) else 0
-            val total = user + nice + sys + idle + iowait + irq + soft
-            val idleAll = idle + iowait
-            if (cpuTotalPrev < 0) {
-                cpuTotalPrev = total
-                cpuIdlePrev = idleAll
-                return -1
-            }
-            val dt = total - cpuTotalPrev
-            val di = idleAll - cpuIdlePrev
-            cpuTotalPrev = total
-            cpuIdlePrev = idleAll
-            if (dt <= 0) return -1
-            val busy = Math.round((dt - di) * 100.0 / dt).toInt()
-            return Math.max(0, Math.min(100, busy))
-        } catch (_: NumberFormatException) {
-            return CPU_UNREADABLE
-        }
-    }
-
-    /** Busy percent from cpuidle time (microseconds) across the cores. -1 until the second sample. */
-    private fun cpuFromIdle(): Int {
-        var idle = 0L
-        var cores = 0
-        for (i in 0 until 8) {
-            var any = false
-            for (state in 0 until 8) {
-                val t = readFirstLine("/sys/devices/system/cpu/cpu" + i
-                        + "/cpuidle/state" + state + "/time")
-                if (t == null) break
-                try {
-                    idle += java.lang.Long.parseLong(t.trim())
-                    any = true
-                } catch (_: NumberFormatException) {
-                    break
-                }
-            }
-            if (!any) break
-            cores++
-        }
-        if (cores == 0) return -1
-        val wall = SystemClock.elapsedRealtime() * 1000L
-        if (idlePrev < 0) {
-            idlePrev = idle
-            wallPrev = wall
-            return -1
-        }
-        val di = idle - idlePrev
-        val dw = (wall - wallPrev) * cores
-        idlePrev = idle
-        wallPrev = wall
-        if (dw <= 0) return -1
-        val busy = Math.round((dw - di) * 100.0 / dw).toInt()
-        return Math.max(0, Math.min(100, busy))
-    }
-
-    /** RAM usage as {used, total} in MB, used = MemTotal - MemAvailable, e.g. "945 / 1536 MB". Used over
-     *  free so the line reads as a load against a known whole; null when /proc/meminfo cannot be read. */
-    private fun memUsedOfTotalMb(): LongArray? {
-        var available = -1L
-        var total = -1L
-        try {
-            BufferedReader(FileReader("/proc/meminfo")).use { r ->
-                var line = r.readLine()
-                while (line != null) {
-                    if (line.startsWith("MemAvailable:")) {
-                        val t = line.split("\\s+".toRegex())
-                        if (t.size >= 2) available = java.lang.Long.parseLong(t[1]) / 1024
-                    } else if (line.startsWith("MemTotal:")) {
-                        val t = line.split("\\s+".toRegex())
-                        if (t.size >= 2) total = java.lang.Long.parseLong(t[1]) / 1024
-                    }
-                    line = r.readLine()
-                }
-            }
-        } catch (_: IOException) {
-        } catch (_: NumberFormatException) {
-        }
-        if (available < 0 || total <= 0) return null
-        return longArrayOf(Math.max(0, total - available), total)
-    }
-
     // ---- navigation ------------------------------------------------------------------------------
 
     override fun onTileVerticalKey(position: Int, keyCode: Int): Boolean {
@@ -3202,218 +2990,24 @@ class MainActivity : Activity(), AppAdapter.TileListener {
 
     /** Dropdown menu under the Inputs pill: HDMI ports (with connection state), AV and Live TV. */
     private fun showInputs() {
-        // A configured source panel and no Live TV row to offer next to it: the panel is the whole menu.
-        // The BYINTEK U4 needs this, as its TvInputManager lists three HDMI ports and an AV input it doesn't have.
-        val coocaa = if (coocaaSources) CoocaaSources.list(this) else Collections.emptyList<CoocaaSources.Source>()
-        if (coocaa.isEmpty() && sourcePanelService.isNotEmpty() && liveTvIntent() == null) {
-            openSourcePanel()
-            return
-        }
-        // top_menu: the pill is gone, so the list hangs under the gear, growing inward from the right.
-        // Read the switch, not the pill: show_inputs_pill=false hides the pill too, and there the list
-        // keeps its usual place.
-        val underGear = topMenu
-        val anchor = findViewById<View>(if (underGear) R.id.btnSettings else R.id.btnInputs)
-        val panel = layoutInflater.inflate(R.layout.popup_inputs, root, false)
-        val rows = panel.findViewById<LinearLayout>(R.id.rows)
-
-        // Compact: as wide as the Inputs pill (a touch wider so "HDMI 1" fits), hanging right below it.
-        val width = Math.max(anchor.width, (150 * density).toInt())
-        val popup = glassPopup(panel, width)
-
-        val tim = getSystemService(TV_INPUT_SERVICE) as? TvInputManager
-        // inputs_connected_only: ports without a connected device and the AV jacks fold behind a "More inputs" row.
-        val connectedOnly = inputsConnectedOnly
-        val folded: MutableList<View> = ArrayList()
-        var sawNonHdmi = false
-        // An explicit root URI asks the Live TV app to leave any HDMI source selected by its own UI.
-        val rootChannel = TvContract.Channels.CONTENT_URI.toString() == liveTvInputId
-        var tunerId: String? = null
-        var tunerIsHw = false
-        var tunerIsAnalog = false
-        if (tim != null) {
-            val inputs = ArrayList(tim.tvInputList)
-            // HDMI ports first in port order, then AV and the rest.
-            inputs.sortWith(Comparator { a, b ->
-                val ha = a.type == TvInputInfo.TYPE_HDMI
-                val hb = b.type == TvInputInfo.TYPE_HDMI
-                if (ha != hb) {
-                    if (ha) -1 else 1
-                } else {
-                    a.loadLabel(this).toString().compareTo(b.loadLabel(this).toString(), ignoreCase = true)
-                }
-            })
-            // An HDMI-CEC device (an Apple TV, a soundbar) gets an input of its own whose parent is the
-            // port it sits on, so the port and the device would each get a row (Vestel MT7332: "HDMI 1"
-            // and "HDMI Apple TV"). The device takes its port's row instead, and a bare port is listed
-            // only when nothing on it speaks CEC.
-            val inputIds = HashSet<String>()
-            for (info in inputs) inputIds.add(info.id)
-            val cecDevices: MutableMap<String, MutableList<TvInputInfo>> = HashMap()
-            for (info in inputs) {
-                val parent = info.parentId
-                if (parent == null || !inputIds.contains(parent)) continue
-                if (!info.isPassthroughInput || info.isHidden(this)) continue
-                var onPort = cecDevices[parent]
-                if (onPort == null) {
-                    onPort = ArrayList()
-                    cecDevices[parent] = onPort
-                }
-                onPort.add(info)
-            }
-            // Some TVs (Sony) report every HDMI port as connected whether or not anything is plugged in,
-            // so drop the HDMI status then. A TV with every port really in use loses it too.
-            var hdmiPorts = 0
-            var hdmiConnected = 0
-            for (info in inputs) {
-                if (!info.isPassthroughInput || info.type != TvInputInfo.TYPE_HDMI) continue
-                if (info.parentId != null && inputIds.contains(info.parentId)) continue
-                hdmiPorts++
-                if (tim.getInputState(info.id) == TvInputManager.INPUT_STATE_CONNECTED) hdmiConnected++
-            }
-            val hdmiStateBogus = hdmiPorts > 1 && hdmiConnected == hdmiPorts
-            for (info in inputs) {
-                if (info.type == TvInputInfo.TYPE_TUNER
-                        && (info.serviceInfo.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                        && (liveTvInputId.isEmpty() || rootChannel || liveTvInputId == info.id)) {
-                    // Prefer a hardware tuner: the framework names those ".../HW<n>". System apps such as
-                    // AirPlay also register software inputs of type TUNER and may sort first (seen on TCL G05).
-                    // Among tuners of the same kind, skip an analog input when another is present.
-                    // MediaTek names them AnalogInputService and TunerInputService; alphabetical order
-                    // would pick the analog one, and Live TV then opens a dead ATV source.
-                    val hw = info.id.matches(".*/HW\\d+$".toRegex())
-                    val analog = info.id.lowercase(Locale.ROOT).contains("analog")
-                    val currentTuner = tunerId
-                    val better = currentTuner == null
-                            || (hw && !tunerIsHw)
-                            || (hw == tunerIsHw && tunerIsAnalog && !analog)
-                            || (hw == tunerIsHw && analog == tunerIsAnalog
-                                    && info.id.compareTo(currentTuner) < 0)
-                    if (better) {
-                        tunerId = info.id
-                        tunerIsHw = hw
-                        tunerIsAnalog = analog
-                    }
-                }
-                // Inputs hidden in the TV's Settings > Inputs stay out of the menu too.
-                if (!info.isPassthroughInput || info.isHidden(this)) continue
-                // input_sources can leave out ports the board reports but the set does not have ("HW8=-").
-                if (mappedSource(info.id) == -1) continue
-                // A CEC device's row is added with its port, below.
-                if (info.parentId != null && inputIds.contains(info.parentId)) continue
-                val l = info.loadLabel(this)
-                var label = l?.toString() ?: info.id
-                val hdmi = info.type == TvInputInfo.TYPE_HDMI
-                if (hdmi && !label.uppercase(Locale.ROOT).contains("HDMI")) label = "HDMI $label"
-                val custom = InputNames.tidy(info.loadCustomLabel(this))
-                val named = custom != null && custom.isNotEmpty() && custom != label
-                if (!hdmi && rows.childCount > 0 && !sawNonHdmi) {
-                    val line = addSeparator(rows)
-                    if (connectedOnly) fold(line, folded)
-                }
-                if (!hdmi) sawNonHdmi = true
-                val devices = cecDevices[info.id]
-                if (devices != null) {
-                    // "Apple TV · HDMI 1": the device's own name (or the one given to it or to its port in
-                    // Settings > Inputs), then the port. Opening the device's input also makes it the CEC
-                    // active source, which wakes it.
-                    for (device in devices) {
-                        var name: CharSequence? = InputNames.tidy(device.loadCustomLabel(this))
-                        if (name == null || name.isEmpty()) name = if (named) custom else device.loadLabel(this)
-                        val deviceLabel = if (name == null || name.isEmpty()) label else "$name \u00B7 $label"
-                        val deviceId = device.id
-                        val state = if (hdmiStateBogus) -1 else tim.getInputState(deviceId)
-                        val row = addInputRow(rows, popup, R.drawable.ic_input, deviceLabel, state) { openInput(deviceId) }
-                        if (connectedOnly && InputFold.folds(true, state)) fold(row, folded)
-                    }
-                    continue
-                }
-                // The name given in Settings > Inputs (e.g. "MacBook Pro") goes first, the port after it.
-                if (named) label = custom!! + " \u00B7 " + label
-                val id = info.id
-                // Analog AV jacks have no hotplug detection, and some TVs report them as always connected
-                // (TCL Smart TV Pro G03 says "Connected" with nothing plugged in), so AV rows show no state.
-                val state = if (!hdmi || hdmiStateBogus) -1 else tim.getInputState(id)
-                val row = addInputRow(rows, popup, if (hdmi) R.drawable.ic_input else R.drawable.ic_av, label, state) { openInput(id) }
-                if (connectedOnly && InputFold.folds(hdmi, state)) fold(row, folded)
-            }
-        }
-        if (folded.isNotEmpty()) {
-            val more = layoutInflater.inflate(R.layout.item_input, rows, false)
-            more.findViewById<ImageView>(R.id.icon).setImageResource(R.drawable.ic_input)
-            more.findViewById<TextView>(R.id.title).setText(R.string.more_inputs)
-            more.findViewById<View>(R.id.status).visibility = View.GONE
-            more.findViewById<View>(R.id.dot).visibility = View.GONE
-            more.setOnClickListener {
-                for (f in folded) f.visibility = View.VISIBLE
-                rows.removeView(more)
-                for (f in folded) {
-                    if (f.isFocusable) { f.requestFocus(); break }
-                }
-            }
-            rows.addView(more)
-        }
-        // Coocaa OS registers nothing with TvInputManager; com.skyworth.tv lists its sources instead.
-        if (rows.childCount == 0) {
-            for (s in coocaa) {
-                val icon = if ("HDMI" == s.name) R.drawable.ic_input
-                        else if ("VOD" == s.name) R.drawable.ic_livetv else R.drawable.ic_av
-                addInputRow(rows, popup, icon, s.label, -1) {
-                    if (!CoocaaSources.open(this, s)) {
-                        Toast.makeText(this, R.string.not_available, Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }
-        }
-        // Nothing to list where there is no TvInputManager: the TV's own source panel switches inputs.
-        if (rows.childCount == 0 && sourcePanelService.isNotEmpty()) {
-            addInputRow(rows, popup, R.drawable.ic_input, getString(R.string.inputs), -1, this::openSourcePanel)
-        }
-        var liveTv = liveTvIntent()
-        if (liveTv != null && tunerId != null) {
-            // Tune that input only when the Live TV package itself handles the URI.
-            // The unrestricted input player also resolves it (that is how HDMI opens), but on the
-            // AIWA AI PONT SA that player stays black, and the Live TV package does not handle the
-            // URI at all, which used to toast "Not available on this TV". Keep the leanback activity
-            // then: it is the same path as the Live TV tile. Do not drop the package restriction.
-            // An explicit tuner uses its channel collection (e.g. DVB-S rather than DVB-T/C).
-            // Keep the legacy passthrough route for automatic selection: some OEM players need it.
-            // If the configured input is absent, tunerId stays null and the app opens normally.
-            val configured = liveTvInputId.isNotEmpty() && !rootChannel
-            val tuned = Intent(Intent.ACTION_VIEW)
-                    .setDataAndType(if (configured) TvContract.buildChannelsUriForInput(tunerId)
-                                    else TvContract.buildChannelUriForPassthroughInput(tunerId),
-                            if (configured) TvContract.Channels.CONTENT_TYPE else TvContract.Channels.CONTENT_ITEM_TYPE)
-                    .setPackage(liveTvPkg)
-            val handler = tuned.resolveActivity(packageManager)
-            if (handler != null) {
-                // On some MediaTek sets the tuner passthrough URI leaves the app's HDMI source selected.
-                // The stock launcher addresses the same activity with the root channel URI instead (#1941).
-                liveTv = if (rootChannel)
-                        Intent(Intent.ACTION_VIEW).setData(TvContract.Channels.CONTENT_URI).setComponent(handler)
-                        else tuned
-            }
-        }
-        if (liveTv != null) {
-            if (rows.childCount > 0) addSeparator(rows)
-            val liveTvIntent = liveTv
-            addInputRow(rows, popup, R.drawable.ic_livetv, getString(R.string.live_tv), -1) { open(liveTvIntent) }
-        }
-        if (rows.childCount == 0) {
-            Toast.makeText(this, R.string.no_inputs, Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        // Fit the widest row: TVs that report a status on every port (Sony) would otherwise squeeze the names out.
-        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
-        popup.width = Math.max(width, Math.min(panel.measuredWidth, (360 * density).toInt()))
-
-        val alignment = if (resources.getBoolean(R.bool.rtl_menu_bar) != underGear) Gravity.END else Gravity.START
-        dropIn(popup, panel, anchor, alignment)
-        for (i in 0 until rows.childCount) {
-            val child = rows.getChildAt(i)
-            if (child.visibility == View.VISIBLE && child.isFocusable) { child.requestFocus(); break }
-        }
+        TvInputsPopup(
+            host = this,
+            root = root,
+            density = density,
+            coocaaSources = coocaaSources,
+            sourcePanelService = sourcePanelService,
+            topMenu = topMenu,
+            inputsConnectedOnly = inputsConnectedOnly,
+            liveTvInputId = liveTvInputId,
+            liveTvPkg = liveTvPkg,
+            liveTvIntent = this::liveTvIntent,
+            openSourcePanel = this::openSourcePanel,
+            mappedSource = this::mappedSource,
+            openInput = this::openInput,
+            open = this::open,
+            glassPopup = this::glassPopup,
+            dropIn = this::dropIn,
+        ).show()
     }
 
     private fun glassPopup(panel: View, width: Int): PopupWindow {
@@ -3440,43 +3034,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
                 .setInterpolator(DecelerateInterpolator(1.6f)).start()
     }
 
-    private fun addSeparator(rows: LinearLayout): View {
-        val line = View(this)
-        line.setBackgroundColor(0x1FFFFFFF)
-        val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, density.toInt())
-        val m = (6 * density).toInt()
-        val h = (12 * density).toInt()
-        lp.setMargins(h, m, h, m)
-        rows.addView(line, lp)
-        return line
-    }
-
-    private fun addInputRow(rows: LinearLayout, popup: PopupWindow, iconRes: Int, title: String, state: Int, action: Runnable): View {
-        val row = layoutInflater.inflate(R.layout.item_input, rows, false)
-        row.findViewById<ImageView>(R.id.icon).setImageResource(iconRes)
-        row.findViewById<TextView>(R.id.title).text = title
-        val status = row.findViewById<TextView>(R.id.status)
-        val dot = row.findViewById<View>(R.id.dot)
-        // This TV reports "standby" for every port whether or not something is plugged in, so only
-        // definite states are shown.
-        if (state == TvInputManager.INPUT_STATE_CONNECTED) {
-            status.setText(R.string.connected)
-            dot.visibility = View.VISIBLE
-        } else if (state == TvInputManager.INPUT_STATE_DISCONNECTED) {
-            status.setText(R.string.not_connected)
-            dot.visibility = View.GONE
-        } else {
-            status.visibility = View.GONE
-            dot.visibility = View.GONE
-        }
-        row.setOnClickListener {
-            popup.dismiss()
-            action.run()
-        }
-        rows.addView(row)
-        return row
-    }
-
     // ---- launcher settings and module cards -------------------------------------------------------
 
     /** top_menu: the gear's dropdown, standing in for the Inputs, Wi-Fi and Settings pills. */
@@ -3486,21 +3043,21 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         val rows = panel.findViewById<LinearLayout>(R.id.rows)
         val popup = glassPopup(panel, (220 * density).toInt())
         // Inputs opens its own list once this one has closed.
-        if (showInputsMenuRow) addInputRow(rows, popup, R.drawable.ic_input, getString(R.string.inputs), -1) { root.post { showInputs() } }
-        addInputRow(rows, popup, R.drawable.ic_wifi, getString(R.string.quick_network), -1, this::openNetworkPill)
+        if (showInputsMenuRow) addTvInputRow(this, rows, popup, R.drawable.ic_input, getString(R.string.inputs), -1) { root.post { showInputs() } }
+        addTvInputRow(this, rows, popup, R.drawable.ic_wifi, getString(R.string.quick_network), -1, this::openNetworkPill)
         val network: CharSequence? = if (wifiIconOnly) btnWifi.contentDescription else btnWifi.text
         if (!TextUtils.isEmpty(network)) {
             val status = rows.getChildAt(rows.childCount - 1).findViewById<TextView>(R.id.status)
             status.text = network
             status.visibility = View.VISIBLE
         }
-        addInputRow(rows, popup, R.drawable.ic_swap_vert, getString(R.string.reorder), -1, this::toggleReorder)
+        addTvInputRow(this, rows, popup, R.drawable.ic_swap_vert, getString(R.string.reorder), -1, this::toggleReorder)
         if (launcherSettingsButton) {
-            addInputRow(rows, popup, R.drawable.ic_home_settings_pill, getString(R.string.launcher_settings), -1) {
+            addTvInputRow(this, rows, popup, R.drawable.ic_home_settings_pill, getString(R.string.launcher_settings), -1) {
                 startActivityForResult(Intent(this, LauncherSettingsActivity::class.java), LAUNCHER_SETTINGS_REQUEST)
             }
         } else {
-            addInputRow(rows, popup, R.drawable.ic_settings, getString(R.string.settings), -1) {
+            addTvInputRow(this, rows, popup, R.drawable.ic_settings, getString(R.string.settings), -1) {
                 open(systemIntent(Settings.ACTION_SETTINGS))
             }
         }

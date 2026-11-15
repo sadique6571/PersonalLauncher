@@ -5,7 +5,6 @@ import android.app.AlertDialog
 import android.app.Dialog
 import android.content.ActivityNotFoundException
 import android.content.Context
-import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Typeface
@@ -344,7 +343,7 @@ internal object GlassSettings {
         page.orientation = LinearLayout.VERTICAL
         page.setPadding(dp(host, 16f), dp(host, 16f), dp(host, 16f), dp(host, 16f))
         page.setTag("settings_shell")
-        styleShell(host, page)
+        SettingsDialogStyle.styleShell(host, page)
         val bar = LinearLayout(host)
         bar.gravity = Gravity.CENTER_VERTICAL
         if (current.pages.isNotEmpty()) {
@@ -449,62 +448,11 @@ internal object GlassSettings {
     }
 
     @JvmStatic
-    fun styleDialog(host: Activity, dialog: AlertDialog) {
-        if (dialog.window == null) return
-        val shell = shellBackground(host)
-        dialog.window!!.setBackgroundDrawable(shell)
-        styleDialogText(host, dialog.window!!.decorView)
-        applyBlur(dialog)
-        for (which in intArrayOf(AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_NEUTRAL)) {
-            val button = dialog.getButton(which)
-            if (button != null) {
-                applyAppFont(host, button)
-                button.setTextColor(ThemeStyle.foreground(ThemePreferences.get(host)))
-            }
-        }
-    }
-
-    private fun styleDialogText(host: Activity, view: View) {
-        if (view is TextView) {
-            val weight = view.typeface?.style ?: Typeface.NORMAL
-            applyAppFont(host, view)
-            view.setTypeface(view.typeface, weight)
-            view.setTextColor(ThemeStyle.foreground(ThemePreferences.get(host)))
-        }
-        if (view is ViewGroup) {
-            for (i in 0 until view.childCount) styleDialogText(host, view.getChildAt(i))
-        }
-    }
-
-    private fun prefsFor(host: Activity): SharedPreferences {
-        return ThemePreferences.get(host)
-    }
-
-    private fun styleShell(host: Activity, page: View) {
-        val glass = TvGlassStyle.enabled(ThemePreferences.get(host))
-        page.background = shellBackground(host)
-        page.clipToOutline = true
-        page.elevation = dp(host, if (glass) 6f else 0f).toFloat()
-    }
-
-    private fun shellBackground(host: Activity): GradientDrawable {
-        if (ThemeStyle.harmony(ThemePreferences.get(host))) return HarmonyVisionSurface.sheet(host)
-        if (ThemeStyle.id(ThemePreferences.get(host)) == ThemeStyle.GLASS) return GlassOsUi.controls(host)
-        val glass = TvGlassStyle.enabled(ThemePreferences.get(host))
-        val shell = if (glass) TvGlassStyle.surface(dp(host, 28f), dp(host, 1f), false, prefsFor(host))
-            else GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xff122338.toInt(), 0xff09182a.toInt()))
-        shell.cornerRadius = dp(host, if (glass) 28f else 24f).toFloat()
-        val prefs = ThemePreferences.get(host)
-        if (!glass) {
-            shell.setStroke(dp(host, 1f), 0x55415a72)
-            shell.alpha = PanelTransparency.alpha(ClassicGlassAlpha.panel(TvGlassStyle.intensity(prefs)), prefs, false)
-        }
-        return shell
-    }
+    fun styleDialog(host: Activity, dialog: AlertDialog) = SettingsDialogStyle.styleDialog(host, dialog)
 
     private fun refreshViews(host: Activity, view: View) {
         if (view is ControlCenterGrid) view.refresh()
-        if ("settings_shell" == view.tag) styleShell(host, view)
+        if ("settings_shell" == view.tag) SettingsDialogStyle.styleShell(host, view)
         if (view.isFocusable && view.background is GradientDrawable) {
             view.background = when {
                 "wide_card" == view.tag -> cardBackground(host, view.isFocused)

@@ -15,7 +15,6 @@ import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.content.res.Configuration
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Outline
@@ -105,6 +104,7 @@ class PersonalHomeActivity : Activity() {
         homeWeatherController.preferencesChanged(key)
     }
     private lateinit var prefs: SharedPreferences
+    private lateinit var settingsTransfer: HomeSettingsTransfer
     private var page: LinearLayout? = null
     private var header: LinearLayout? = null
     private var actions: LinearLayout? = null
@@ -324,8 +324,7 @@ class PersonalHomeActivity : Activity() {
     }
     private var avatarBitmap: Bitmap? = null
     private var customWallpaper: Bitmap? = null
-    private var contrastKey: ClockSampleKey? = null
-    private var wallpaperClockInk = 0xffffffff.toInt()
+    private val clockContrast = HomeClockContrast()
     private var liquidBackdrop: LiquidBackdrop? = null
     private var headerBackdrop: LiquidBackdrop? = null
     private var continueWatching: ContinueWatchingView? = null
@@ -409,6 +408,7 @@ class PersonalHomeActivity : Activity() {
         onCreateStartMs = SystemClock.elapsedRealtime()
         BootLog.mark("home onCreate")
         prefs = ThemePreferences.get(this)
+        settingsTransfer = HomeSettingsTransfer(this, prefs, worker, handler, this::buildHome)
         val config = Config.load(this)
         settingsRemoteKeys = HashSet()
         settingsRemoteKeys.add(KeyEvent.KEYCODE_SETTINGS)
@@ -1083,7 +1083,7 @@ class PersonalHomeActivity : Activity() {
             sky.clockX = position[0] - origin[0] + timeView.width / 2f
             sky.clockY = position[1] - origin[1] + timeView.height / 2f
             sky.invalidate()
-            if (updateWallpaperClockInk()) adaptVisibleTextColors()
+            if (clockContrast.update(sky, prefs, tv, dp(150).toFloat())) adaptVisibleTextColors()
         }
         val heading = text("Your apps", prefs.getInt("focus_title_size", if (tv) 32 else 26), TEXT)
         appHeading = heading
@@ -2718,148 +2718,28 @@ class PersonalHomeActivity : Activity() {
         val headerLabel = label === userName || label === greeting || label === homeWeather || label === networkStatus
         if (headerLabel) label.setTextColor(HeaderAppearance.foreground(prefs))
         if (glassOs() && label === networkStatus) return
-        if (clockLabel) label.setTextColor(wallpaperClockInk)
+        if (clockLabel) label.setTextColor(clockContrast.ink)
         if (clockLabel && !prefs.getBoolean("clock_shadow", true)) label.setShadowLayer(0f, 0f, 0f, Color.TRANSPARENT)
         else {
-            val darkInk = if (clockLabel) wallpaperClockInk != 0xffffffff.toInt() else headerLabel && ThemeStyle.light(prefs) && headerBgMode() != 0
+            val darkInk = if (clockLabel) clockContrast.ink != 0xffffffff.toInt() else headerLabel && ThemeStyle.light(prefs) && headerBgMode() != 0
             label.setShadowLayer(dp(if (clockLabel) 5 else 2).toFloat(), 0f, dp(if (clockLabel) 2 else 1).toFloat(), if (darkInk) 0x99ffffff.toInt() else 0xe6000000.toInt())
         }
-    }
-
-    /** Nine cached photo samples choose clock ink; the photo itself is never tinted for text contrast. */
-    private fun updateWallpaperClockInk(): Boolean {
-        val skyView = sky
-        if (skyView == null) { contrastKey = null; return false }
-        val photo = skyView.currentPicture()
-        if (photo == null || photo.isRecycled) {
-            contrastKey = null
-            val changed = wallpaperClockInk != 0xffffffff.toInt()
-            wallpaperClockInk = 0xffffffff.toInt()
-            return changed
-        }
-        if (skyView.width <= 0 || skyView.height <= 0) return false
-        val y = if (skyView.clockY >= 0) skyView.clockY else dp(150).toFloat()
-        val x = if (skyView.clockX >= 0) skyView.clockX else skyView.width / 2f
-        val frame = skyView.wallpaperFrame(photo, y, photo === skyView.backdrop)
-        if (tv && (x < frame[0] || x >= frame[2] || y < frame[1] || y >= frame[3])) {
-            contrastKey = null
-            val changed = wallpaperClockInk != Color.WHITE
-            wallpaperClockInk = Color.WHITE
-            return changed
-        }
-        val px = Math.max(0, Math.min(photo.width - 1, Math.round((x - frame[0]) / (frame[2] - frame[0]) * photo.width)))
-        val py = Math.max(0, Math.min(photo.height - 1, Math.round((y - frame[1]) / (frame[3] - frame[1]) * photo.height)))
-        val shade = HomeAppearance.shade(prefs.getString("theme_mode", "light"), skyView.minute, prefs.getInt("background_dim", 0))
-        val darkInk = 0xff11191c.toInt()
-        val key = contrastKey
-        if (key != null && key.matches(photo, px, py, shade, darkInk)) return false
-        contrastKey = ClockSampleKey(photo, px, py, shade, darkInk)
-        var red = 0
-        var green = 0
-        var blue = 0
-        val dx = Math.max(1, photo.width / 30)
-        val dy = Math.max(1, photo.height / 30)
-        for (row in -1..1) for (col in -1..1) {
-            val pixel = photo.getPixel(Math.max(0, Math.min(photo.width - 1, px + col * dx)), Math.max(0, Math.min(photo.height - 1, py + row * dy)))
-            red += (pixel shr 16) and 255
-            green += (pixel shr 8) and 255
-            blue += pixel and 255
-        }
-        val background = MaterialAppearance.mix(Color.rgb(red / 9, green / 9, blue / 9), 0xff051327.toInt(), shade / 255f)
-        // A white cloud or bright patch must not turn an otherwise colourful photo's clock black.
-        var whiteWallpaper = true
-        for (row in 0 until 3) {
-            if (!whiteWallpaper) break
-            for (col in 0 until 3) {
-                val pixel = photo.getPixel(Math.min(photo.width - 1, Math.round(photo.width * (0.15f + 0.35f * col))),
-                        Math.min(photo.height - 1, Math.round(photo.height * (0.15f + 0.35f * row))))
-                if (ThemeStyle.wallpaperClockInk(pixel, darkInk) == 0xffffffff.toInt()) { whiteWallpaper = false; break }
-            }
-        }
-        val ink = if (whiteWallpaper) ThemeStyle.wallpaperClockInk(background, darkInk) else 0xffffffff.toInt()
-        val changed = ink != wallpaperClockInk
-        wallpaperClockInk = ink
-        return changed
     }
 
     private fun adaptTextColors() {
         liquidBackdrop?.refresh()
         headerBackdrop?.refresh()
-        updateWallpaperClockInk()
+        clockContrast.update(sky, prefs, tv, dp(150).toFloat())
         adaptVisibleTextColors()
     }
 
     /** Applies the current light/dark text scheme to every wallpaper-backed label. */
     private fun chooseSetting(title: String, options: Array<String>, selected: IntConsumer) {
-        GlassSettings.choices(this, title, options, { settingCurrentIndex(title) }, { which ->
+        GlassSettings.choices(this, title, options, { HomeSettingsChoices.currentIndex(title, prefs, tv, glassOs(), this::headerBgMode,
+                this::appLabelSizes, this::hasFavoriteWallpaper, this::gradientWallpaper) }, { which ->
             selected.accept(which)
             GlassSettings.refresh(this)
         })
-    }
-
-    /** Index of the currently applied option for a settings chooser (-1 when none applies). (User 2026-11-01.) */
-    private fun settingCurrentIndex(title: String): Int {
-        return when (title) {
-            "Custom accent color" -> if (prefs.getInt("theme_name", 0) != 3) -1 else indexOf(intArrayOf(0xff40d9ff.toInt(), 0xffff9a5c.toInt(), 0xffb388ff.toInt(), 0xff69f0ae.toInt(), 0xffff5252.toInt(), 0xffffea00.toInt(), 0xffff80ab.toInt(), 0xffffffff.toInt(),
-                    0xff000000.toInt(), 0xff343b46.toInt(), 0xffcbd3df.toInt(), 0xff508dff.toInt(), 0xff44c6bc.toInt(), 0xffe8c66a.toInt(), 0xffd890a5.toInt(), 0xff7986ed.toInt()), prefs.getInt("custom_accent", 0))
-            "Panel transparency" -> if (PanelTransparency.enabled(prefs)) 0 else 1
-            "Glass finish" -> TvGlassStyle.finish(prefs)
-            "Glass edge" -> Math.max(0, Math.min(2, prefs.getInt("glass_edge", 1)))
-            "Visual style" -> ThemeStyle.id(prefs)
-            "Wallpaper darkness" -> Math.min(2, prefs.getInt("background_dim", 0) / 20)
-            "Wallpaper focus glow" -> if (prefs.getBoolean("focus_glow", true)) 0 else 1
-            "Header background" -> if (glassOs()) Math.min(1, headerBgMode()) else headerBgMode()
-            "App columns" -> {
-                val v = prefs.getInt(if (tv) "tv_columns" else "phone_columns", 0)
-                if (v == 0) 0 else v - 1
-            }
-            "Tile size" -> if (prefs.getBoolean("large_tiles", false)) 1 else 0
-            "Tile spacing" -> prefs.getInt("tile_spacing", 1)
-            "Tile corners" -> prefs.getInt("tile_corners", 1)
-            "Logo size" -> Math.max(0, Math.min(2, prefs.getInt("logo_size", 1)))
-            "App label size" -> indexOf(appLabelSizes(), prefs.getInt("app_label_size", if (glassOs()) 16 else if (tv) 17 else 14))
-            "Focused app title size" -> indexOf(intArrayOf(24, 32, 40, 48), prefs.getInt("focus_title_size", if (tv) 32 else 26))
-            "Focus border" -> prefs.getInt("focus_border", 1)
-            "Clock size" -> indexOf(if (ThemeStyle.custom(prefs)) DemoGeometry.clockSizes(tv) else if (tv) intArrayOf(42, 52, 62) else intArrayOf(36, 44, 52), prefs.getInt("clock_size", if (tv) 52 else 44))
-            "Clock style" -> prefs.getInt("clock_style", 0)
-            "Watch face" -> prefs.getInt("harmony_clock_face", 0)
-            "Metal finish" -> prefs.getInt("harmony_clock_finish", 0)
-            "Clock accent" -> prefs.getInt("harmony_clock_accent", 0)
-            "Second hand" -> if (prefs.getBoolean("harmony_clock_sweep", true)) 0 else 1
-            "Harmony clock size" -> prefs.getInt("harmony_clock_size", 1)
-            "Daily thoughts" -> if (prefs.getBoolean("harmony_daily_quote", true)) 0 else 1
-            "Clock font" -> prefs.getInt("clock_font", 0)
-            "Home weather widget" -> if (prefs.getBoolean("weather_widget", ThemeStyle.id(prefs) == ThemeStyle.GLASS)) 0 else 1
-            "Widget animation" -> if (prefs.getBoolean("weather_widget_animation", true)) 0 else 1
-            "Hijri day adjustment" -> Math.max(0, Math.min(4, prefs.getInt("hijri_adjustment", 0) + 2))
-            "Time format" -> if (prefs.getBoolean("time_24h", false)) 1 else 0
-            "Clock alignment" -> prefs.getInt("clock_align", 1)
-            "Clock seconds" -> if (prefs.getBoolean("clock_seconds", false)) 1 else 0
-            "Clock glow" -> if (prefs.getBoolean("clock_glow", false)) 1 else 0
-            "Clock shadow" -> if (prefs.getBoolean("clock_shadow", true)) 1 else 0
-            "Hide clock" -> if (prefs.getBoolean("hide_clock", false)) 1 else 0
-            "Hide greeting" -> if (prefs.getBoolean("hide_greeting", false)) 1 else 0
-            "Accent preset" -> prefs.getInt("theme_name", 0)
-            "Launcher font" -> prefs.getInt("app_font", 0)
-            "Glass intensity" -> indexOf(intArrayOf(30, 70, 100), prefs.getInt("glass_alpha", 70))
-            "Wallpaper source" -> {
-                val favorite = hasFavoriteWallpaper()
-                if (gradientWallpaper()) if (favorite) 3 else 2
-                else if ("custom" == prefs.getString("wallpaper_mode", "mountains")) -1
-                else {
-                    val source = prefs.getInt("wallpaper_source", 0)
-                    if (source == 2 && !favorite) 0 else source
-                }
-            }
-            "Bottom shade" -> if (prefs.getBoolean("bottom_shade", true)) 1 else 0
-            "Continue watching" -> if (prefs.getBoolean("continue_watching", true)) 0 else 1
-            "Avatar shape" -> prefs.getInt("avatar_shape", 0)
-            "Performance" -> prefs.getInt("perf_mode", 0)
-            "Home wallpaper" -> if ("custom" == prefs.getString("wallpaper_mode", "mountains")) 1 else -1
-            "Temperature unit" -> if (prefs.getBoolean("weather_fahrenheit", false)) 1 else 0
-            "Start screensaver after idle" -> indexOf(intArrayOf(0, 2, 5, 10, 15), prefs.getInt("idle_screensaver_minutes", 0))
-            else -> -1
-        }
     }
 
     private fun refreshApps() {
@@ -3101,121 +2981,9 @@ class PersonalHomeActivity : Activity() {
     }
 
     /** Export settings to JSON via document picker. Excludes secrets. */
-    private fun exportSettings() {
-        try {
-            val json = org.json.JSONObject()
-            json.put("version", 1)
-            json.put("app", "com.sadique.launcher")
-            // Export safe prefs only (no secrets, no cache).
-            val all = prefs.all
-            val data = org.json.JSONObject()
-            for ((k, v) in all) {
-                // Skip secrets, caches, and transient state.
-                if (k == ThemePreferences.MIGRATED || k == NotificationAccessSetup.ASKED || k.contains("key") || k.contains("secret") || k.contains("token")
-                        || k.contains("password") || k.startsWith("weather_cached")) continue
-                if (v is String || v is Int || v is Boolean || v is Long || v is Float) {
-                    data.put(k, v)
-                } else if (v is Set<*>) {
-                    val arr = org.json.JSONArray()
-                    for (item in v) arr.put(item.toString())
-                    data.put(k, arr)
-                }
-            }
-            json.put("settings", data)
-            val content = json.toString(2)
-            val intent = Intent(Intent.ACTION_CREATE_DOCUMENT)
-                    .addCategory(Intent.CATEGORY_OPENABLE)
-                    .setType("application/json")
-                    .putExtra(Intent.EXTRA_TITLE, "launcher-settings.json")
-            // Store content for onActivityResult.
-            pendingExport = content
-            startActivityForResult(intent, 10)
-        } catch (e: Exception) {
-            Toast.makeText(this, "Export failed", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private var pendingExport: String? = null
-
-    /** Import settings from JSON via document picker. Validates format version. */
-    private fun importSettings() {
-        try {
-            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
-                    .addCategory(Intent.CATEGORY_OPENABLE)
-                    .setType("application/json")
-            startActivityForResult(intent, 11)
-        } catch (e: Exception) {
-            Toast.makeText(this, "Import failed", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     override fun onActivityResult(request: Int, result: Int, data: Intent?) {
         super.onActivityResult(request, result, data)
-        if (request == 10 && result == RESULT_OK && data != null && data.data != null) {
-            // Export: write JSON to the picked document.
-            val uri = data.data!!
-            val content = pendingExport
-            pendingExport = null
-            if (content != null) {
-                worker.execute {
-                    try {
-                        val out = contentResolver.openOutputStream(uri)
-                        out!!.use {
-                            it.write(content.toByteArray(Charsets.UTF_8))
-                            handler.post { Toast.makeText(this, "Settings exported", Toast.LENGTH_SHORT).show() }
-                        }
-                    } catch (e: Exception) {
-                        handler.post { Toast.makeText(this, "Export failed", Toast.LENGTH_SHORT).show() }
-                    }
-                }
-            }
-            return
-        }
-        if (request == 11 && result == RESULT_OK && data != null && data.data != null) {
-            // Import: read and validate JSON, apply settings.
-            val uri = data.data!!
-            worker.execute {
-                try {
-                    val input = contentResolver.openInputStream(uri)!!
-                    input.use {
-                        val scanner = java.util.Scanner(it).useDelimiter("\\A")
-                        val content = if (scanner.hasNext()) scanner.next() else ""
-                        val json = org.json.JSONObject(content)
-                        val version = json.optInt("version", 0)
-                        if (version != 1) throw Exception("Unsupported version: $version")
-                        if ("com.sadique.launcher" != json.optString("app")) {
-                            throw Exception("Not a Personal Launcher export")
-                        }
-                        val settings = json.getJSONObject("settings")
-                        val ed = prefs.edit()
-                        val keys = settings.keys()
-                        while (keys.hasNext()) {
-                            val k = keys.next()
-                            if (k == ThemePreferences.MIGRATED || k == NotificationAccessSetup.ASKED) continue
-                            val v = settings.get(k)
-                            if (v is String) ed.putString(k, v)
-                            else if (v is Int) ed.putInt(k, v)
-                            else if (v is Boolean) ed.putBoolean(k, v)
-                            else if (v is Long) ed.putLong(k, v)
-                            else if (v is org.json.JSONArray) {
-                                val set = HashSet<String>()
-                                val arr = v
-                                for (i in 0 until arr.length()) set.add(arr.getString(i))
-                                ed.putStringSet(k, set)
-                            }
-                        }
-                        ed.apply()
-                        handler.post {
-                            Toast.makeText(this, "Settings imported — restarting Home", Toast.LENGTH_SHORT).show()
-                            buildHome()
-                        }
-                    }
-                } catch (e: Exception) {
-                    handler.post { Toast.makeText(this, "Import failed: " + e.message, Toast.LENGTH_LONG).show() }
-                }
-            }
-            return
-        }
+        if (settingsTransfer.onActivityResult(request, result, data)) return
         if (request == 9) {
             if (result == RESULT_OK && data != null) {
                 val words = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
@@ -3241,26 +3009,7 @@ class PersonalHomeActivity : Activity() {
         val targetAsset = profileAsset(if (wallpaper) "personal-wallpaper.jpg" else "personal-avatar.png")
         worker.execute {
             try {
-                val options = BitmapFactory.Options()
-                options.inJustDecodeBounds = true
-                contentResolver.openInputStream(uri)?.use { input ->
-                    BitmapFactory.decodeStream(input, null, options)
-                }
-                if (options.outWidth <= 0 || options.outHeight <= 0) throw java.io.IOException("Invalid image")
-                options.inJustDecodeBounds = false
-                options.inSampleSize = 1
-                while (Math.max(options.outWidth, options.outHeight) / options.inSampleSize > (if (wallpaper) 1920 else 512)) options.inSampleSize *= 2
-                var decoded: Bitmap? = null
-                contentResolver.openInputStream(uri)?.use { input ->
-                    decoded = BitmapFactory.decodeStream(input, null, options)
-                }
-                val image = decoded ?: throw java.io.IOException("Invalid image")
-                val destination = android.util.AtomicFile(targetAsset)
-                val out = destination.startWrite()
-                try {
-                    if (!image.compress(if (wallpaper) Bitmap.CompressFormat.JPEG else Bitmap.CompressFormat.PNG, if (wallpaper) 85 else 100, out)) throw java.io.IOException("Cannot save image")
-                    destination.finishWrite(out)
-                } catch (error: Exception) { destination.failWrite(out); throw error }
+                val image = HomePhotoImport.readAndSave(contentResolver, uri, targetAsset, wallpaper)
                 handler.post {
                     if (isDestroyed || importEpoch != profileEpoch) return@post
                     if (wallpaper) { customWallpaper = image; prefs.edit().putString("wallpaper_mode", "custom").putInt("wallpaper_source", 0).apply(); sky?.invalidate() }
@@ -3449,9 +3198,6 @@ class PersonalHomeActivity : Activity() {
             return true
         }
 
-        private fun indexOf(values: IntArray, value: Int): Int {
-            for (i in values.indices) if (values[i] == value) return i
-            return -1
-        }
+
     }
 }
