@@ -56,7 +56,6 @@ import android.text.TextPaint
 import android.text.TextUtils
 import android.text.TextWatcher
 import android.text.style.ForegroundColorSpan
-import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
@@ -94,9 +93,6 @@ class PersonalHomeActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
     /** Dedicated app-loading worker: icon scans never block avatar/wallpaper/import, and a new scan cancels the old. */
     private val appWorker = Executors.newSingleThreadExecutor()
-    private val weatherWorker = Executors.newSingleThreadExecutor()
-    private var weatherBusy = false
-    private var weatherForceRefresh = false
     private var clockDatesInline = false
     private var weatherWidget: WeatherWidgetView? = null
     private var analogClock: SweepAnalogClock? = null
@@ -105,21 +101,13 @@ class PersonalHomeActivity : Activity() {
     private var harmonyGreetingValue: TextView? = null
     private var harmonyQuoteValue: TextView? = null
     private var harmonyWeatherCard: View? = null
-    private var forecastPanel: WeatherForecastPanel? = null
-    private var weatherSnapshot: WeatherForecast? = null
-    private var weatherSnapshotKey = ""
-    private var weatherSnapshotAt = 0L
     private fun weatherWidgetEnabled(): Boolean = ((harmony() && tv) || prefs.getBoolean("weather_widget", ThemeStyle.id(prefs) == ThemeStyle.GLASS)) && !prefs.getBoolean("apps_only", false)
     private fun clockAlignment(): Int = WeatherWidgetLayout.clockAlignment(weatherWidgetEnabled(), ThemeStyle.clockAlignment(prefs))
-    private var nextWeatherAttempt = 0L
-    private var lastWeatherRequestKey = ""
-    private val weatherPreferences = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+    private lateinit var homeWeatherController: HomeWeatherController
+    private val homeBingWallpaper = HomeBingWallpaper(this)
+    private val homePreferences = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if ("ambient_strength" == key) updateAmbient()
-        if ("weather_lat" == key || "weather_lon" == key || "weather_fahrenheit" == key || "weather_city" == key) {
-            nextWeatherAttempt = 0
-            handler.removeCallbacks(weatherRefresh)
-            handler.post(weatherRefresh)
-        }
+        homeWeatherController.preferencesChanged(key)
     }
     private lateinit var prefs: SharedPreferences
     private var page: LinearLayout? = null
@@ -241,7 +229,7 @@ class PersonalHomeActivity : Activity() {
         thought.addView(dateValue, dateParams)
         quoteValue.visibility = if (prefs.getBoolean("harmony_daily_quote", true)) View.VISIBLE else View.GONE
         if (HarmonyVisionLayout.showNativeWeatherWidget()) {
-            val widget = WeatherWidgetView(this, this::showWeatherForecast)
+            val widget = WeatherWidgetView(this, homeWeatherController::showForecast)
             weatherWidget = widget
             harmonyWeatherCard = widget
             widget.setOnKeyListener { _, key, event -> harmonyHeroKey(key, event) }
@@ -250,11 +238,7 @@ class PersonalHomeActivity : Activity() {
             wp.marginStart = dp(if (screenW < 780) 8 else 24)
             stage.addView(widget, wp)
             widget.active(resumed)
-            val snapshot = weatherSnapshot
-            if (snapshot != null && weatherSnapshotKey == weatherCacheKey()
-                    && HomeWeatherPolicy.fresh("forecast", weatherSnapshotKey, weatherCacheKey(),
-                    weatherSnapshotAt, System.currentTimeMillis(), WEATHER_CACHE_MS))
-                widget.bind(snapshot, weatherCity(), prefs.getBoolean("weather_fahrenheit", false))
+            homeWeatherController.restoreWidget(widget)
         }
         clock.active(resumed && !prefs.getBoolean("hide_clock", false))
         return stage
@@ -437,7 +421,18 @@ class PersonalHomeActivity : Activity() {
         RemoteKeys.parseAppKeys(config.appKeys).forEach { (key, action) ->
             if ("home_settings" == action) settingsRemoteKeys.add(key)
         }
-        prefs.registerOnSharedPreferenceChangeListener(weatherPreferences)
+        homeWeatherController = HomeWeatherController(
+            activity = this,
+            prefs = prefs,
+            handler = handler,
+            connectivity = { connectivity },
+            resumed = { resumed },
+            harmony = this::harmony,
+            weatherWidgetEnabled = this::weatherWidgetEnabled,
+            homeWeather = { homeWeather },
+            weatherWidget = { weatherWidget },
+        )
+        prefs.registerOnSharedPreferenceChangeListener(homePreferences)
         if (!prefs.getBoolean("bing_daily_home_v67", false)) {
             prefs.edit().putBoolean("bing_daily_home_v67", true)
                     .putInt("wallpaper_source", 1).putString("wallpaper_mode", "mountains").apply()
@@ -1139,7 +1134,7 @@ class PersonalHomeActivity : Activity() {
             if (!wide) instruments.orientation = LinearLayout.VERTICAL
             val available = resources.configuration.screenWidthDp - if (tv) 64 else 32
             if (weatherWidgetEnabled()) {
-                val widget = WeatherWidgetView(this, this::showWeatherForecast)
+                val widget = WeatherWidgetView(this, homeWeatherController::showForecast)
                 weatherWidget = widget
                 val wp = LinearLayout.LayoutParams(dp(Math.min(available, WeatherWidgetLayout.width(available, glassOs()))), -2)
                 if (glassOs() && wide) wp.marginEnd = dp(12) else if (!wide) wp.bottomMargin = dp(10)
@@ -1355,143 +1350,6 @@ class PersonalHomeActivity : Activity() {
         continueWatching?.reload()
     }
 
-    /**
-     * Small weather pill in the header. Shows cached weather immediately;
-     * refreshes only when stale, or on city/unit change.
-     */
-    private fun weatherOnline(): Boolean {
-        val conn = connectivity
-        val network = conn?.activeNetwork
-        val caps = if (network == null) null else conn?.getNetworkCapabilities(network)
-        return HomeWeatherPolicy.canAttempt(network != null, caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET), caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))
-    }
-    private fun weatherNeedsForecast(): Boolean {
-        val panel = forecastPanel
-        return weatherWidgetEnabled() || (panel != null && panel.isShowing())
-    }
-    private fun weatherCity(): String = prefs.getString("weather_city", LandscapeModel.CITY) ?: LandscapeModel.CITY
-    private fun showWeatherForecast() {
-        forecastPanel = WeatherForecastPanel(this, { weatherForceRefresh = true; nextWeatherAttempt = 0; refreshHomeWeather() }, { WeatherSettings.show(this) })
-        val available = if (weatherOnline() && weatherSnapshotKey == weatherCacheKey() && HomeWeatherPolicy.fresh("forecast", weatherSnapshotKey, weatherCacheKey(), weatherSnapshotAt, System.currentTimeMillis(), WEATHER_CACHE_MS)) weatherSnapshot else null
-        forecastPanel?.show(available, weatherCity(), prefs.getBoolean("weather_fahrenheit", false))
-        refreshHomeWeather()
-    }
-    private fun bindWeatherForecast(model: WeatherForecast?) {
-        weatherWidget?.bind(model, weatherCity(), prefs.getBoolean("weather_fahrenheit", false))
-        forecastPanel?.update(model, weatherCity(), prefs.getBoolean("weather_fahrenheit", false))
-    }
-    private fun refreshHomeWeather() {
-        val weatherView = homeWeather
-        if (weatherView == null || !resumed || isDestroyed) return
-        val cacheKey = weatherCacheKey()
-        val now = System.currentTimeMillis()
-        val widget = weatherWidgetEnabled()
-        val forecastNeeded = weatherNeedsForecast()
-        val requestKey = cacheKey + if (forecastNeeded) "|forecast" else "|current"
-        handler.removeCallbacks(weatherRefresh)
-        weatherView.visibility = if (widget || harmony()) View.GONE else View.VISIBLE
-        if (!weatherOnline()) { setHomeWeather("Unavailable"); bindWeatherForecast(null); nextWeatherAttempt = 0; handler.postDelayed(weatherRefresh, 60_000L); return }
-        WeatherSettings.resolvePhonePlace(this, false)
-        val cached = prefs.getString("weather_cached", null)
-        val cachedAt = prefs.getLong("weather_cached_at", 0)
-        val currentFresh = HomeWeatherPolicy.fresh(cached, prefs.getString("weather_cache_key", ""), cacheKey, cachedAt, now, WEATHER_CACHE_MS)
-        val modelFresh = weatherSnapshot != null && HomeWeatherPolicy.fresh("forecast", weatherSnapshotKey, cacheKey, weatherSnapshotAt, now, WEATHER_CACHE_MS)
-        setHomeWeather(if (currentFresh && cached != null) cached else "Unavailable")
-        bindWeatherForecast(if (modelFresh) weatherSnapshot else null)
-        if (!weatherForceRefresh && currentFresh && (!forecastNeeded || modelFresh)) {
-            handler.postDelayed(weatherRefresh, Math.max(60_000L, WEATHER_CACHE_MS - (now - if (forecastNeeded) Math.min(cachedAt, weatherSnapshotAt) else cachedAt)))
-            return
-        }
-        if (weatherBusy) return
-        if (!weatherForceRefresh && requestKey == lastWeatherRequestKey && now < nextWeatherAttempt) { handler.postDelayed(weatherRefresh, Math.max(1000, nextWeatherAttempt - now)); return }
-        val force = weatherForceRefresh
-        weatherForceRefresh = false
-        weatherBusy = true
-        lastWeatherRequestKey = requestKey
-        val latitude = prefs.getString("weather_lat", LandscapeModel.LATITUDE.toString())
-        val longitude = prefs.getString("weather_lon", LandscapeModel.LONGITUDE.toString())
-        val fahrenheit = prefs.getBoolean("weather_fahrenheit", false)
-        weatherWorker.execute {
-            var forecast: WeatherForecast? = null
-            var summary: String? = null
-            var encoded: String? = null
-            var fetched = System.currentTimeMillis()
-            try {
-                if (forecastNeeded) {
-                    val persisted = prefs.getString("weather_forecast_json", null)
-                    val timestamp = prefs.getLong("weather_forecast_at", 0)
-                    if (!force && HomeWeatherPolicy.fresh(persisted, prefs.getString("weather_forecast_key", ""), cacheKey, timestamp, fetched, WEATHER_CACHE_MS)) {
-                        try { forecast = WeatherForecast.decode(persisted!!); fetched = timestamp } catch (invalid: Exception) { forecast = null }
-                    }
-                    if (forecast == null) { forecast = WeatherForecast.fetch(latitude!!.toDouble(), longitude!!.toDouble(), fahrenheit); fetched = System.currentTimeMillis() }
-                    WeatherOrbView.prepareMoon(this)
-                    WeatherImages.prepare(this)
-                    encoded = forecast.encode()
-                    summary = forecast.summary(fahrenheit)
-                } else {
-                    summary = WeatherClient.fetch(latitude!!.toDouble(), longitude!!.toDouble(), fahrenheit)
-                    fetched = System.currentTimeMillis()
-                }
-            } catch (unavailable: Exception) {
-                Log.w("PersonalWeather", "Weather unavailable (" + unavailable.javaClass.simpleName + ")")
-            }
-            val result = forecast
-            val value = summary
-            val cache = encoded
-            val fetchedAt = fetched
-            handler.post {
-                weatherBusy = false
-                if (isDestroyed) return@post
-                if (cacheKey != weatherCacheKey()) { nextWeatherAttempt = 0; refreshHomeWeather(); return@post }
-                if (value != null) {
-                    val saved = prefs.edit().putString("weather_cached", value).putLong("weather_cached_at", fetchedAt).putString("weather_cache_key", cacheKey)
-                    if (result != null) {
-                        weatherSnapshot = result
-                        weatherSnapshotKey = cacheKey
-                        weatherSnapshotAt = fetchedAt
-                        saved.putString("weather_forecast_json", cache).putLong("weather_forecast_at", fetchedAt).putString("weather_forecast_key", cacheKey)
-                    }
-                    saved.apply()
-                } else {
-                    weatherSnapshot = null
-                    weatherSnapshotKey = ""
-                    prefs.edit().putLong("weather_cached_at", 0).putLong("weather_forecast_at", 0).apply()
-                }
-                nextWeatherAttempt = System.currentTimeMillis() + if (value == null) 60_000L else WEATHER_CACHE_MS
-                if (!resumed) return@post
-                val online = weatherOnline()
-                setHomeWeather(if (online && value != null) value else "Unavailable")
-                val snapshot = weatherSnapshot
-                val ready = result ?: if (snapshot != null && HomeWeatherPolicy.fresh("forecast", weatherSnapshotKey, cacheKey, weatherSnapshotAt, System.currentTimeMillis(), WEATHER_CACHE_MS)) snapshot else null
-                bindWeatherForecast(if (online) ready else null)
-                homeWeather?.visibility = if (weatherWidgetEnabled() || harmony()) View.GONE else View.VISIBLE
-                handler.removeCallbacks(weatherRefresh)
-                if ((weatherNeedsForecast() && !forecastNeeded) || weatherForceRefresh) { nextWeatherAttempt = 0; handler.post(weatherRefresh) }
-                else handler.postDelayed(weatherRefresh, if (value == null) 60_000L else Math.max(60_000L, WEATHER_CACHE_MS - (System.currentTimeMillis() - fetchedAt)))
-            }
-        }
-    }
-
-    /** Cache key: changes when city or units change, invalidating the cache. */
-    private fun setHomeWeather(value: String) {
-        val weatherView = homeWeather ?: return
-        weatherView.text = if (ThemeStyle.custom(prefs)) value.replace(" · ", " ") else value
-        if (ThemeStyle.custom(prefs) && "Unavailable" != value) {
-            val glyph = StatusWeatherGlyph(value, Calendar.getInstance().get(Calendar.HOUR_OF_DAY), HeaderAppearance.foreground(prefs))
-            glyph.setBounds(0, 0, dp(22), dp(22))
-            weatherView.compoundDrawablePadding = dp(6)
-            weatherView.setCompoundDrawablesRelative(glyph, null, null, null)
-        } else weatherView.setCompoundDrawablesRelative(null, null, null, null)
-    }
-
-    private fun weatherCacheKey(): String {
-        return prefs.getString("weather_lat", "") + "," +
-                prefs.getString("weather_lon", "") + "," +
-                prefs.getBoolean("weather_fahrenheit", false)
-    }
-
-    private val weatherRefresh: Runnable = Runnable(::refreshHomeWeather)
-
     private fun updateNetwork() {
         val status = networkStatus ?: return
         val conn = connectivity
@@ -1526,7 +1384,7 @@ class PersonalHomeActivity : Activity() {
             val photo = avatar
             if (photo is AppAccentAvatar) photo.online(online)
         }
-        refreshHomeWeather()
+        homeWeatherController.refresh()
     }
 
     @Volatile
@@ -3041,7 +2899,7 @@ class PersonalHomeActivity : Activity() {
                 }
                 else if (which == 2) WeatherSettings.show(this)
                 else if (which == 3) chooseSetting("Temperature unit", arrayOf("Celsius", "Fahrenheit")) { value -> prefs.edit().putBoolean("weather_fahrenheit", value == 1).apply() }
-                else showWeatherForecast()
+                else homeWeatherController.showForecast()
             }, { which -> if (which == 0) !(harmony() && tv) else which != 1 || weatherWidgetEnabled() })
     }
     private fun screensaverSettings() {
@@ -3425,7 +3283,7 @@ class PersonalHomeActivity : Activity() {
         updateNetwork()
         val watching = continueWatching
         if (watching != null && !prefs.getBoolean("apps_only", false)) watching.start()
-        refreshHomeWeather()
+        homeWeatherController.refresh()
         updateOnlineWallpaper()
         handler.removeCallbacks(secondTick)
         if (prefs.getBoolean("clock_seconds", false)) secondTick.run()
@@ -3468,7 +3326,7 @@ class PersonalHomeActivity : Activity() {
         handler.removeCallbacks(idleScreensaver)
         handler.removeCallbacks(tick)
         handler.removeCallbacks(secondTick)
-        handler.removeCallbacks(weatherRefresh)
+        homeWeatherController.pause()
         handler.removeCallbacks(notificationOffer)
         handler.removeCallbacks(updateCheck)
         val conn = connectivity
@@ -3525,7 +3383,7 @@ class PersonalHomeActivity : Activity() {
         weatherWidget?.active(false)
         analogClock?.active(false)
         harmonyClock?.active(false)
-        forecastPanel?.close()
+        homeWeatherController.close()
         bluetooth?.stop()
         telemetry?.stop()
         appLibrary?.close()
@@ -3534,8 +3392,7 @@ class PersonalHomeActivity : Activity() {
         searchDialog?.dismiss()
         handler.removeCallbacksAndMessages(null)
         continueWatching?.stop()
-        prefs.unregisterOnSharedPreferenceChangeListener(weatherPreferences)
-        weatherWorker.shutdownNow()
+        prefs.unregisterOnSharedPreferenceChangeListener(homePreferences)
         worker.shutdownNow()
         appWorker.shutdownNow()
         super.onDestroy()
@@ -3644,30 +3501,10 @@ class PersonalHomeActivity : Activity() {
             }
         }
 
-        private fun bingSnapshotFile(): File = File(filesDir, "home_bing_snapshot.bin")
-
-        private fun decodeBingPhoto(bytes: ByteArray): Bitmap? {
-            try {
-                val options = BitmapFactory.Options()
-                options.inJustDecodeBounds = true
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
-                if (options.outWidth <= 0 || options.outHeight <= 0) return null
-                val metrics = resources.displayMetrics
-                options.inSampleSize = WallpaperSize.sampleSize(options.outWidth, options.outHeight, metrics.widthPixels, metrics.heightPixels)
-                if (!WallpaperSize.accepted(options.outWidth / options.inSampleSize, options.outHeight / options.inSampleSize)) return null
-                val scale = WallpaperSize.coverScale(options.outWidth / options.inSampleSize, options.outHeight / options.inSampleSize, metrics.widthPixels, metrics.heightPixels)
-                if (scale != null) { options.inScaled = true; options.inDensity = scale[0]; options.inTargetDensity = scale[1] }
-                options.inJustDecodeBounds = false
-                return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
-            } catch (unavailable: RuntimeException) { return null }
-            catch (unavailable: OutOfMemoryError) { return null }
-        }
-
         private fun restoreBingSnapshot() {
             if (prefs.getInt("wallpaper_source", 0) != 1 || onlineWallpaper != null || onlineNext != null) return
-            val saved = HomeWallpaperCache.read(bingSnapshotFile()) ?: return
-            val restored = decodeBingPhoto(saved.image) ?: return
-            onlineWallpaper = restored
+            val saved = homeBingWallpaper.restore() ?: return
+            onlineWallpaper = saved.image
             onlineImageUrl = saved.url
             onlineCheckedAt = saved.checkedAt
             onlineIndex = 0
@@ -3722,39 +3559,10 @@ class PersonalHomeActivity : Activity() {
             if (index == onlineIndex && (onlineWallpaper != null || onlineNext != null)
                     && !LandscapeModel.bingCheckDue(onlineCheckedAt, System.currentTimeMillis())) return
             onlineLoading = true
-            // Bing daily: use the index directly (0=today). No time-based seed —
-            // the launcher must always show today's wallpaper. (User 2026-10-31.)
-            val bingIdx = index
             val previousUrl = onlineImageUrl
             val hasCurrentPhoto = onlineWallpaper != null || onlineNext != null
             worker.execute {
-                var bmp: Bitmap? = null
-                var fetchedUrl = ""
-                var checked = false
-                try {
-                    // Retire the old 6-photo disk cache: it is no longer populated.
-                    val stale = File(cacheDir, "screensaver_photos").listFiles()
-                    if (stale != null) for (f in stale) f.delete()
-                    // Bing daily wallpaper: API returns JSON, parse to get image URL.
-                    val apiUrl = LandscapeModel.photoUrl(bingIdx)
-                    val jsonBytes = OnlineContent.get(apiUrl, 64 * 1024)
-                    val json = String(jsonBytes, Charsets.UTF_8)
-                    val imageUrl = LandscapeModel.bingImageUrl(json)
-                    fetchedUrl = imageUrl
-                    checked = true
-                    if (imageUrl != previousUrl || !hasCurrentPhoto) {
-                        val bytes = OnlineContent.get(imageUrl, 6 * 1024 * 1024)
-                        bmp = decodeBingPhoto(bytes)
-                        if (bmp != null) {
-                            try { HomeWallpaperCache.write(bingSnapshotFile(), imageUrl, System.currentTimeMillis(), bytes) }
-                            catch (unavailable: java.io.IOException) { Log.w("PersonalWallpaper", "Could not persist the last Home photo", unavailable) }
-                        }
-                    }
-                } catch (ignored: Exception) {
-                }
-                val loaded = bmp
-                val newUrl = fetchedUrl
-                val metadataChecked = checked
+                val (loaded, newUrl, metadataChecked) = homeBingWallpaper.refresh(index, previousUrl, hasCurrentPhoto)
                 this@PersonalHomeActivity.handler.post {
                     onlineLoading = false
                     if (sky != this@SkyClock) { loaded?.recycle(); return@post }
@@ -3943,9 +3751,6 @@ class PersonalHomeActivity : Activity() {
         private val CYAN = 0xff40d9ff.toInt()
         private val TEXT = 0xfff0f7ff.toInt()
         private val MUTED = 0xffa4bcd6.toInt()
-
-        /** Weather cache validity: 15 minutes. */
-        private const val WEATHER_CACHE_MS = 15 * 60_000L
 
         private fun sameApps(before: List<App>?, after: List<App>): Boolean {
             if (before == null || before.size != after.size) return false
