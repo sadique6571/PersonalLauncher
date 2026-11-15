@@ -50,7 +50,9 @@ internal class HomeProfile(
         refreshProfileAvatarPreview()
     }
 
-    private fun dp(value: Int): Int = Math.round(value * host.resources.displayMetrics.density)
+    private fun dp(value: Float): Int = Math.round(value * host.resources.displayMetrics.density)
+
+    private fun dp(value: Int): Int = dp(value.toFloat())
 
     fun avatarSurface(focused: Boolean): GradientDrawable {
         return avatarSurface(focused, if (ThemeStyle.custom(prefs) && tv) 52 else 44)
