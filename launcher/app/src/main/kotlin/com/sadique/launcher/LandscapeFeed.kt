@@ -27,10 +27,10 @@ import org.xml.sax.InputSource
 internal class LandscapeFeed {
 
     private enum class Source {
-        FLICKR, BING, PORTRAITS, WALLSPAPERS, COMMONS, PUBLIC_DOMAIN_PICTURES, OCEAN_EXPLORATION, NATIONAL_PARK_SERVICE, PXHERE;
+        FLICKR, OPENVERSE, BING, PORTRAITS, WALLSPAPERS, COMMONS, PUBLIC_DOMAIN_PICTURES, OCEAN_EXPLORATION, NATIONAL_PARK_SERVICE, PXHERE;
 
         fun live(): Boolean {
-            return this == FLICKR || this == BING || this == COMMONS || this == WALLSPAPERS
+            return this == FLICKR || this == OPENVERSE || this == BING || this == COMMONS || this == WALLSPAPERS
         }
     }
 
@@ -50,6 +50,7 @@ internal class LandscapeFeed {
     private var nextSource = 0
     private var recycleSource = 0
     private var flickrTopic = 0
+    private var openverseCall = 0
     private var bingBatch = 0
     private var commonsTopic = 0
     private val bingMarket: Int
@@ -123,6 +124,18 @@ internal class LandscapeFeed {
                     )
                 )
             }
+            Source.OPENVERSE -> {
+                val call = openverseCall++
+                val topic = FLICKR_TAGS[call % FLICKR_TAGS.size]
+                openverseScenes(
+                    OnlineContent.get(
+                        "https://api.openverse.org/v1/images/?q=" + encode(topic) +
+                            "&source=flickr&page_size=20&page=" + ((call / FLICKR_TAGS.size) % 12 + 1),
+                        128 * 1024, 3500, 5000
+                    ),
+                    topic
+                )
+            }
             Source.BING -> {
                 val batchIndex = bingBatch++ % (MARKETS.size * 2)
                 bing(
@@ -175,7 +188,7 @@ internal class LandscapeFeed {
     companion object {
         // Give Flickr the first attempt and two additional turns in each rotation.
         private val SOURCES = arrayOf(
-            Source.FLICKR, Source.BING, Source.PORTRAITS, Source.FLICKR,
+            Source.FLICKR, Source.OPENVERSE, Source.BING, Source.PORTRAITS, Source.FLICKR,
             Source.WALLSPAPERS, Source.COMMONS, Source.PUBLIC_DOMAIN_PICTURES, Source.FLICKR,
             Source.OCEAN_EXPLORATION, Source.NATIONAL_PARK_SERVICE, Source.PXHERE
         )
@@ -201,6 +214,10 @@ internal class LandscapeFeed {
         )
         private val FHD_DOWNLOAD = Pattern.compile(
             "href=\"(/download/[a-f0-9]{10}/fhd)\""
+        )
+        // Old Flickr photo URLs carry no size suffix (500px); the Openverse parser rewrites them to _b.
+        private val STATICFLICKR_PLAIN = Pattern.compile(
+            "https://live\\.staticflickr\\.com/[0-9]+/[0-9]+_[0-9a-f]+\\.jpg"
         )
         private val MARKETS = arrayOf("en-US", "en-GB", "en-AU", "en-CA", "de-DE", "ja-JP")
         private val COMMONS_TOPICS = arrayOf("mountain", "lake", "waterfall", "coast", "desert", "forest", "beach", "river")
@@ -266,6 +283,37 @@ internal class LandscapeFeed {
                 if ("live.staticflickr.com" != uri.host) continue
                 val id = LandscapePhotoPolicy.flickrImage.matcher(uri.path)
                 if (id.matches()) photos.add(Scene("flickr:" + id.group(1), url, title, false))
+            }
+            return photos
+        }
+
+        @JvmStatic
+        @Throws(Exception::class)
+        fun openverseScenes(feed: ByteArray, topic: String): MutableList<Scene> {
+            val photos = ArrayList<Scene>()
+            val results = JSONObject(String(feed, StandardCharsets.UTF_8)).optJSONArray("results") ?: return photos
+            for (i in 0 until results.length()) {
+                val item = results.optJSONObject(i) ?: continue
+                val id = item.optString("id")
+                if (id.isEmpty()) continue
+                var url = item.optString("url")
+                if (url.isEmpty()) continue
+                // Old Flickr URLs carry no size suffix (500px); rewrite to the 1024px _b variant.
+                if (STATICFLICKR_PLAIN.matcher(url).matches()) url = url.substring(0, url.length - 4) + "_b.jpg"
+                if (!imageUrlAllowed(url)) continue
+                val width = item.optInt("width")
+                val height = item.optInt("height")
+                if (!fitsWidescreen(width, height)) continue
+                val title = item.optString("title").trim().ifEmpty { topic }
+                val tags = item.optJSONArray("tags")
+                val tagText = StringBuilder()
+                if (tags != null) {
+                    for (j in 0 until tags.length()) {
+                        tagText.append(tags.optJSONObject(j)?.optString("name") ?: "").append(' ')
+                    }
+                }
+                if (!safeSubject(title, tagText.toString())) continue
+                photos.add(Scene("openverse:$id", url, title, false))
             }
             return photos
         }

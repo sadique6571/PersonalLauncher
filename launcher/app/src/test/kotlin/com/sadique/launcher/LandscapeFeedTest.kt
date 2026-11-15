@@ -74,6 +74,40 @@ class LandscapeFeedTest {
         assertTrue(LandscapeFeed.flickrScenes(utf8("<!DOCTYPE rss SYSTEM 'https://example.com/x'>" + feed)).isEmpty())
     }
 
+    @Test fun openverseSearchReturnsWidescreenFlickrPhotos() {
+        val feed = "{\"result_count\":7,\"results\":[" +
+            "{\"id\":\"11111111-1111-1111-1111-111111111111\",\"title\":\"Calm lake at dawn\"," +
+            "\"url\":\"https://live.staticflickr.com/65535/53147294188_feebe50604_b.jpg\"," +
+            "\"width\":1024,\"height\":576,\"tags\":[{\"name\":\"lake\"},{\"name\":\"mountains\"}]}," +
+            "{\"id\":\"22222222-2222-2222-2222-222222222222\",\"title\":\"Old mountain road\"," +
+            "\"url\":\"https://live.staticflickr.com/65535/53147294189_feebe50605.jpg\"," +
+            "\"width\":1024,\"height\":576,\"tags\":[]}," +
+            "{\"id\":\"33333333-3333-3333-3333-333333333333\",\"title\":\"A couple kissing by the lake\"," +
+            "\"url\":\"https://live.staticflickr.com/65535/53147294190_feebe50606_b.jpg\"," +
+            "\"width\":1024,\"height\":576,\"tags\":[]}," +
+            "{\"id\":\"44444444-4444-4444-4444-444444444444\",\"title\":\"Forest path\"," +
+            "\"url\":\"https://live.staticflickr.com/65535/53147294191_feebe50607_b.jpg\"," +
+            "\"width\":1024,\"height\":768,\"tags\":[]}," +
+            "{\"id\":\"55555555-5555-5555-5555-555555555555\",\"title\":\"Desert dunes\"," +
+            "\"url\":\"https://example.com/photos/dunes_b.jpg\"," +
+            "\"width\":1024,\"height\":576,\"tags\":[]}," +
+            "{\"id\":\"66666666-6666-6666-6666-666666666666\",\"title\":\"\"," +
+            "\"url\":\"https://live.staticflickr.com/65535/53147294192_feebe50608_b.jpg\"," +
+            "\"width\":1024,\"height\":576,\"tags\":[{\"name\":\"lake\"}]}," +
+            "{\"title\":\"River valley\"," +
+            "\"url\":\"https://live.staticflickr.com/65535/53147294193_feebe50609_b.jpg\"," +
+            "\"width\":1024,\"height\":576,\"tags\":[]}" +
+            "]}"
+        val scenes = LandscapeFeed.openverseScenes(utf8(feed), "lake")
+        assertEquals(3, scenes.size)
+        assertEquals("openverse:11111111-1111-1111-1111-111111111111", scenes[0].id)
+        assertEquals("https://live.staticflickr.com/65535/53147294188_feebe50604_b.jpg", scenes[0].url)
+        assertEquals("Calm lake at dawn", scenes[0].subject)
+        assertFalse(scenes[0].reviewed)
+        assertEquals("https://live.staticflickr.com/65535/53147294189_feebe50605_b.jpg", scenes[1].url)
+        assertEquals("lake", scenes[2].subject)
+    }
+
     @Test fun imageRoutesStayOnTheExpectedHttpsHosts() {
         assertTrue(LandscapeFeed.imageUrlAllowed("https://www.bing.com/th?id=OHR.NorthWindow_EN-US1170338293_1920x1080.jpg"))
         assertTrue(LandscapeFeed.imageUrlAllowed("https://images.unsplash.com/photo-1745690720220-24e337e571c7?w=1600"))
