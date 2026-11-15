@@ -2,14 +2,9 @@ package com.sadique.launcher
 
 import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
-import android.content.pm.ActivityInfo
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.content.pm.Signature
-import android.content.res.Resources
-import android.content.res.XmlResourceParser
 import android.os.Build
 import android.util.Log
 import java.io.File
@@ -17,7 +12,6 @@ import java.security.MessageDigest
 import java.util.ArrayList
 import java.util.Collections
 import java.util.HashMap
-import java.util.HashSet
 import java.util.TreeMap
 import java.util.function.Supplier
 import org.xmlpull.v1.XmlPullParser
@@ -138,8 +132,6 @@ internal class Cards private constructor() {
 
         private var selfChecked = false
 
-        // ---- discovery -------------------------------------------------------------------------------
-
         /**
          * Every valid card installed on this TV, with its state under the given records. One cheap
          * PackageManager query when no app declares a card; the app list is only walked when one does.
@@ -151,65 +143,7 @@ internal class Cards private constructor() {
         fun discover(
             ctx: Context, hidden: Set<String>, recordSource: Supplier<Map<String, Record>>,
             leanback: List<ResolveInfo>
-        ): List<Card> {
-            if ((ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) selfCheck()
-            val out = ArrayList<Card>()
-            val pm = ctx.packageManager
-            val declared: List<ResolveInfo>
-            try {
-                declared = pm.queryIntentActivities(
-                    Intent(Intent.ACTION_MAIN).addCategory(CATEGORY),
-                    PackageManager.GET_META_DATA
-                )
-            } catch (e: Exception) {
-                Log.w(TAG, "card query failed: $e")
-                return out
-            }
-            if (declared.isEmpty()) return out
-            val records = recordSource.get()
-
-            // What the card must agree with: the activities shown as tiles, and the names already on screen.
-            val tiles = HashSet<String>()
-            val names = HashMap<String, MutableSet<String>>()
-            for (ri in leanback) {
-                val ai = ri.activityInfo ?: continue
-                val pkg = ai.packageName
-                tiles.add(ComponentName(pkg, ai.name).flattenToString())
-                try {
-                    addName(names, ri.loadLabel(pm).toString(), pkg)
-                    addName(names, ai.applicationInfo.loadLabel(pm).toString(), pkg)
-                } catch (e: Exception) {
-                    Log.w(TAG, "$pkg: label unreadable, $e") // an app with broken resources; not a card problem
-                }
-            }
-            val uiNames = uiNames(ctx.resources)
-            val seen = HashSet<String>()
-
-            var n = 0
-            for (ri in declared) {
-                if (++n > MAX_DECLARED) {
-                    Log.w(TAG, "more than $MAX_DECLARED cards declared; the rest are ignored")
-                    break
-                }
-                val pkg = ri.activityInfo?.packageName ?: "?"
-                try {
-                    val card = read(ctx, pm, ri, tiles, names, uiNames, hidden, seen, records)
-                    seen.add(card.pkg)
-                    out.add(card)
-                } catch (e: CardException) {
-                    Log.w(TAG, "$pkg: ${e.message}")
-                } catch (e: Exception) {
-                    // Package gone between the query and the read, a resource that is not XML, and anything else.
-                    Log.w(TAG, "$pkg: $e")
-                }
-            }
-
-            val kept = resolveClashes(out, records)
-            for (c in out) {
-                if (!kept.contains(c)) Log.w(TAG, "${c.pkg}: another card is also named '${c.label}'")
-            }
-            return kept
-        }
+        ): List<Card> = CardDiscovery.discover(ctx, hidden, recordSource, leanback)
 
         /**
          * Cards that share a folded label: the one the owner already decided on keeps its name (the
@@ -248,73 +182,6 @@ internal class Cards private constructor() {
             val fb = rb?.firstSeen ?: Long.MAX_VALUE
             if (fa != fb) return fa < fb
             return a.pkg.compareTo(b.pkg) < 0
-        }
-
-        private fun read(
-            ctx: Context, pm: PackageManager, ri: ResolveInfo, tiles: Set<String>,
-            names: Map<String, Set<String>>, uiNames: Set<String>, hidden: Set<String>,
-            seen: Set<String>, records: Map<String, Record>
-        ): Card {
-            val ai: ActivityInfo = ri.activityInfo ?: throw CardException("not an activity")
-            val pkg = ai.packageName
-            if (pkg == ctx.packageName) throw CardException("the launcher itself")
-            if (hidden.contains(pkg)) throw CardException("listed in hidden_apps")
-            if (seen.contains(pkg)) throw CardException("declares a second card; one per package is read")
-            if (!ai.exported || !ai.enabled || !ai.applicationInfo.enabled) {
-                throw CardException("card activity is not exported and enabled")
-            }
-            val component = ComponentName(pkg, ai.name)
-            if (!tiles.contains(component.flattenToString())) {
-                throw CardException("card activity has no LEANBACK_LAUNCHER intent filter")
-            }
-
-            val xml: XmlResourceParser = ai.loadXmlMetaData(pm, META_DATA)
-                ?: throw CardException("no <meta-data android:name=\"$META_DATA\" android:resource=...>")
-            val d: Declared
-            try {
-                d = parse(xml)
-            } finally {
-                xml.close()
-            }
-            if (d.spec != SPEC_SUPPORTED) throw CardException("spec ${d.spec} is not supported (this launcher reads spec $SPEC_SUPPORTED)")
-
-            val sigDigest = digest(pm, pkg)
-            val folded = fold(d.label)
-            val r = records[pkg]
-            val state: State
-            if (r == null) state = State.NEW
-            else if (r.digest != sigDigest) state = State.RESIGNED
-            else if (r.label != folded) state = State.RELABELLED // the owner said yes to another name
-            else state = if (DECISION_SHOW == r.decision) State.SHOWN else State.HIDDEN
-            val pending = state == State.NEW || state == State.RESIGNED || state == State.RELABELLED
-
-            // Reserved words are policy and always apply. Name collisions only matter while the prompt is
-            // due: they stop a newcomer from borrowing a name, and never undo a decision the owner made.
-            // A decided card that changes its label becomes pending again (RELABELLED), so it cannot take
-            // another app's name on an update either.
-            if (isReserved(folded, uiNames)) throw CardException("label '${d.label}' is reserved")
-            if (pending && isTaken(folded, pkg, names)) throw CardException("label '${d.label}' is the name of another installed app")
-            val appLabel = cleanLabel(ai.applicationInfo.loadLabel(pm).toString(), pkg)
-            if (pending && isTaken(fold(appLabel), pkg, names)) throw CardException("app label '$appLabel' is the name of another installed app")
-
-            return Card(pkg, component, d.label, appLabel, d.caption, d.accent, sigDigest, state)
-        }
-
-        private fun addName(names: MutableMap<String, MutableSet<String>>, label: String, pkg: String) {
-            val key = fold(label)
-            if (key.isEmpty()) return
-            names.getOrPut(key) { HashSet() }.add(pkg)
-        }
-
-        /** The launcher's own UI names in the TV's language, folded. */
-        private fun uiNames(res: Resources): Set<String> {
-            val ids = intArrayOf(
-                R.string.app_name, R.string.settings, R.string.inputs, R.string.choose_input, R.string.wifi,
-                R.string.live_tv, R.string.home_settings, R.string.app_library, R.string.dream_name
-            )
-            val out = HashSet<String>()
-            for (id in ids) out.add(fold(res.getString(id)))
-            return out
         }
 
         /** Shown cards in the order they take on screen: by label, at most {@link #MAX_SHOWN}. */

@@ -49,7 +49,7 @@ open class DockDecoration(
             val position = parent.getChildAdapterPosition(child)
             if (position < 0 || (!bandAll && position >= dockSize)) continue
             val holder = parent.getChildViewHolder(child)
-            val card = (if (holder is AppAdapter.Holder) holder.card else child.findViewById<View>(R.id.card)) ?: continue
+            val card = (if (holder is AppTileHolder) holder.card else child.findViewById<View>(R.id.card)) ?: continue
             val left = (child.left + card.left).toFloat()
             val top = child.top + card.top + child.translationY
             val right = left + card.width
