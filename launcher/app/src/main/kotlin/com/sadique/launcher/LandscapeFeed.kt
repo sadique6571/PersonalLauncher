@@ -5,7 +5,6 @@ import android.util.Log
 import java.io.IOException
 import java.io.StringReader
 import java.net.URI
-import java.net.URISyntaxException
 import java.net.URLEncoder
 import java.net.UnknownHostException
 import java.nio.charset.StandardCharsets
@@ -14,7 +13,6 @@ import java.util.ArrayList
 import java.util.Collections
 import java.util.EnumMap
 import java.util.LinkedHashSet
-import java.util.Locale
 import java.util.Random
 import java.util.concurrent.TimeUnit
 import java.util.function.Predicate
@@ -182,7 +180,6 @@ internal class LandscapeFeed {
             "landscape,cc0", "nationalpark,landscape", "nature,widescreen", "landscape,widescreen",
             "mountains", "waterfall", "forest", "lake", "coast", "nationalpark"
         )
-        private val FLICKR_IMAGE = Pattern.compile("/[0-9]+/([0-9]+)_[a-f0-9]+_b\\.jpg")
         private const val MEDIA_RSS = "http://search.yahoo.com/mrss/"
         private const val CC_RSS = "http://cyber.law.harvard.edu/rss/creativeCommonsRssModule.html"
 
@@ -205,17 +202,6 @@ internal class LandscapeFeed {
         private val COMMONS_SIZES = arrayOf(
             intArrayOf(1920, 1080), intArrayOf(1280, 720), intArrayOf(1600, 900),
             intArrayOf(2560, 1440), intArrayOf(3840, 2160)
-        )
-        private val UNSUITABLE = Pattern.compile(
-            "\\b(?:kiss\\w*|couples?|romance|romantic|wedding\\w*|brides?|grooms?|nud\\w*|erotic\\w*|" +
-                "sexual\\w*|intimate|lingerie|swimwear|bikinis?|painting\\w*|illustration\\w*|" +
-                "nasa|astronaut\\w*|space station|from space|satellite|cira|orbital|artwork\\w*|composites?|people|persons?|families|family|women|woman|children|hikers?|crowds?|portraits?|lovers?|hugging|embracing|group photo)\\b",
-            Pattern.CASE_INSENSITIVE
-        )
-        private val NATURE = Pattern.compile(
-            "\\b(?:mountains?|lakes?|waterfalls?|forests?|parks?|glaciers?|islands?|coasts?|" +
-                "canyons?|deserts?|valleys?|rivers?|reefs?|oceans?|cliffs?|dunes?|peaks?|beach(?:es)?|harbou?rs?|grasslands?|" +
-                "volcano\\w*|waterways?|aurora\\w*|meadows?|wetlands?|landscapes?)\\b", Pattern.CASE_INSENSITIVE
         )
         private val FLICKR_NON_SCENERY = Pattern.compile(
             "\\b(?:cosplay\\w*|anime|burlesque|conventions?|screenshots?|videogames?|video games?|" +
@@ -262,7 +248,7 @@ internal class LandscapeFeed {
                 if (!imageUrlAllowed(url)) continue
                 val uri = URI.create(url)
                 if ("live.staticflickr.com" != uri.host) continue
-                val id = FLICKR_IMAGE.matcher(uri.path)
+                val id = LandscapePhotoPolicy.flickrImage.matcher(uri.path)
                 if (id.matches()) photos.add(Scene("flickr:" + id.group(1), url, title, false))
             }
             return photos
@@ -501,53 +487,16 @@ internal class LandscapeFeed {
         }
 
         @JvmStatic
-        fun landscapeSubject(title: String, description: String): Boolean {
-            return title.trim().isNotEmpty() && NATURE.matcher("$title $description").find() &&
-                !UNSUITABLE.matcher("$title $description").find()
-        }
+        fun landscapeSubject(title: String, description: String): Boolean = LandscapePhotoPolicy.landscapeSubject(title, description)
 
         @JvmStatic
-        fun commonsLicense(license: String): Boolean {
-            val name = license.trim().lowercase(Locale.ROOT)
-            return name == "public domain" || name == "cc0" || name.startsWith("cc0 ")
-        }
+        fun commonsLicense(license: String): Boolean = LandscapePhotoPolicy.commonsLicense(license)
 
         @JvmStatic
-        fun fitsWidescreen(width: Int, height: Int): Boolean {
-            // Accept standard landscape formats close to 16:9. FIT_CENTER shows the full photo.
-            if (height <= 480) return false
-            val ratio = width.toDouble() / height
-            return ratio >= 1.50 && ratio <= 2.05
-        }
+        fun fitsWidescreen(width: Int, height: Int): Boolean = LandscapePhotoPolicy.fitsWidescreen(width, height)
 
         @JvmStatic
-        fun imageUrlAllowed(url: String): Boolean {
-            try {
-                val uri = URI(url)
-                if ("https" != uri.scheme || uri.host == null || uri.userInfo != null ||
-                    (uri.port != -1 && uri.port != 443)
-                ) return false
-                val path = uri.path
-                return when (uri.host) {
-                    "live.staticflickr.com" -> uri.rawQuery == null && FLICKR_IMAGE.matcher(path).matches()
-                    "images.unsplash.com" -> path.matches(Regex("/photo-[0-9]+-[a-f0-9]+"))
-                    "www.bing.com" -> "/th" == path && uri.query != null &&
-                        uri.query.matches(Regex("id=OHR\\.[A-Za-z0-9_.-]+_1920x1080\\.jpg"))
-                    "thumb.wikimedia.org",
-                    "upload.wikimedia.org" -> path.startsWith("/wikipedia/commons/") &&
-                        path.lowercase(Locale.ROOT).matches(Regex(".+\\.jpe?g"))
-                    "wallspapers.org" -> path.matches(Regex("/download/[a-f0-9]{10}/fhd"))
-                    "www.publicdomainpictures.net" ->
-                        path.matches(Regex("/pictures/[0-9]+/velka/[A-Za-z0-9_-]+\\.jpg"))
-                    "npgallery.nps.gov" -> path.matches(Regex("/GetAsset/[a-f0-9-]{36}/original\\.jpg"))
-                    "c.pxhere.com" -> path.matches(Regex("/photos/[a-f0-9]{2}/[a-f0-9]{2}/[a-z0-9_-]+\\.jpg!d"))
-                    "oceanexplorer.noaa.gov" -> path.startsWith("/wp-content/uploads/") &&
-                        path.lowercase(Locale.ROOT).endsWith(".jpg")
-                    else -> false
-                }
-            } catch (invalid: URISyntaxException) {
-                return false
-            }
-        }
+        fun imageUrlAllowed(url: String): Boolean = LandscapePhotoPolicy.imageUrlAllowed(url)
+
     }
 }

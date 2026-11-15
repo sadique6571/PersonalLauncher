@@ -4,8 +4,6 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Intent
-import android.content.pm.PackageInfo
-import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.graphics.Color
 import android.graphics.Rect
@@ -39,7 +37,6 @@ import java.text.Collator
 import java.util.ArrayList
 import java.util.HashMap
 import java.util.HashSet
-import java.util.LinkedHashMap
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.function.Predicate
@@ -63,20 +60,7 @@ internal class AppLibraryDialog(
          */
         private val LOADER: ExecutorService = Executors.newSingleThreadExecutor()
 
-        /** Labels kept between openings (LOADER thread only), until the app is updated. */
-        private val KNOWN: MutableMap<String, Known> = HashMap()
-
-        private fun loadLabel(pm: PackageManager, app: ResolveInfo): String {
-            val pkg = app.activityInfo.packageName
-            try {
-                return Cards.cleanLabel(app.loadLabel(pm).toString(), pkg)
-            } catch (e: RuntimeException) {
-                return pkg
-            }
-        }
     }
-
-    private class Known(val updated: Long, val label: String)
 
     private val main = Handler(Looper.getMainLooper())
 
@@ -253,48 +237,16 @@ internal class AppLibraryDialog(
         val pm = activity.packageManager
         val self = activity.packageName
         LOADER.execute {
-            val unique = LinkedHashMap<String, ResolveInfo>()
-            val tv = HashSet<String>()
-            // Prefer the TV entry when an app declares both categories.
-            for (category in arrayOf(Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER)) {
-                for (info in pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(category), 0)) {
-                    val ai = info.activityInfo
-                    if (ai == null || !ai.exported) continue
-                    val pkg = ai.packageName
-                    if (Intent.CATEGORY_LEANBACK_LAUNCHER == category) tv.add(pkg)
-                    if (pkg != self && !LibraryApps.excludedFromCatalog(excludedApps, pkg) && !unique.containsKey(pkg)) unique[pkg] = info
-                }
-            }
-            val names = HashMap<String, String>()
-            val installed = HashMap<String, Long>()
-            for ((pkg, value) in unique) {
-                var updated = 0L
-                try {
-                    val info: PackageInfo = pm.getPackageInfo(pkg, 0)
-                    installed[pkg] = info.firstInstallTime
-                    updated = info.lastUpdateTime
-                } catch (e: PackageManager.NameNotFoundException) {
-                    installed[pkg] = 0L
-                } catch (e: RuntimeException) {
-                    installed[pkg] = 0L
-                }
-                var known = KNOWN[pkg]
-                if (known == null || known.updated != updated) {
-                    known = Known(updated, loadLabel(pm, value))
-                    KNOWN[pkg] = known
-                }
-                names[pkg] = known.label
-            }
-            KNOWN.keys.retainAll(unique.keys)
+            val listing = AppLibraryCatalog.load(pm, self, excludedApps)
             main.post {
                 if (closed || !loads.isLatest(load)) return@post
                 tvPackages.clear()
-                tvPackages.addAll(tv)
+                tvPackages.addAll(listing.tvPackages)
                 installTimes.clear()
-                installTimes.putAll(installed)
+                installTimes.putAll(listing.installTimes)
                 labels.clear()
-                labels.putAll(names)
-                fill(ArrayList(unique.values))
+                labels.putAll(listing.labels)
+                fill(listing.apps)
                 if (loads.takeReveal()) reveal()
             }
         }
@@ -332,7 +284,7 @@ internal class AppLibraryDialog(
         val pkg = app.activityInfo.packageName
         val cached = labels[pkg]
         if (cached != null) return cached
-        val value = loadLabel(activity.packageManager, app)
+        val value = AppLibraryCatalog.loadLabel(activity.packageManager, app)
         labels[pkg] = value
         return value
     }

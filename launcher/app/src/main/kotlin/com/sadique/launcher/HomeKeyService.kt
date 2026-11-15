@@ -545,39 +545,24 @@ class HomeKeyService : AccessibilityService() {
             else service.disarmStandbyExit()
         }
 
-        /** Exact component match: the recovery window, and nothing else from setupwraith or elsewhere. */
         @JvmStatic
-        fun isRecoveryWindow(pkg: CharSequence?, cls: CharSequence?): Boolean {
-            if (pkg == null || cls == null) return false
-            return RECOVERY_PACKAGE.contentEquals(pkg) && RECOVERY_ACTIVITY == cls.toString()
-        }
+        fun isRecoveryWindow(pkg: CharSequence?, cls: CharSequence?): Boolean =
+            HomeKeyPolicy.isRecoveryWindow(pkg, cls)
 
-        /**
-         * Whether the recovery fallback may redirect right now. Pure for tests: every input is a parameter.
-         * Redirects at most once per boot (Android reopens recovery on its own, so without this the service
-         * would steal focus in a loop), with a cooldown as a second guard.
-         */
         @JvmStatic
         fun shouldRedirectRecovery(
             optIn: Boolean, pkg: CharSequence?, cls: CharSequence?,
             stockHomeUnavailable: Boolean, boot: Int, lastRedirectBoot: Int, now: Long, lastRedirectMs: Long
-        ): Boolean {
-            if (!optIn || !isRecoveryWindow(pkg, cls) || !stockHomeUnavailable) return false
-            if (boot < 0 || boot == lastRedirectBoot) return false
-            return now - lastRedirectMs >= RECOVERY_REDIRECT_COOLDOWN_MS
-        }
-
-        /** Duplicate openHome() triggers inside the window are dropped (window event + key + power-on can coincide). */
-        @JvmStatic
-        fun shouldOpenHome(now: Long, lastOpenMs: Long): Boolean {
-            return now - lastOpenMs >= OPEN_HOME_DEDUP_MS
-        }
+        ): Boolean =
+            HomeKeyPolicy.shouldRedirectRecovery(optIn, pkg, cls, stockHomeUnavailable, boot, lastRedirectBoot, now, lastRedirectMs)
 
         @JvmStatic
-        fun stillArmed(now: Long, armedUntil: Long): Boolean {
-            return now < armedUntil
-        }
+        fun shouldOpenHome(now: Long, lastOpenMs: Long): Boolean =
+            HomeKeyPolicy.shouldOpenHome(now, lastOpenMs)
 
+        @JvmStatic
+        fun stillArmed(now: Long, armedUntil: Long): Boolean =
+            HomeKeyPolicy.stillArmed(now, armedUntil)
         /** The settings menu offers Restart only while this helper is bound: it opens the system power menu. */
         @JvmStatic
         fun canOpenPowerMenu(): Boolean {
@@ -592,18 +577,16 @@ class HomeKeyService : AccessibilityService() {
         }
 
         @JvmStatic
-        fun powerOnRedirect(liveTv: String, pkg: CharSequence?, now: Long, armedUntil: Long): Boolean {
-            return liveTv.isNotEmpty() && pkg != null && liveTv.contentEquals(pkg) && now < armedUntil
-        }
+        fun powerOnRedirect(liveTv: String, pkg: CharSequence?, now: Long, armedUntil: Long): Boolean =
+            HomeKeyPolicy.powerOnRedirect(liveTv, pkg, now, armedUntil)
 
         @JvmStatic
-        fun firstBindAfterBoot(boot: Int, lastBoot: Int, uptimeMs: Long): Boolean {
-            return boot >= 0 && boot != lastBoot && uptimeMs < BOOT_WINDOW_MS
-        }
+        fun firstBindAfterBoot(boot: Int, lastBoot: Int, uptimeMs: Long): Boolean =
+            HomeKeyPolicy.firstBindAfterBoot(boot, lastBoot, uptimeMs)
 
         @JvmStatic
-        fun isShortPress(downTime: Long, upTime: Long, longPressTimeout: Long): Boolean {
-            return upTime - downTime < longPressTimeout
-        }
+        fun isShortPress(downTime: Long, upTime: Long, longPressTimeout: Long): Boolean =
+            HomeKeyPolicy.isShortPress(downTime, upTime, longPressTimeout)
+
     }
 }

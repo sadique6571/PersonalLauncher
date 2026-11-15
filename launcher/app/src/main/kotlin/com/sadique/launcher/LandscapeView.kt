@@ -37,7 +37,7 @@ class LandscapeView(context: Context) : FrameLayout(context) {
     private val reducedMotion: Boolean
     private var photo: ImageView
     private var previousPhoto: ImageView
-    private var photoEffect = 0
+    private val photoTransition = LandscapePhotoTransition()
     private var startupPhotoIndex = 0
     private val clock: TextView
     private val date: TextView
@@ -169,36 +169,7 @@ class LandscapeView(context: Context) : FrameLayout(context) {
         incoming.translationY = 0f
         incoming.scaleX = 1f
         incoming.scaleY = 1f
-        if (hasPhoto && !reducedMotion) {
-            val horizontal = width * .085f
-            val vertical = height * .10f
-            var scale = 1f
-            when (photoEffect++ % 7) {
-                1 -> outgoing.animate().scaleX(.87f).scaleY(.87f).setDuration(620).start()
-                2 -> scale = .87f
-                3 -> {
-                    scale = .80f
-                    incoming.translationX = horizontal
-                }
-                4 -> {
-                    scale = .80f
-                    incoming.translationX = -horizontal
-                }
-                5 -> {
-                    scale = .76f
-                    incoming.translationY = vertical
-                }
-                6 -> {
-                    scale = .76f
-                    incoming.translationY = -vertical
-                }
-                else -> {
-                    // Crossfade.
-                }
-            }
-            incoming.scaleX = scale
-            incoming.scaleY = scale
-        }
+        photoTransition.prepare(incoming, outgoing, hasPhoto, reducedMotion, width, height)
         details.text = caption
         incoming.animate().alpha(1f).translationX(0f).translationY(0f).scaleX(1f).scaleY(1f)
             .setInterpolator(DecelerateInterpolator())
