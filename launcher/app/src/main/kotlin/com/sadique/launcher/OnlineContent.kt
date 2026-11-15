@@ -15,7 +15,7 @@ object OnlineContent {
     )
     private val allowedHosts = imageHosts + setOf(
         "api.open-meteo.com", "geocoding-api.open-meteo.com", "wttr.in", "www.flickr.com",
-        "commons.wikimedia.org", "nominatim.openstreetmap.org"
+        "commons.wikimedia.org", "nominatim.openstreetmap.org", "api.openverse.org"
     )
     private val redirectStatuses = setOf(301, 302, 303, 307, 308)
 
