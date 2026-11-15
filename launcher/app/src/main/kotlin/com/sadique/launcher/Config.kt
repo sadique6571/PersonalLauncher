@@ -2,20 +2,21 @@ package com.sadique.launcher
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.graphics.Color
 import android.os.Environment
-import android.util.Log
+import com.sadique.launcher.ThemeConfigJson.bool
+import com.sadique.launcher.ThemeConfigJson.color
+import com.sadique.launcher.ThemeConfigJson.intArray
+import com.sadique.launcher.ThemeConfigJson.integer
+import com.sadique.launcher.ThemeConfigJson.moods
+import com.sadique.launcher.ThemeConfigJson.raceCalendar
+import com.sadique.launcher.ThemeConfigJson.string
+import com.sadique.launcher.ThemeConfigJson.stringList
 import java.io.File
 import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.util.ArrayList
 import java.util.Collections
 import java.util.HashMap
-import java.util.HashSet
-import org.json.JSONArray
-import org.json.JSONException
 import org.json.JSONObject
 
 /**
@@ -566,7 +567,6 @@ internal class Config private constructor(
     }
 
     companion object {
-        private const val TAG = "TvHome.Config"
         const val FILE_NAME = "config.json"
         const val WALLPAPER_NAME = "wallpaper.jpg"
         const val SETTINGS_NAME = "launcher_settings"
@@ -727,7 +727,7 @@ internal class Config private constructor(
             val themeDir = dir(ctx)
             val file = if (themeDir != null) File(themeDir, FILE_NAME) else null
             val mounted = Environment.MEDIA_MOUNTED == Environment.getExternalStorageState()
-            val json = readOverlay(ctx, file, mounted)
+            val json = ThemeConfigOverlay.readOverlay(ctx, FILE_NAME, file, mounted)
             if (json != null) {
                 applied = true
                 dock = stringList(json, "dock_apps", dock)
@@ -899,33 +899,6 @@ internal class Config private constructor(
                 Math.max(0, Math.min(600, openOnStartNetworkWait)), iconOnlyVpn, remoteKeysDebug, recoveryHomeRedirect)
         }
 
-        /**
-         * {@code "race_calendar": [{"round": 18, "name": "United States Grand Prix", "place": "Austin",
-         * "sessions": [{"name": "FP1", "start": "2026-10-23T17:30:00Z"}, ...]}, ...]}. A race or session that does
-         * not parse is left out on its own; the rest of the calendar still counts.
-         */
-        private fun raceCalendar(json: JSONObject): List<RaceWeekend.Race> {
-            val races = ArrayList<RaceWeekend.Race>()
-            val list = json.optJSONArray("race_calendar") ?: return races
-            for (i in 0 until list.length()) {
-                val r = list.optJSONObject(i) ?: continue
-                val sessions = r.optJSONArray("sessions") ?: continue
-                val parsed = ArrayList<RaceWeekend.Session>()
-                for (j in 0 until sessions.length()) {
-                    val s = sessions.optJSONObject(j) ?: continue
-                    val name = s.optString("name", "").trim()
-                    try {
-                        if (name.isNotEmpty()) parsed.add(RaceWeekend.Session(name, java.time.Instant.parse(s.optString("start", ""))))
-                    } catch (ignored: java.time.format.DateTimeParseException) {
-                        // a session without a readable start time cannot be counted down
-                    }
-                }
-                if (parsed.isNotEmpty()) races.add(RaceWeekend.Race(r.optInt("round", 0),
-                    r.optString("name", "Grand Prix").trim(), r.optString("place", "").trim(), parsed))
-            }
-            return races
-        }
-
         private fun syncThemeChoices(choices: SharedPreferences, dir: File?, config: File?) {
             val revision = if (dir == null) null else File(dir, THEME_REVISION_NAME)
             val token = revisionToken(revision)
@@ -969,122 +942,6 @@ internal class Config private constructor(
             }
         }
 
-        /** Reads and parses the overlay; any problem means "no overlay", never a crash on the home screen. */
-        /**
-         * The overlay, or before external storage is mounted, the copy kept from the last time it was read. Home can
-         * start before the card is mounted (seen at every boot on a Xiaomi MiTV-MTEQ0), and without the copy it comes
-         * up with the built-in dock order. A missing file on mounted storage still means no overlay.
-         */
-        private fun readOverlay(ctx: Context, file: File?, mounted: Boolean): JSONObject? {
-            val copy = File(ctx.filesDir, FILE_NAME)
-            if (!mounted) return read(copy)
-            val json = read(file)
-            if (json == null) {
-                copy.delete()
-            } else {
-                try {
-                    FileOutputStream(copy).use { out ->
-                        out.write(json.toString().toByteArray(StandardCharsets.UTF_8))
-                    }
-                } catch (e: IOException) {
-                    Log.w(TAG, "could not keep a copy of $file: ${e.message}")
-                }
-            }
-            return json
-        }
-
-        private fun read(file: File?): JSONObject? {
-            if (file == null || !file.isFile) return null
-            if (file.length() > 64 * 1024) {
-                Log.w(TAG, "ignoring $file: larger than 64 KB")
-                return null
-            }
-            try {
-                FileInputStream(file).use { input ->
-                    val buf = ByteArray(file.length().toInt())
-                    var n = 0
-                    while (n < buf.size) {
-                        val r = input.read(buf, n, buf.size - n)
-                        if (r <= 0) break
-                        n += r
-                    }
-                    var text = String(buf, 0, n, StandardCharsets.UTF_8)
-                    if (text.startsWith("\uFEFF")) text = text.substring(1)   // Windows editors add a BOM
-                    return JSONObject(text)
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "ignoring $file: ${e.message}")
-                return null
-            }
-        }
-
-        /** wallpaper_moods as JSON text (config.xml); empty or unreadable is no groups. */
-        private fun moods(text: String): Map<String, Set<String>> {
-            if (text.trim().isEmpty()) return Collections.emptyMap()
-            try {
-                return moods(JSONObject(text))
-            } catch (e: JSONException) {
-                return Collections.emptyMap()
-            }
-        }
-
-        /** {"night": ["03-moon-lake.jpg", ...], ...}: each mood's picture names; other keys and names are left out. */
-        private fun moods(o: JSONObject): Map<String, Set<String>> {
-            val groups = HashMap<String, Set<String>>()
-            for (mood in WallpaperMood.ALL) {
-                val names = o.optJSONArray(mood) ?: continue
-                val group = HashSet<String>()
-                for (i in 0 until names.length()) {
-                    val name = names.optString(i, "").trim()
-                    if (ThemeFiles.collectionImage(name)) group.add(name)
-                }
-                if (group.isNotEmpty()) groups[mood] = Collections.unmodifiableSet(group)
-            }
-            return Collections.unmodifiableMap(groups)
-        }
-
-        private fun string(o: JSONObject, key: String, fallback: String): String {
-            val v = o.opt(key)
-            return if (v is String) v.trim() else fallback
-        }
-
-        private fun bool(o: JSONObject, key: String, fallback: Boolean): Boolean {
-            val v = o.opt(key)
-            return if (v is Boolean) v else fallback
-        }
-
-        private fun integer(o: JSONObject, key: String, fallback: Int, min: Int, max: Int): Int {
-            val v = o.opt(key)
-            if (v !is Number) return fallback
-            val i = v.toInt()
-            return if (i < min || i > max) fallback else i
-        }
-
-        private fun color(o: JSONObject, key: String, fallback: Int): Int {
-            val v = o.opt(key)
-            if (v !is String) return fallback
-            try {
-                val c = Color.parseColor(v.trim())
-                return c or 0xFF000000.toInt()   // always opaque: the window behind is black anyway
-            } catch (e: IllegalArgumentException) {
-                return fallback
-            }
-        }
-
-        /** Positive keycodes only (vendor remotes use codes in the thousands); a list with anything else in it is ignored as a whole. */
-        private fun intArray(o: JSONObject, key: String, fallback: IntArray): IntArray {
-            val v = o.opt(key)
-            if (v !is JSONArray) return fallback
-            val out = IntArray(v.length())
-            for (i in 0 until v.length()) {
-                val item = v.opt(i)
-                if (item !is Number) return fallback
-                out[i] = item.toInt()
-                if (out[i] < 1) return fallback
-            }
-            return out
-        }
-
         /** "package=value" entries; an entry without both halves is skipped, and a later entry for a package wins. */
         @JvmStatic
         fun packageMap(entries: List<String>): Map<String, String> {
@@ -1095,17 +952,6 @@ internal class Config private constructor(
                 val pkg = entry.substring(0, eq).trim()
                 val value = entry.substring(eq + 1).trim()
                 if (pkg.isNotEmpty() && value.isNotEmpty()) out[pkg] = value
-            }
-            return out
-        }
-
-        private fun stringList(o: JSONObject, key: String, fallback: MutableList<String>): MutableList<String> {
-            val v = o.opt(key)
-            if (v !is JSONArray) return fallback
-            val out = ArrayList<String>()
-            for (i in 0 until v.length()) {
-                val item = v.opt(i)
-                if (item is String && item.trim().isNotEmpty()) out.add(item.trim())
             }
             return out
         }
