@@ -13,7 +13,7 @@ internal object AppLibraryCatalog {
     /** Labels kept between openings (LOADER thread only), until the app is updated. */
     private val KNOWN: MutableMap<String, Known> = HashMap()
 
-    private fun loadLabel(pm: PackageManager, app: ResolveInfo): String {
+    fun loadLabel(pm: PackageManager, app: ResolveInfo): String {
         val pkg = app.activityInfo.packageName
         try {
             return Cards.cleanLabel(app.loadLabel(pm).toString(), pkg)

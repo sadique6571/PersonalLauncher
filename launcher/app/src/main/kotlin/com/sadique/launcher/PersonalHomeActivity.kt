@@ -2654,8 +2654,8 @@ class PersonalHomeActivity : Activity() {
                 buildHomeSoon()
             } },
             Runnable { LauncherUpdatesUi.show(this) },
-            Runnable(::exportSettings),
-            Runnable(::importSettings),
+            Runnable(settingsTransfer::exportSettings),
+            Runnable(settingsTransfer::importSettings),
             Runnable { ThemeDialogBuilder(this).setTitle("Reset layout and show all apps?").setPositiveButton("Reset") { _, _ ->
                 prefs.edit().remove("app_order").remove("hidden_apps").remove("tv_columns").remove("phone_columns").remove("large_tiles")
                         .remove("focus_title_size").remove("clock_size").remove("background_dim").remove("theme_mode")

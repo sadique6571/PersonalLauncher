@@ -57,9 +57,9 @@ internal class HomeClockContrast {
                 if (ThemeStyle.wallpaperClockInk(pixel, darkInk) == 0xffffffff.toInt()) { whiteWallpaper = false; break }
             }
         }
-        val ink = if (whiteWallpaper) ThemeStyle.wallpaperClockInk(background, darkInk) else 0xffffffff.toInt()
-        val changed = ink != ink
-        ink = ink
+        val nextInk = if (whiteWallpaper) ThemeStyle.wallpaperClockInk(background, darkInk) else 0xffffffff.toInt()
+        val changed = nextInk != ink
+        ink = nextInk
         return changed
     }
 }

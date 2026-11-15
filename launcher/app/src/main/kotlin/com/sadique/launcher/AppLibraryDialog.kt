@@ -284,7 +284,7 @@ internal class AppLibraryDialog(
         val pkg = app.activityInfo.packageName
         val cached = labels[pkg]
         if (cached != null) return cached
-        val value = loadLabel(activity.packageManager, app)
+        val value = AppLibraryCatalog.loadLabel(activity.packageManager, app)
         labels[pkg] = value
         return value
     }
