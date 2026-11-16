@@ -27,10 +27,10 @@ import org.xml.sax.InputSource
 internal class LandscapeFeed {
 
     private enum class Source {
-        FLICKR, OPENVERSE, BING, PORTRAITS, WALLSPAPERS, COMMONS, PUBLIC_DOMAIN_PICTURES, OCEAN_EXPLORATION, NATIONAL_PARK_SERVICE, PXHERE;
+        FLICKR, FLICKR_PEOPLE, OPENVERSE, BING, PORTRAITS, WALLSPAPERS, COMMONS, PUBLIC_DOMAIN_PICTURES, OCEAN_EXPLORATION, NATIONAL_PARK_SERVICE, PXHERE;
 
         fun live(): Boolean {
-            return this == FLICKR || this == OPENVERSE || this == BING || this == COMMONS || this == WALLSPAPERS
+            return this == FLICKR || this == FLICKR_PEOPLE || this == OPENVERSE || this == BING || this == COMMONS || this == WALLSPAPERS
         }
     }
 
@@ -38,7 +38,9 @@ internal class LandscapeFeed {
         @JvmField val id: String,
         @JvmField val url: String,
         @JvmField val subject: String,
-        @JvmField val reviewed: Boolean
+        @JvmField val reviewed: Boolean,
+        @JvmField val cropOffsetPercent: Int = -1,
+        @JvmField val livePeople: Boolean = false
     )
 
     private val random = Random()
@@ -50,6 +52,7 @@ internal class LandscapeFeed {
     private var nextSource = 0
     private var recycleSource = 0
     private var flickrTopic = 0
+    private var peopleTopic = 0
     private var openverseCall = 0
     private var bingBatch = 0
     private var commonsTopic = 0
@@ -113,16 +116,21 @@ internal class LandscapeFeed {
         return null
     }
 
+    private fun flickrRss(tags: String): ByteArray {
+        return OnlineContent.get(
+            "https://www.flickr.com/services/feeds/photos_public.gne" +
+                "?format=rss_200&tagmode=all&tags=" + encode(tags), 192 * 1024, 2200, 3500
+        )
+    }
+
     private fun fetch(source: Source, alreadyShown: Predicate<String>): MutableList<Scene> {
         return when (source) {
-            Source.FLICKR -> {
-                val tags = FLICKR_TAGS[flickrTopic++ % FLICKR_TAGS.size]
-                flickrScenes(
-                    OnlineContent.get(
-                        "https://www.flickr.com/services/feeds/photos_public.gne" +
-                            "?format=rss_200&tagmode=all&tags=" + encode(tags), 192 * 1024, 2200, 3500
-                    )
-                )
+            Source.FLICKR -> flickrScenes(flickrRss(FLICKR_TAGS[flickrTopic++ % FLICKR_TAGS.size]))
+            Source.FLICKR_PEOPLE -> {
+                val topic = peopleTopic++ % (PEOPLE_REGIONS.size * PEOPLE_TAGS.size)
+                val region = PEOPLE_REGIONS[topic % PEOPLE_REGIONS.size]
+                val tag = PEOPLE_TAGS[topic / PEOPLE_REGIONS.size]
+                flickrPeopleScenes(flickrRss("$region,$tag"))
             }
             Source.OPENVERSE -> {
                 val call = openverseCall++
@@ -188,7 +196,7 @@ internal class LandscapeFeed {
     companion object {
         // Give Flickr the first attempt and two additional turns in each rotation.
         private val SOURCES = arrayOf(
-            Source.FLICKR, Source.OPENVERSE, Source.BING, Source.PORTRAITS, Source.FLICKR,
+            Source.FLICKR, Source.FLICKR_PEOPLE, Source.OPENVERSE, Source.BING, Source.PORTRAITS, Source.FLICKR,
             Source.WALLSPAPERS, Source.COMMONS, Source.PUBLIC_DOMAIN_PICTURES, Source.FLICKR,
             Source.OCEAN_EXPLORATION, Source.NATIONAL_PARK_SERVICE, Source.PXHERE
         )
@@ -202,6 +210,25 @@ internal class LandscapeFeed {
             "sunset", "glacier", "river", "ocean", "nationalpark", "desert", "beach",
             "island", "valley", "friends", "family", "portrait", "people", "street",
             "festival", "travel", "city"
+        )
+        private val PEOPLE_REGIONS = arrayOf(
+            "pakistan", "india", "iran", "tajikistan", "turkmenistan", "turkey", "saudiarabia",
+            "afghanistan", "uzbekistan", "kyrgyzstan", "kazakhstan", "bangladesh", "nepal", "srilanka",
+            "azerbaijan", "iraq", "oman", "qatar", "unitedarabemirates", "jordan", "kuwait"
+        )
+        private val PEOPLE_TAGS = arrayOf("cc0", "publicdomain", "people", "portrait", "streetphotography")
+        private val PEOPLE_SUBJECT = Pattern.compile(
+            "\\b(?:people|portraits?|women|woman|ladies|lady|men|man|family|families|" +
+                "friends|shoppers?|vendors?|sellers?|workers?|walkers?|artists?|drivers?|crowd)\\b",
+            Pattern.CASE_INSENSITIVE
+        )
+        private val PEOPLE_EXCLUDED = Pattern.compile(
+            "\\b(?:kiss\\w*|couples?|romanc\\w*|wedding\\w*|brid\\w*|grooms?|nud\\w*|erotic\\w*|" +
+                "sex\\w*|intimat\\w*|suggestive|lingerie|underwear|swimwear|bikinis?|topless|fetish|bdsm|" +
+                "boudoir|see.through|sheer|thongs?|bedroom|bed|provocative|sensual|glamour|hugg\\w*|embrac\\w*|" +
+                "paintings?|illustrations?|artwork|ai.generated|generative|midjourney|stable diffusion|" +
+                "protest\\w*|violence|weapons?|firearms?|wars?|conflict|nasa|astronaut\\w*|satellite)\\b",
+            Pattern.CASE_INSENSITIVE
         )
         private const val MEDIA_RSS = "http://search.yahoo.com/mrss/"
 
@@ -257,6 +284,16 @@ internal class LandscapeFeed {
         @JvmStatic
         @Throws(Exception::class)
         fun flickrScenes(feed: ByteArray): MutableList<Scene> {
+            return flickrScenes(feed, false)
+        }
+
+        @JvmStatic
+        @Throws(Exception::class)
+        fun flickrPeopleScenes(feed: ByteArray): MutableList<Scene> {
+            return flickrScenes(feed, true)
+        }
+
+        private fun flickrScenes(feed: ByteArray, people: Boolean): MutableList<Scene> {
             val factory = DocumentBuilderFactory.newInstance()
             factory.isNamespaceAware = true
             // Flickr publishes UTF-8 RSS. Reject DTDs before parsing so the parser cannot resolve entities.
@@ -270,19 +307,26 @@ internal class LandscapeFeed {
                 val content = item.getElementsByTagNameNS(MEDIA_RSS, "content").item(0)
                 if (content !is Element) continue
                 val image = content
+                val width = xmlDimension(image, "width")
+                val height = xmlDimension(image, "height")
                 if ("image/jpeg" != image.getAttribute("type") ||
-                    !fitsWidescreen(xmlDimension(image, "width"), xmlDimension(image, "height"))
+                    !(if (people) fitsPeopleFrame(width, height) else fitsWidescreen(width, height))
                 ) continue
                 val title = xmlText(item, MEDIA_RSS, "title")
                 val description = xmlText(item, null, "description").replace(Regex("<[^>]*>"), " ")
                 val tags = xmlText(item, MEDIA_RSS, "category")
-                if (!safeSubject(title, "$description $tags")) continue
+                val text = "$title $description $tags"
+                if (people) {
+                    // Require a meaningful people subject in the title or caption, not just a search tag.
+                    if (title.isEmpty() || !PEOPLE_SUBJECT.matcher("$title $description").find() ||
+                        PEOPLE_EXCLUDED.matcher(text).find() || !safeSubject(title, "$description $tags")) continue
+                } else if (!safeSubject(title, "$description $tags")) continue
                 val url = image.getAttribute("url")
                 if (!imageUrlAllowed(url)) continue
                 val uri = URI.create(url)
                 if ("live.staticflickr.com" != uri.host) continue
                 val id = LandscapePhotoPolicy.flickrImage.matcher(uri.path)
-                if (id.matches()) photos.add(Scene("flickr:" + id.group(1), url, title, false))
+                if (id.matches()) photos.add(Scene("flickr:" + id.group(1), url, title, false, -1, people))
             }
             return photos
         }
@@ -433,6 +477,17 @@ internal class LandscapeFeed {
             portrait(result, "1536010447069-d2c8af80c584", "Friends laughing together", null)
             portrait(result, "1556159916-26bf2ce06da9", "Friends in the tulip fields", null)
             portrait(result, "1758272134073-39aced2153e6", "Group selfie outdoors", null)
+            /** Public-domain/CC0 people photos, with each 16:9 framing visually reviewed. */
+            // flickr.com/photos/wendelinjacober/29941887810
+            flickrPortrait(result, "5684", "29941887810_b3316581e3", "City balcony · Wendelin Jacober", 0)
+            // flickr.com/photos/106274066@N07/54275237479
+            flickrPortrait(result, "65535", "54275237479_6194e5949e", "Friends in the grass · snelson951", 50)
+            // flickr.com/photos/wwward0/51676150106
+            flickrPortrait(result, "65535", "51676150106_73b559de61", "Painters in East River Park · wwward0", 50)
+            // flickr.com/photos/mussikatz/55595101640
+            flickrPortrait(result, "65535", "55595101640_6d5cc4db13", "Weekend market in Bangkok · mussikatz", 35)
+            // flickr.com/photos/mussikatz/52769851516
+            flickrPortrait(result, "65535", "52769851516_86d01c2b9c", "Village life in Colombia · mussikatz", 35)
             return result
         }
 
@@ -444,6 +499,11 @@ internal class LandscapeFeed {
                         "&w=1920&h=1080&fm=jpg&q=78", subject, true
                 )
             )
+        }
+
+        private fun flickrPortrait(list: MutableList<Scene>, server: String, file: String, subject: String, cropOffsetPercent: Int) {
+            val id = file.substring(0, file.indexOf('_'))
+            list.add(Scene("flickr:$id", "https://live.staticflickr.com/$server/${file}_b.jpg", subject, true, cropOffsetPercent))
         }
 
         private fun oceanPhotos(): MutableList<Scene> {
@@ -552,6 +612,12 @@ internal class LandscapeFeed {
 
         @JvmStatic
         fun fitsWidescreen(width: Int, height: Int): Boolean = LandscapePhotoPolicy.fitsWidescreen(width, height)
+
+        fun fitsPeopleFrame(width: Int, height: Int): Boolean {
+            return width >= 960 && width <= 1920 && height > 480 &&
+                width.toLong() * 3 >= height.toLong() * 4 &&
+                width.toLong() * 9 <= height.toLong() * 16
+        }
 
         @JvmStatic
         fun imageUrlAllowed(url: String): Boolean = LandscapePhotoPolicy.imageUrlAllowed(url)

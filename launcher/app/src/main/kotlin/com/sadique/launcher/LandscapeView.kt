@@ -3,6 +3,7 @@ package com.sadique.launcher
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Typeface
 import android.net.ConnectivityManager
@@ -22,6 +23,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -410,7 +412,13 @@ class LandscapeView(context: Context) : FrameLayout(context) {
                 null
             } ?: break
             try {
-                val bytes = OnlineContent.get(scene.url, 3 * 1024 * 1024, 3500, 8000)
+                var bytes = OnlineContent.get(scene.url, 3 * 1024 * 1024, 3500, 8000)
+                if (scene.cropOffsetPercent >= 0) {
+                    bytes = frameReviewedPortrait(bytes, scene.cropOffsetPercent) ?: continue
+                }
+                if (scene.livePeople) {
+                    bytes = fitLivePeoplePhoto(bytes) ?: continue
+                }
                 val image = ScreensaverPrefetch.decode(bytes) ?: continue
                 var accepted = false
                 try {
@@ -498,6 +506,54 @@ class LandscapeView(context: Context) : FrameLayout(context) {
                 return if (accepted) image else null
             } finally {
                 if (!accepted) image.recycle()
+            }
+        }
+
+        private fun frameReviewedPortrait(bytes: ByteArray, offsetPercent: Int): ByteArray? {
+            val bounds = BitmapFactory.Options()
+            bounds.inJustDecodeBounds = true
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            val width = bounds.outWidth
+            val height = bounds.outHeight
+            val frameHeight = width / 16 * 9
+            // Only frame the reviewed horizontal previews. If a CDN rendition changes, skip it.
+            if (width != 1024 || height < frameHeight || height > width) return null
+            val original = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+            var framed = original
+            try {
+                val top = Math.round((height - frameHeight) * offsetPercent / 100f)
+                framed = Bitmap.createBitmap(original, 0, top, width, frameHeight)
+                val output = ByteArrayOutputStream()
+                return if (framed.compress(Bitmap.CompressFormat.JPEG, 90, output)) output.toByteArray() else null
+            } finally {
+                if (framed != original) framed.recycle()
+                original.recycle()
+            }
+        }
+
+        private fun fitLivePeoplePhoto(bytes: ByteArray): ByteArray? {
+            val bounds = BitmapFactory.Options()
+            bounds.inJustDecodeBounds = true
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            if (!LandscapeFeed.fitsPeopleFrame(bounds.outWidth, bounds.outHeight)) return null
+            if (LandscapeFeed.fitsWidescreen(bounds.outWidth, bounds.outHeight)) return bytes
+            val original = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+            var frame: Bitmap? = null
+            try {
+                val units = (original.height + 8) / 9
+                val created = Bitmap.createBitmap(units * 16, units * 9, Bitmap.Config.ARGB_8888)
+                frame = created
+                val canvas = android.graphics.Canvas(created)
+                canvas.drawColor(0xff041225.toInt())
+                canvas.drawBitmap(
+                    original, (created.width - original.width) / 2f,
+                    (created.height - original.height) / 2f, null
+                )
+                val output = ByteArrayOutputStream()
+                return if (created.compress(Bitmap.CompressFormat.JPEG, 90, output)) output.toByteArray() else null
+            } finally {
+                frame?.recycle()
+                original.recycle()
             }
         }
     }
