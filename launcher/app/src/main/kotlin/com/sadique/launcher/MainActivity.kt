@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.Drawable
 import android.media.tv.TvInputManager
@@ -46,7 +45,6 @@ import java.util.ArrayList
 import java.util.Arrays
 import java.util.Collections
 import java.util.HashSet
-import java.util.Locale
 
 /**
  * tvOS style home: black, a pinned dock row, an app grid, and one glass highlight that springs between tiles.
@@ -119,6 +117,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     private lateinit var adapter: AppAdapter
     private lateinit var grid: RecyclerView
     private lateinit var root: FrameLayout
+    private lateinit var clockHeader: LauncherClockHeader
     private lateinit var wallpaperPlayer: WallpaperPlayer
     private lateinit var glass: GlassView
     private lateinit var shelf: LauncherShelf
@@ -128,28 +127,18 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     private var glassAccent = 0
     private var animations = false
     private var advancedEffects = false
-    private lateinit var greeting: TextView
-    private lateinit var clockBlock: View
     private lateinit var btnInputs: View
     /** config show_inputs_pill: false keeps the Inputs pill hidden even when the TV has inputs. */
     private var showInputsPill = true
     private lateinit var btnWifi: TextView
     /** The pills have been filled in once; later resumes refresh them after the first frame. */
     private var pillsShown = false
-    private lateinit var shamsiDate: TextView
-    /** lunar_date: the lunisolar date under the date line, and the time zone it is computed for. */
-    private lateinit var lunarDate: TextView
-    private var lunar = false
-    private var lunarOffset = 0
     private var stats: TextView? = null
     private lateinit var sportsPanel: LauncherSportsPanel
     /** config.xml show_stats, overridable by a theme. Off: the line is gone and nothing is read. */
     private var showStats = false
     /** config.xml inputs_connected_only: the Inputs menu lists only connected inputs, the rest behind "More inputs". */
     private var inputsConnectedOnly = false
-    private var shamsi = false
-    /** greeting_name: said after the greeting, which is shown in capitals. */
-    private var greetingName = ""
     /** Optional time-of-day backdrop (config.xml, sky_intensity); 0 keeps it hidden. */
     private lateinit var sky: SkyView
     private lateinit var btnVpn: TextView
@@ -187,7 +176,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     private var diya: DiyaDrawable? = null
     private var bell: BellDrawable? = null
     private var marigold: MarigoldDrawable? = null
-    private var greetingColor = 0
     /** boot_to_live_tv: open the Live TV app on the first Home of each boot. */
     private var bootToLiveTv = false
     /** open_on_start_choice: the app picked in Launcher settings may open on the first Home of each boot. */
@@ -409,51 +397,12 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         cinematic = cfg.cinematicHome
         cinematicWhiteFocus = cfg.cinematicWhiteFocus
         shelf = LauncherShelf(this, cfg, density, { adapter }, { rtlAppGrid })
-        greeting = findViewById(R.id.greeting)
-        clockBlock = findViewById(R.id.leftBlock)
-        greetingColor = greeting.currentTextColor
-        if (!cfg.showGreeting) greeting.visibility = View.GONE
-        if (cfg.headerWhite) {
-            // The clock's own white for the date and the line before it, instead of their dimmed whites.
-            findViewById<TextView>(R.id.date).setTextColor(Color.WHITE)
-            findViewById<View>(R.id.clockDivider).setBackgroundColor(Color.WHITE)
-        }
-        if (resources.getBoolean(R.bool.rtl_menu_bar)) {
-            // Center Hebrew greetings over the numeric time, independent of a visible AM/PM label. The clock's row
-            // is watched too: date_below_clock can move the whole row right under a wider date.
-            val clock = findViewById<View>(R.id.clock)
-            val clockRow = clock.parent as View
-            val centerGreeting = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                val params = greeting.layoutParams
-                if (params.width != clock.width) {
-                    params.width = clock.width
-                    greeting.layoutParams = params
-                }
-                greeting.translationX = (clockRow.left + clock.left).toFloat()
-            }
-            clock.addOnLayoutChangeListener(centerGreeting)
-            clockRow.addOnLayoutChangeListener(centerGreeting)
-        }
+        clockHeader = LauncherClockHeader(this, cfg, density)
         btnWifi = findViewById(R.id.btnWifi)
-        shamsiDate = findViewById(R.id.shamsiDate)
         stats = findViewById(R.id.stats)
         sportsPanel = LauncherSportsPanel(this, handler, cfg, density) { stopped }
         showStats = cfg.showStats
         inputsConnectedOnly = cfg.inputsConnectedOnly
-        shamsi = cfg.shamsiDate
-        lunarDate = findViewById(R.id.lunarDate)
-        lunar = cfg.lunarDate
-        lunarOffset = Lunar.offsetFor(cfg.lunarUtcOffset, Locale.getDefault())
-        if (lunar) lunarDate.visibility = View.VISIBLE
-        greetingName = cfg.greetingName
-        if (cfg.dateBelowClock) moveDateBelowClock()
-        if (shamsi) {
-            shamsiDate.visibility = View.VISIBLE
-            val date = findViewById<TextView>(R.id.date)
-            date.setTextSize(11f)
-            lunarDate.setTextSize(11f)
-            date.setPadding(0, (4 * density).toInt(), 0, 0)
-        }
         btnVpn = findViewById(R.id.btnVpn)
         moduleCards = cfg.moduleCards
         hiddenApps = HashSet(cfg.hiddenApps)
@@ -561,7 +510,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
             }
         })
 
-        sportsPanel.attachToGrid(grid, clockBlock)
+        sportsPanel.attachToGrid(grid, clockHeader.clockBlock)
 
         // Liquid feel: soft springs on the highlight's position.
         springX = SpringAnimation(glass, object : FloatPropertyCompat<View>("glassContentX") {
@@ -1347,39 +1296,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         shelf.hideHero()
     }
 
-    /**
-     * date_below_clock: the date column moves to its own line under the clock, in the vertical LinearLayout that holds
-     * the clock's row, and the line between them goes. In Hebrew (rtl_menu_bar) the date and the clock's row sit right.
-     */
-    private fun moveDateBelowClock() {
-        val column = findViewById<View>(R.id.date).parent as View
-        val clockRow = findViewById<View>(R.id.clock).parent as View
-        val clockColumn = clockRow.parent as LinearLayout
-        (column.parent as ViewGroup).removeView(column)
-        findViewById<View>(R.id.clockDivider).visibility = View.GONE
-        // Its own width, not the column's: in Hebrew the column is only as wide as the clock.
-        val lp = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        lp.topMargin = Math.round(4 * density)
-        if (resources.getBoolean(R.bool.rtl_menu_bar)) {
-            // Date and clock flush right; the greeting stays left and follows the clock by translation.
-            lp.gravity = Gravity.RIGHT
-            (clockRow.layoutParams as LinearLayout.LayoutParams).gravity = Gravity.RIGHT
-        }
-        clockColumn.addView(column, clockColumn.indexOfChild(clockRow) + 1, lp)
-        // The column now wraps its texts, so they must wrap too: a match_parent TextView does not ask for a new
-        // layout when its text gets longer, and the column kept the width of the day before ("TUESDAY 27 OCTOB…").
-        val texts = column as ViewGroup
-        for (i in 0 until texts.childCount) {
-            val text = texts.getChildAt(i)
-            val textLp = text.layoutParams as LinearLayout.LayoutParams
-            textLp.width = ViewGroup.LayoutParams.WRAP_CONTENT
-            // Keep each line where its own gravity put it (right in Hebrew) now that it no longer fills the column.
-            textLp.gravity = (text as TextView).gravity and Gravity.HORIZONTAL_GRAVITY_MASK
-            text.layoutParams = textLp
-        }
-    }
-
     /** The first top-bar button after Inputs that is shown, in bar order (top_bar_apps, the network pill, ...); Settings is always there. */
     private fun firstTopButton(): View {
         val bar = findViewById<ViewGroup>(R.id.topButtons)
@@ -1447,7 +1363,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
 
     private fun updateClockVisibility() {
         val valid = System.currentTimeMillis() >= TIME_VALID_AFTER_MS
-        clockBlock.visibility = if (valid) View.VISIBLE else View.INVISIBLE
+        clockHeader.clockBlock.visibility = if (valid) View.VISIBLE else View.INVISIBLE
         handler.removeCallbacks(clockCheck)
         if (valid) {
             updateGreeting()
@@ -1457,9 +1373,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     }
 
     private fun updateGreeting() {
-        LauncherGreeting.update(this, greeting, greetingName, greetingColor, festive, festival)
-        if (shamsi) shamsiDate.text = Shamsi.today(resources)
-        if (lunar) lunarDate.text = Lunar.today(resources, lunarOffset)
+        clockHeader.update(festive, festival)
     }
 
     private fun refreshPillsAfterNextDraw() {

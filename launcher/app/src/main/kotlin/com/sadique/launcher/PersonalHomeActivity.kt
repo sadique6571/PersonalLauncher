@@ -55,7 +55,6 @@ import android.widget.Toast
 import androidx.recyclerview.widget.RecyclerView
 import java.io.File
 import java.util.Calendar
-import java.util.Collections
 import java.util.concurrent.Executors
 import java.util.function.IntConsumer
 
@@ -110,7 +109,7 @@ class PersonalHomeActivity : Activity() {
             applyAppearance = this::applyAppearance,
             profileAsset = this::profileAsset,
             loadWallpaper = this::loadWallpaper,
-            rearrangeApps = this::rearrangeApps,
+            rearrangeApps = moveApps::rearrangeApps,
             requestWatchNextAccess = { continueWatching?.requestAccess() },
             editProfile = homeProfile::show,
             applyPerformanceProfile = this::applyPerformanceProfile,
@@ -276,10 +275,22 @@ class PersonalHomeActivity : Activity() {
     /** First buildHome() also logs the first drawn frame; rebuilds only log their own duration. */
     private var firstBuild = true
     private var cachedApps: List<PersonalApp>? = null
-    /** Move mode: the app being carried, and the visible package order while it moves. Null when off. */
-    private var carriedApp: PersonalApp? = null
-    private var movingRendered = false
-    private var moveOrder: MutableList<String>? = null
+    private val moveApps by lazy {
+        HomeAppReorder(
+            host = this,
+            prefs = prefs,
+            cachedApps = { cachedApps },
+            grid = { grid },
+            gridWidth = this::gridWidth,
+            clearCategory = { selectedCategory = "" },
+            setHeading = { appHeading?.text = it },
+            submitHomeApps = this::submitHomeApps,
+            renderApps = this::renderApps,
+            focusFirstApp = this::focusFirstApp,
+            chooseSetting = this::chooseSetting,
+            refreshApps = this::refreshApps,
+        )
+    }
     /** Live tiles by package, for progressive icon fill-in. Rebuilt with the grid. */
     private val tileViews = HashMap<String, View>()
     /** Package of the focused tile, restored after grid rebuilds. */
@@ -746,7 +757,7 @@ class PersonalHomeActivity : Activity() {
         heading.setPadding(dp(4), dp(8), 0, dp(12))
         val grid = HomeAppGrid<PersonalApp>(this, { app -> app.info.activityInfo.packageName },
                 { app, width ->
-                    val carried = carriedApp
+                    val carried = moveApps.carriedApp
                     createAppTile(app, width, carried != null && app.info.activityInfo.packageName == carried.info.activityInfo.packageName)
                 },
                 harmonyHome)
@@ -781,55 +792,21 @@ class PersonalHomeActivity : Activity() {
         continueWatching = watching
         if (watching != null && !prefs.getBoolean("apps_only", false)) grid.setFooter(watching)
         body.addView(grid, LinearLayout.LayoutParams(-1, -1))
-        val scrollContent = LinearLayout(this)
-        scrollContent.orientation = LinearLayout.VERTICAL
-        if (glassOs() && !harmony()) scrollContent.gravity = Gravity.CENTER_VERTICAL
-        if (!clockVisible()) clock.visibility = View.GONE
-        val align = clockAlignment()
-        val clockParams = LinearLayout.LayoutParams(-1, -2)
-        clockParams.gravity = intArrayOf(Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END)[align]
-        if (harmonyHome) {
-            scrollContent.addView(harmonyHero(), LinearLayout.LayoutParams(-1, -2))
-        } else if (glassOs() || weatherWidgetEnabled()) {
-            val stage = LinearLayout(this)
-            stage.gravity = Gravity.CENTER_VERTICAL or Gravity.END
-            val wide = resources.configuration.screenWidthDp >= 700
-            stage.orientation = if (wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-            if (wide) stage.addView(clock, LinearLayout.LayoutParams(0, -2, 1f)) else stage.addView(clock, clockParams)
-            val instruments = LinearLayout(this)
-            instruments.gravity = Gravity.CENTER_VERTICAL or Gravity.END
-            if (!wide) instruments.orientation = LinearLayout.VERTICAL
-            val available = resources.configuration.screenWidthDp - if (tv) 64 else 32
-            if (weatherWidgetEnabled()) {
-                val widget = WeatherWidgetView(this, homeWeatherController::showForecast)
-                weatherWidget = widget
-                val wp = LinearLayout.LayoutParams(dp(Math.min(available, WeatherWidgetLayout.width(available, glassOs()))), -2)
-                if (glassOs() && wide) wp.marginEnd = dp(12) else if (!wide) wp.bottomMargin = dp(10)
-                instruments.addView(widget, wp)
-                widget.setOnKeyListener { _, key, event ->
-                    if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
-                    if (key == KeyEvent.KEYCODE_DPAD_DOWN) { grid.focusKey(focusedPkg); return@setOnKeyListener true }
-                    if (key == KeyEvent.KEYCODE_DPAD_UP || key == KeyEvent.KEYCODE_DPAD_LEFT) { searchButton?.requestFocus(); return@setOnKeyListener true }
-                    key == KeyEvent.KEYCODE_DPAD_RIGHT
-                }
-                widget.active(resumed)
-            }
-            if (glassOs()) {
-                val cardWidth = if (wide) (if (weatherWidgetEnabled()) WeatherWidgetLayout.telemetryWidth(available) else Math.min(315, resources.configuration.screenWidthDp / 3)) else Math.min(280, available)
-                if (harmony()) instruments.addView(harmonyShortcuts(), LinearLayout.LayoutParams(dp(cardWidth), -2))
-                else {
-                    val tele = GlassTelemetry(this)
-                    telemetry = tele
-                    instruments.addView(tele, LinearLayout.LayoutParams(dp(cardWidth), -2))
-                    if (resumed) tele.start()
-                }
-            }
-            stage.addView(instruments)
-            if (prefs.getBoolean("apps_only", false)) stage.visibility = View.GONE
-            scrollContent.addView(stage, LinearLayout.LayoutParams(-1, -2))
-        } else scrollContent.addView(clock, clockParams)
+        val stage = HomeClockStage(this, prefs, tv, resumed, glassOs(), harmony()).build(
+            clock = clock,
+            alignment = clockAlignment(),
+            clockVisible = clockVisible(),
+            showWeather = weatherWidgetEnabled(),
+            harmonyHero = if (harmonyHome) this::harmonyHero else null,
+            harmonyShortcuts = this::harmonyShortcuts,
+            forecast = homeWeatherController::showForecast,
+            focusGrid = { grid.focusKey(focusedPkg) },
+            focusSearch = { searchButton?.requestFocus() },
+        )
+        if (stage.weather != null) weatherWidget = stage.weather
+        telemetry = stage.telemetry
         val referenceStage = glassOs() && !prefs.getBoolean("apps_only", false)
-        scroll.addView(scrollContent, ViewGroup.LayoutParams(-1, -2))
+        scroll.addView(stage.content, ViewGroup.LayoutParams(-1, -2))
         page.addView(scroll, if (referenceStage) LinearLayout.LayoutParams(-1, 0, 1f) else LinearLayout.LayoutParams(-1, -2))
         if (harmony() || ThemeStyle.custom(prefs) || glassOs()) heading.visibility = View.GONE
         page.addView(heading)
@@ -990,7 +967,7 @@ class PersonalHomeActivity : Activity() {
     }
 
     private fun loadApps() {
-        if (carriedApp != null) { carriedApp = null; moveOrder = null }
+        moveApps.clear()
         artworkCatalog.load()
     }
 
@@ -1007,7 +984,7 @@ class PersonalHomeActivity : Activity() {
                 }
             }
         }
-        if (carriedApp != null) return
+        if (moveApps.carriedApp != null) return
         val tile = tileViews[pkg]
         if (tile is HarmonyAppTile) { tile.artwork(icon, accent); tile.setTag(accent) }
         else if (tile is GlassIconTile) { tile.artwork(icon, accent); tile.setTag(accent); if (tile.isFocused) updateGlassAccent(accent) }
@@ -1027,7 +1004,7 @@ class PersonalHomeActivity : Activity() {
         cachedApps = apps
         appHeading?.text = if (harmony()) "YOUR APPS" else getString(R.string.h_your_apps)
         val library = HomeLibraryStore(this)
-        val visible = orderedApps(apps)
+        val visible = moveApps.orderedApps(apps)
         val hidden = prefs.getStringSet("hidden_apps", emptySet())
         visible.removeIf { app -> hidden?.contains(app.info.activityInfo.packageName) == true
                 || (selectedCategory.isNotEmpty() && selectedCategory != library.category(app.info.activityInfo.packageName)) }
@@ -1036,7 +1013,7 @@ class PersonalHomeActivity : Activity() {
                 else PersonalHomeModel.columns((avail / resources.displayMetrics.density).toInt(),
                 prefs.getInt(if (tv) "tv_columns" else "phone_columns", 0), prefs.getBoolean("large_tiles", false))
         submitHomeApps(visible, columns, avail)
-        if (movingRendered) { movingRendered = false; g.rebind() }
+        if (moveApps.consumeRebind()) g.rebind()
         val state = gridState
         if (state != null) { g.layoutManager?.onRestoreInstanceState(state); gridState = null }
         appHeading?.setText(if (visible.isEmpty()) R.string.h_no_apps else R.string.h_your_apps)
@@ -1070,66 +1047,6 @@ class PersonalHomeActivity : Activity() {
 
     private fun profileAsset(name: String): File = File(filesDir, HomeLibraryStore(this).assetName(name))
 
-    /** Direct move mode: long-press > Move, then arrows carry the tile, OK drops it, Back cancels. */
-    private fun startMoveMode(app: PersonalApp) {
-        val apps = cachedApps ?: return
-        val visible = orderedApps(apps)
-        val hidden = prefs.getStringSet("hidden_apps", emptySet())
-        visible.removeIf { a -> hidden?.contains(a.info.activityInfo.packageName) == true }
-        val order = ArrayList<String>()
-        moveOrder = order
-        for (a in visible) order.add(a.info.activityInfo.packageName)
-        selectedCategory = ""
-        carriedApp = app
-        renderMoveGrid()
-        Toast.makeText(this, "Arrows move · OK places · Back cancels", Toast.LENGTH_LONG).show()
-    }
-
-    private fun renderMoveGrid() {
-        movingRendered = true
-        val byPackage = LinkedHashMap<String, PersonalApp>()
-        for (app in cachedApps!!) byPackage[app.info.activityInfo.packageName] = app
-        val carried = carriedApp!!
-        appHeading?.text = "Move " + carried.name
-        val avail = gridWidth()
-        val g = grid!!
-        val columns = g.columnCount
-        val movingPkg = carried.info.activityInfo.packageName
-        val moved = ArrayList<PersonalApp>()
-        for (pkg in moveOrder!!) {
-            val app = byPackage[pkg]
-            if (app != null) moved.add(app)
-        }
-        submitHomeApps(moved, columns, avail)
-        g.rebind()
-        g.focusKey(movingPkg)
-    }
-
-    private fun commitMove() {
-        // Hidden apps keep their slots; visible ones take the new order.
-        val order = moveOrder!!
-        val visibleSet = HashSet(order)
-        val moved = order.iterator()
-        val result = ArrayList<String>()
-        for (app in orderedApps(cachedApps!!)) {
-            val pkg = app.info.activityInfo.packageName
-            result.add(if (visibleSet.contains(pkg)) moved.next() else pkg)
-        }
-        prefs.edit().putString("app_order", org.json.JSONArray(result).toString()).apply()
-        carriedApp = null
-        moveOrder = null
-        renderApps(cachedApps!!)
-        focusFirstApp()
-        Toast.makeText(this, "App order saved", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun cancelMove() {
-        carriedApp = null
-        moveOrder = null
-        renderApps(cachedApps!!)
-        focusFirstApp()
-    }
-
     /** System navigation sounds: tick on arrows, click on OK. */
     private fun playNavSound(keyCode: Int) {
         val audio = getSystemService(AudioManager::class.java) ?: return
@@ -1154,7 +1071,7 @@ class PersonalHomeActivity : Activity() {
                 && !PassiveHomeService.enabled(this) && VolumeKeys.control(this, event)) return true
         if (event.action == KeyEvent.ACTION_DOWN) playNavSound(event.keyCode)
         // Press effect: tile dips slightly the moment OK is pressed.
-        if (event.action == KeyEvent.ACTION_DOWN && carriedApp == null
+        if (event.action == KeyEvent.ACTION_DOWN && moveApps.carriedApp == null
                 && (event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || event.keyCode == KeyEvent.KEYCODE_ENTER
                 || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER)) {
             val focused = currentFocus
@@ -1162,38 +1079,7 @@ class PersonalHomeActivity : Activity() {
                 focused.animate().scaleX(0.94f).scaleY(0.94f).setDuration(80).start()
             }
         }
-        val carried = carriedApp
-        if (carried != null && event.action == KeyEvent.ACTION_DOWN) {
-            val pkg = carried.info.activityInfo.packageName
-            val order = moveOrder!!
-            val from = order.indexOf(pkg)
-            val g = grid!!
-            val cols = Math.max(1, g.columnCount)
-            val code = event.keyCode
-            if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER
-                    || code == KeyEvent.KEYCODE_NUMPAD_ENTER) {
-                commitMove()
-                return true
-            }
-            if (code == KeyEvent.KEYCODE_BACK) { cancelMove(); return true }
-            var to = -1
-            if (g.isHorizontalDock() && (code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_DPAD_RIGHT)) {
-                val forward = (code == KeyEvent.KEYCODE_DPAD_RIGHT) == (g.layoutDirection != View.LAYOUT_DIRECTION_RTL)
-                to = AppGridNavigation.horizontal(from, order.size, forward)
-                if (to == from) to = -1
-            } else if (g.isHorizontalDock() && (code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_DPAD_DOWN)) {
-                return true
-            } else if (code == KeyEvent.KEYCODE_DPAD_LEFT) { if (from % cols != 0) to = from - 1 }
-            else if (code == KeyEvent.KEYCODE_DPAD_RIGHT) { if (from % cols != cols - 1 && from + 1 < order.size) to = from + 1 }
-            else if (code == KeyEvent.KEYCODE_DPAD_UP) { if (from - cols >= 0) to = from - cols }
-            else if (code == KeyEvent.KEYCODE_DPAD_DOWN) { if (from + cols < order.size) to = from + cols }
-            else return super.dispatchKeyEvent(event)
-            if (to >= 0) {
-                Collections.swap(order, from, to)
-                renderMoveGrid()
-            }
-            return true
-        }
+        moveApps.handleKey(event) { super.dispatchKeyEvent(event) }?.let { return it }
         val g = grid
         if (g != null && g.navigateKey(event)) return true
         return super.dispatchKeyEvent(event)
@@ -1235,7 +1121,7 @@ class PersonalHomeActivity : Activity() {
             border = this::tileBorder, perfAllows = this::perfAllows, accentColor = this::accentColor,
             selectApp = { focusedPkg = it.info.activityInfo.packageName },
             updateFocusWallpaper = this::updateTileFocusWallpaper, launch = this::launch,
-            isCarryingApp = { carriedApp != null }, showOptions = this::showTileOptions,
+            isCarryingApp = { moveApps.carriedApp != null }, showOptions = this::showTileOptions,
             trackAttachment = this::trackTileAttachment,
         )
     }
@@ -1278,7 +1164,7 @@ class PersonalHomeActivity : Activity() {
     private fun showTileOptions(app: PersonalApp) {
         ThemeDialogBuilder(this).setTitle(app.name).setItems(arrayOf("App info", "Hide from launcher", "Move app", getString(R.string.h_category))) { _, which ->
             if (which == 0) launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + app.info.activityInfo.packageName)))
-            else if (which == 2) startMoveMode(app)
+            else if (which == 2) moveApps.startMoveMode(app)
             else if (which == 3) HomeLibraryUi.category(this, app.info.activityInfo.packageName) { cachedApps?.let { renderApps(it) } }
             else {
                 val hidden = HashSet(prefs.getStringSet("hidden_apps", emptySet()) ?: emptySet())
@@ -1333,50 +1219,6 @@ class PersonalHomeActivity : Activity() {
             return
         }
         chooseSetting("Inputs", labels.toTypedArray()) { which -> launch(targets[which]) }
-    }
-
-    private fun orderedApps(apps: List<PersonalApp>): MutableList<PersonalApp> {
-        val byPackage = LinkedHashMap<String, PersonalApp>()
-        for (app in apps) byPackage[app.info.activityInfo.packageName] = app
-        val saved = ArrayList<String>()
-        try {
-            val array = org.json.JSONArray(prefs.getString("app_order", "[]"))
-            for (i in 0 until array.length()) saved.add(array.getString(i))
-        } catch (malformed: org.json.JSONException) { /* Fall back to alphabetical order. */ }
-        val result = ArrayList<PersonalApp>()
-        for (pkg in AppOrder.merge(ArrayList(byPackage.keys), saved)) result.add(byPackage[pkg]!!)
-        return result
-    }
-
-    private fun rearrangeApps() {
-        val apps = cachedApps ?: return
-        val visible = orderedApps(apps)
-        val hidden = prefs.getStringSet("hidden_apps", emptySet())
-        visible.removeIf { app -> hidden?.contains(app.info.activityInfo.packageName) == true }
-        if (visible.isEmpty()) { Toast.makeText(this, "Unhide an app first", Toast.LENGTH_SHORT).show(); return }
-        val names = Array(visible.size) { "" }
-        val hints = Array(visible.size) { "" }
-        for (i in visible.indices) { names[i] = visible[i].name; hints[i] = "Select to move this app" }
-        GlassSettings.options(this, "Rearrange apps", names, hints) { which -> moveApp(visible[which]) }
-    }
-
-    private fun moveApp(moving: PersonalApp) {
-        val apps = cachedApps ?: return
-        val ordered = orderedApps(apps)
-        val visible = ArrayList(ordered)
-        val hidden = prefs.getStringSet("hidden_apps", emptySet())
-        visible.removeIf { app -> hidden?.contains(app.info.activityInfo.packageName) == true }
-        val positions = Array(visible.size) { "" }
-        for (i in visible.indices) positions[i] = "${i + 1} · ${visible[i].name}"
-        chooseSetting("Move " + moving.name + " to position", positions) { which ->
-            val packages = ArrayList<String>()
-            for (app in orderedApps(cachedApps!!)) packages.add(app.info.activityInfo.packageName)
-            val destination = packages.indexOf(visible[which].info.activityInfo.packageName)
-            val moved = AppOrder.move(packages, moving.info.activityInfo.packageName, destination)
-            prefs.edit().putString("app_order", org.json.JSONArray(moved).toString()).apply()
-            refreshApps()
-            Toast.makeText(this, "App order saved", Toast.LENGTH_SHORT).show()
-        }
     }
 
     private fun showNotifications() {
