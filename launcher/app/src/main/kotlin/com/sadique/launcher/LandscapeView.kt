@@ -3,7 +3,6 @@ package com.sadique.launcher
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Typeface
 import android.net.ConnectivityManager
@@ -11,7 +10,6 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import android.text.SpannableString
 import android.text.Spanned
 import android.text.style.RelativeSizeSpan
@@ -23,7 +21,6 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -50,12 +47,10 @@ class LandscapeView(context: Context) : FrameLayout(context) {
     private val details: TextView
     private var worker: ExecutorService? = null
     private var weatherWorker: ExecutorService? = null
-    // Live-download feed used only on the single photo worker thread.
-    private val liveFeed = LandscapeFeed()
+    private val photoLoader = LandscapePhotoLoader(context)
     private var running = false
     private var registered = false
     private var photoBusy = false
-    private var bundledFallbackIndex = 0
     private var weatherBusy = false
     private var hasPhoto = false
     private var networkOnline = false
@@ -291,16 +286,16 @@ class LandscapeView(context: Context) : FrameLayout(context) {
     private fun showStartupPhoto() {
         // Use a bundled photo as a placeholder while the worker checks the history and feeds.
         // It is not added to the unseen queue or used to reset photo history.
-        val index = Random().nextInt(OFFLINE_RESOURCES.size)
+        val index = Random().nextInt(LandscapePhotoLoader.bundledPhotoCount)
         startupPhotoIndex = index
-        photo.setImageResource(OFFLINE_RESOURCES[index])
+        photo.setImageResource(LandscapePhotoLoader.bundledResource(index))
         photo.alpha = 1f
         photo.translationX = 0f
         photo.translationY = 0f
         photo.scaleX = 1f
         photo.scaleY = 1f
         hasPhoto = true
-        details.text = OFFLINE_SUBJECTS[index]
+        details.text = LandscapePhotoLoader.bundledSubject(index)
         status.text = "Looking for a new photo…"
     }
 
@@ -311,66 +306,7 @@ class LandscapeView(context: Context) : FrameLayout(context) {
         val request = generation
         val placeholder = startupPhotoIndex
         worker!!.execute {
-            var result: Bitmap? = null
-            var subject = ""
-            try {
-                LandscapeHistory(context).use { history ->
-                    var selected: LandscapeHistory.SavedPhoto?
-                    var i = 0
-                    while (result == null && i < LandscapeHistory.RESERVE_SIZE && !Thread.currentThread().isInterrupted) {
-                        selected = history.takeOffline()
-                        if (selected == null) break
-                        result = ScreensaverPrefetch.decode(selected.bytes)
-                        if (result != null) subject = selected.subject
-                        i++
-                    }
-                    if (result == null) {
-                        for (j in OFFLINE_RESOURCES.indices) {
-                            if (result != null || Thread.currentThread().isInterrupted) break
-                            if (j == placeholder || history.contains(OFFLINE_IDS[j])) continue
-                            resources.openRawResource(OFFLINE_RESOURCES[j]).use { input ->
-                                selected = LandscapeHistory.SavedPhoto(
-                                    OFFLINE_IDS[j], OFFLINE_SUBJECTS[j],
-                                    OnlineContent.readBounded(input, LandscapeHistory.RESERVE_PHOTO_LIMIT)
-                                )
-                                result = rememberPhoto(history, selected)
-                                if (result != null) subject = selected!!.subject
-                            }
-                        }
-                    }
-                    if (result == null && online()) {
-                        // Reserve empty and no bundled photo left: download the next
-                        // unseen photo directly instead of waiting for the prefetch
-                        // job to be scheduled, or the slideshow stalls on one photo.
-                        val live = downloadLivePhoto(history)
-                        result = live.first
-                        subject = live.second
-                    }
-                }
-            } catch (unavailable: Exception) {
-                Log.w("PersonalLandscape", "Photo history unavailable", unavailable)
-            }
-            if (result == null) {
-                // Last resort: cycle a bundled photo so the slideshow never sticks
-                // on one picture. Uses no history, so it also covers a broken
-                // photo database and a device with no network at all.
-                try {
-                    val index = bundledFallbackIndex
-                    bundledFallbackIndex = (bundledFallbackIndex + 1) % OFFLINE_RESOURCES.size
-                    resources.openRawResource(OFFLINE_RESOURCES[index]).use { input ->
-                        val bytes = OnlineContent.readBounded(input, LandscapeHistory.RESERVE_PHOTO_LIMIT)
-                        val fallback = ScreensaverPrefetch.decode(bytes)
-                        if (fallback != null) {
-                            result = fallback
-                            subject = OFFLINE_SUBJECTS[index]
-                        }
-                    }
-                } catch (ignored: Exception) {
-                    Log.d("PersonalLandscape", "Bundled photo fallback unavailable", ignored)
-                }
-            }
-            val image = result
-            val caption = subject
+            val (image, caption) = photoLoader.load(placeholder, ::online)
             handler.post {
                 if (!running || request != generation) {
                     image?.recycle()
@@ -391,51 +327,6 @@ class LandscapeView(context: Context) : FrameLayout(context) {
                 }
             }
         }
-    }
-
-    /**
-     * Downloads the next photo straight from the feeds, with the same
-     * decode and duplicate checks as the prefetch job. Runs only on the
-     * single photo worker thread. Returns the bitmap and its caption, or a
-     * null bitmap when nothing could be downloaded in time.
-     */
-    private fun downloadLivePhoto(history: LandscapeHistory): Pair<Bitmap?, String> {
-        val deadline = SystemClock.elapsedRealtime() + 45_000L
-        var attempts = 0
-        while (attempts < 6 && !Thread.currentThread().isInterrupted &&
-            SystemClock.elapsedRealtime() < deadline) {
-            attempts++
-            val scene = try {
-                liveFeed.next({ id -> history.contains(id) || history.reserved(id) }, deadline)
-            } catch (failure: Exception) {
-                Log.w("PersonalLandscape", "Live photo feed unavailable", failure)
-                null
-            } ?: break
-            try {
-                var bytes = OnlineContent.get(scene.url, 3 * 1024 * 1024, 3500, 8000)
-                if (scene.cropOffsetPercent >= 0) {
-                    bytes = frameReviewedPortrait(bytes, scene.cropOffsetPercent) ?: continue
-                }
-                if (scene.livePeople) {
-                    bytes = fitLivePeoplePhoto(bytes) ?: continue
-                }
-                val image = ScreensaverPrefetch.decode(bytes) ?: continue
-                var accepted = false
-                try {
-                    // A recycled scene is already in the shown history — showing it
-                    // again is the point, so skip the dedup record instead of
-                    // rejecting it.
-                    accepted = if (history.contains(scene.id)) true else history.remember(scene.id, bytes, ScreensaverPrefetch.fingerprint(image))
-                    if (accepted) return image to scene.subject
-                } finally {
-                    if (!accepted) image.recycle()
-                }
-            } catch (failure: Exception) {
-                if (Thread.currentThread().isInterrupted) break
-                Log.d("PersonalLandscape", "Skipping unavailable live photo from ${scene.id.substringBefore(':')}", failure)
-            }
-        }
-        return null to ""
     }
 
     private fun requestWeather() {
@@ -477,18 +368,6 @@ class LandscapeView(context: Context) : FrameLayout(context) {
     }
 
     companion object {
-        private val OFFLINE_RESOURCES = intArrayOf(
-            R.drawable.offline_autumn, R.drawable.offline_mountain_road, R.drawable.offline_mississippi
-        )
-        private val OFFLINE_IDS = arrayOf(
-            "publicdomainpictures:200000/velka/fall-by-the-lake-14767797082J2.jpg",
-            "publicdomainpictures:470000/velka/landschap-bergweg-haarspeldbocht-1665124155qIR.jpg",
-            "nps:29fc4bc2-b103-4b1b-939f-19d4b91ce209"
-        )
-        private val OFFLINE_SUBJECTS = arrayOf(
-            "Autumn by the lake", "Winding mountain road", "Mississippi River · U.S. National Park Service"
-        )
-
         private fun photoLayer(context: Context, parent: FrameLayout): ImageView {
             val layer = ImageView(context)
             layer.scaleType = ImageView.ScaleType.FIT_CENTER
@@ -497,64 +376,5 @@ class LandscapeView(context: Context) : FrameLayout(context) {
             return layer
         }
 
-        private fun rememberPhoto(history: LandscapeHistory, photo: LandscapeHistory.SavedPhoto?): Bitmap? {
-            if (photo == null || history.contains(photo.id) || Thread.currentThread().isInterrupted) return null
-            val image = ScreensaverPrefetch.decode(photo.bytes) ?: return null
-            var accepted = false
-            try {
-                accepted = history.remember(photo.id, photo.bytes, ScreensaverPrefetch.fingerprint(image))
-                return if (accepted) image else null
-            } finally {
-                if (!accepted) image.recycle()
-            }
-        }
-
-        private fun frameReviewedPortrait(bytes: ByteArray, offsetPercent: Int): ByteArray? {
-            val bounds = BitmapFactory.Options()
-            bounds.inJustDecodeBounds = true
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-            val width = bounds.outWidth
-            val height = bounds.outHeight
-            val frameHeight = width / 16 * 9
-            // Only frame the reviewed horizontal previews. If a CDN rendition changes, skip it.
-            if (width != 1024 || height < frameHeight || height > width) return null
-            val original = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
-            var framed = original
-            try {
-                val top = Math.round((height - frameHeight) * offsetPercent / 100f)
-                framed = Bitmap.createBitmap(original, 0, top, width, frameHeight)
-                val output = ByteArrayOutputStream()
-                return if (framed.compress(Bitmap.CompressFormat.JPEG, 90, output)) output.toByteArray() else null
-            } finally {
-                if (framed != original) framed.recycle()
-                original.recycle()
-            }
-        }
-
-        private fun fitLivePeoplePhoto(bytes: ByteArray): ByteArray? {
-            val bounds = BitmapFactory.Options()
-            bounds.inJustDecodeBounds = true
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-            if (!LandscapeFeed.fitsPeopleFrame(bounds.outWidth, bounds.outHeight)) return null
-            if (LandscapeFeed.fitsWidescreen(bounds.outWidth, bounds.outHeight)) return bytes
-            val original = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
-            var frame: Bitmap? = null
-            try {
-                val units = (original.height + 8) / 9
-                val created = Bitmap.createBitmap(units * 16, units * 9, Bitmap.Config.ARGB_8888)
-                frame = created
-                val canvas = android.graphics.Canvas(created)
-                canvas.drawColor(0xff041225.toInt())
-                canvas.drawBitmap(
-                    original, (created.width - original.width) / 2f,
-                    (created.height - original.height) / 2f, null
-                )
-                val output = ByteArrayOutputStream()
-                return if (created.compress(Bitmap.CompressFormat.JPEG, 90, output)) output.toByteArray() else null
-            } finally {
-                frame?.recycle()
-                original.recycle()
-            }
-        }
     }
 }

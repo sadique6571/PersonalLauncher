@@ -634,55 +634,21 @@ class PersonalHomeActivity : Activity() {
         continueWatching = watching
         if (watching != null && !prefs.getBoolean("apps_only", false)) grid.setFooter(watching)
         body.addView(grid, LinearLayout.LayoutParams(-1, -1))
-        val scrollContent = LinearLayout(this)
-        scrollContent.orientation = LinearLayout.VERTICAL
-        if (glassOs() && !harmony()) scrollContent.gravity = Gravity.CENTER_VERTICAL
-        if (!clockVisible()) clock.visibility = View.GONE
-        val align = clockAlignment()
-        val clockParams = LinearLayout.LayoutParams(-1, -2)
-        clockParams.gravity = intArrayOf(Gravity.START, Gravity.CENTER_HORIZONTAL, Gravity.END)[align]
-        if (harmonyHome) {
-            scrollContent.addView(harmonyHero(), LinearLayout.LayoutParams(-1, -2))
-        } else if (glassOs() || weatherWidgetEnabled()) {
-            val stage = LinearLayout(this)
-            stage.gravity = Gravity.CENTER_VERTICAL or Gravity.END
-            val wide = resources.configuration.screenWidthDp >= 700
-            stage.orientation = if (wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-            if (wide) stage.addView(clock, LinearLayout.LayoutParams(0, -2, 1f)) else stage.addView(clock, clockParams)
-            val instruments = LinearLayout(this)
-            instruments.gravity = Gravity.CENTER_VERTICAL or Gravity.END
-            if (!wide) instruments.orientation = LinearLayout.VERTICAL
-            val available = resources.configuration.screenWidthDp - if (tv) 64 else 32
-            if (weatherWidgetEnabled()) {
-                val widget = WeatherWidgetView(this, homeWeatherController::showForecast)
-                weatherWidget = widget
-                val wp = LinearLayout.LayoutParams(dp(Math.min(available, WeatherWidgetLayout.width(available, glassOs()))), -2)
-                if (glassOs() && wide) wp.marginEnd = dp(12) else if (!wide) wp.bottomMargin = dp(10)
-                instruments.addView(widget, wp)
-                widget.setOnKeyListener { _, key, event ->
-                    if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
-                    if (key == KeyEvent.KEYCODE_DPAD_DOWN) { grid.focusKey(focusedPkg); return@setOnKeyListener true }
-                    if (key == KeyEvent.KEYCODE_DPAD_UP || key == KeyEvent.KEYCODE_DPAD_LEFT) { searchButton?.requestFocus(); return@setOnKeyListener true }
-                    key == KeyEvent.KEYCODE_DPAD_RIGHT
-                }
-                widget.active(resumed)
-            }
-            if (glassOs()) {
-                val cardWidth = if (wide) (if (weatherWidgetEnabled()) WeatherWidgetLayout.telemetryWidth(available) else Math.min(315, resources.configuration.screenWidthDp / 3)) else Math.min(280, available)
-                if (harmony()) instruments.addView(harmonyShortcuts(), LinearLayout.LayoutParams(dp(cardWidth), -2))
-                else {
-                    val tele = GlassTelemetry(this)
-                    telemetry = tele
-                    instruments.addView(tele, LinearLayout.LayoutParams(dp(cardWidth), -2))
-                    if (resumed) tele.start()
-                }
-            }
-            stage.addView(instruments)
-            if (prefs.getBoolean("apps_only", false)) stage.visibility = View.GONE
-            scrollContent.addView(stage, LinearLayout.LayoutParams(-1, -2))
-        } else scrollContent.addView(clock, clockParams)
+        val stage = HomeClockStage(this, prefs, tv, resumed, glassOs(), harmony()).build(
+            clock = clock,
+            alignment = clockAlignment(),
+            clockVisible = clockVisible(),
+            showWeather = weatherWidgetEnabled(),
+            harmonyHero = if (harmonyHome) this::harmonyHero else null,
+            harmonyShortcuts = this::harmonyShortcuts,
+            forecast = homeWeatherController::showForecast,
+            focusGrid = { grid.focusKey(focusedPkg) },
+            focusSearch = { searchButton?.requestFocus() },
+        )
+        if (stage.weather != null) weatherWidget = stage.weather
+        telemetry = stage.telemetry
         val referenceStage = glassOs() && !prefs.getBoolean("apps_only", false)
-        scroll.addView(scrollContent, ViewGroup.LayoutParams(-1, -2))
+        scroll.addView(stage.content, ViewGroup.LayoutParams(-1, -2))
         page.addView(scroll, if (referenceStage) LinearLayout.LayoutParams(-1, 0, 1f) else LinearLayout.LayoutParams(-1, -2))
         if (harmony() || ThemeStyle.custom(prefs) || glassOs()) heading.visibility = View.GONE
         page.addView(heading)

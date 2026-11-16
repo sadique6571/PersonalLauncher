@@ -68,7 +68,8 @@ class ScreensaverPrefetch : JobService() {
                 SystemClock.elapsedRealtime() < deadline) {
                 val scene = feed.next({ history.contains(it) || history.reserved(it) }, deadline) ?: break
                 try {
-                    val bytes = OnlineContent.get(scene.url, 3 * 1024 * 1024, 3500, 8000)
+                    val downloaded = OnlineContent.get(scene.url, 3 * 1024 * 1024, 3500, 8000)
+                    val bytes = LandscapePhotoFraming.prepare(downloaded, scene) ?: continue
                     val image = decode(bytes) ?: continue
                     try {
                         val stored = if (bytes.size <= LandscapeHistory.RESERVE_PHOTO_LIMIT) bytes else encode(image)
