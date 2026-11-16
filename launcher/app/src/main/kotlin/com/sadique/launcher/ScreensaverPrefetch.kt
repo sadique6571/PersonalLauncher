@@ -11,7 +11,6 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
-import android.media.FaceDetector
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -69,10 +68,10 @@ class ScreensaverPrefetch : JobService() {
                 SystemClock.elapsedRealtime() < deadline) {
                 val scene = feed.next({ history.contains(it) || history.reserved(it) }, deadline) ?: break
                 try {
-                    val bytes = OnlineContent.get(scene.url, 3 * 1024 * 1024, 3500, 8000)
+                    val downloaded = OnlineContent.get(scene.url, 3 * 1024 * 1024, 3500, 8000)
+                    val bytes = LandscapePhotoFraming.prepare(downloaded, scene) ?: continue
                     val image = decode(bytes) ?: continue
                     try {
-                        if (!scene.reviewed && !clearLandscape(image)) continue
                         val stored = if (bytes.size <= LandscapeHistory.RESERVE_PHOTO_LIMIT) bytes else encode(image)
                         if (stored != null && !Thread.currentThread().isInterrupted) {
                             history.saveForOffline(scene.id, scene.subject, stored, fingerprint(image))
@@ -146,18 +145,6 @@ class ScreensaverPrefetch : JobService() {
                 val pixels = IntArray(size * size)
                 sample.getPixels(pixels, 0, size, 0, 0, size, size)
                 return LandscapeFingerprint.of(pixels)
-            } finally {
-                sample.recycle()
-            }
-        }
-
-        internal fun clearLandscape(image: Bitmap): Boolean {
-            val width = 480
-            val height = maxOf(1, Math.round(width.toFloat() * image.height / image.width))
-            val sample = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
-            try {
-                Canvas(sample).drawBitmap(image, null, Rect(0, 0, width, height), Paint(Paint.FILTER_BITMAP_FLAG))
-                return FaceDetector(width, height, 1).findFaces(sample, arrayOfNulls<FaceDetector.Face>(1)) == 0
             } finally {
                 sample.recycle()
             }

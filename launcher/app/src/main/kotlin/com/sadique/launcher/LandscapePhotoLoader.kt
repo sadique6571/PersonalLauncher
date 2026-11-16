@@ -5,9 +5,10 @@ import android.graphics.Bitmap
 import android.os.SystemClock
 import android.util.Log
 
-/** Loads queued, bundled or live photos on the slideshow's photo worker. */
+/** Loads queued, bundled and live photos on the slideshow worker. */
 internal class LandscapePhotoLoader(private val context: Context) {
     private val liveFeed = LandscapeFeed()
+    private var bundledFallbackIndex = 0
 
     fun load(placeholder: Int, online: () -> Boolean): Pair<Bitmap?, String> {
         var result: Bitmap? = null
@@ -49,12 +50,31 @@ internal class LandscapePhotoLoader(private val context: Context) {
         } catch (unavailable: Exception) {
             Log.w("PersonalLandscape", "Photo history unavailable", unavailable)
         }
+        if (result == null) {
+            // Last resort: cycle a bundled photo so the slideshow never sticks
+            // on one picture. Uses no history, so it also covers a broken
+            // photo database and a device with no network at all.
+            try {
+                val index = bundledFallbackIndex
+                bundledFallbackIndex = (bundledFallbackIndex + 1) % OFFLINE_RESOURCES.size
+                context.resources.openRawResource(OFFLINE_RESOURCES[index]).use { input ->
+                    val bytes = OnlineContent.readBounded(input, LandscapeHistory.RESERVE_PHOTO_LIMIT)
+                    val fallback = ScreensaverPrefetch.decode(bytes)
+                    if (fallback != null) {
+                        result = fallback
+                        subject = OFFLINE_SUBJECTS[index]
+                    }
+                }
+            } catch (ignored: Exception) {
+                Log.d("PersonalLandscape", "Bundled photo fallback unavailable", ignored)
+            }
+        }
         return result to subject
     }
 
     /**
-     * Downloads the next unseen photo straight from the feeds, with the same
-     * decode, face and duplicate checks as the prefetch job. Runs only on the
+     * Downloads the next photo straight from the feeds, with the same
+     * decode and duplicate checks as the prefetch job. Runs only on the
      * single photo worker thread. Returns the bitmap and its caption, or a
      * null bitmap when nothing could be downloaded in time.
      */
@@ -71,12 +91,15 @@ internal class LandscapePhotoLoader(private val context: Context) {
                 null
             } ?: break
             try {
-                val bytes = OnlineContent.get(scene.url, 3 * 1024 * 1024, 3500, 8000)
+                val downloaded = OnlineContent.get(scene.url, 3 * 1024 * 1024, 3500, 8000)
+                val bytes = LandscapePhotoFraming.prepare(downloaded, scene) ?: continue
                 val image = ScreensaverPrefetch.decode(bytes) ?: continue
                 var accepted = false
                 try {
-                    if (!scene.reviewed && !ScreensaverPrefetch.clearLandscape(image)) continue
-                    accepted = history.remember(scene.id, bytes, ScreensaverPrefetch.fingerprint(image))
+                    // A recycled scene is already in the shown history — showing it
+                    // again is the point, so skip the dedup record instead of
+                    // rejecting it.
+                    accepted = if (history.contains(scene.id)) true else history.remember(scene.id, bytes, ScreensaverPrefetch.fingerprint(image))
                     if (accepted) return image to scene.subject
                 } finally {
                     if (!accepted) image.recycle()

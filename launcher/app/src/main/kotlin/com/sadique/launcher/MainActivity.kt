@@ -2,29 +2,18 @@ package com.sadique.launcher
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
-import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.graphics.Rect
-import android.graphics.drawable.Drawable
-import android.media.tv.TvInputManager
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
-import android.net.NetworkRequest
+import android.graphics.Color
 import android.net.wifi.WifiManager
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import android.provider.Settings
 import android.view.Gravity
 import android.view.KeyEvent
-import android.view.SoundEffectConstants
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
@@ -35,9 +24,6 @@ import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import android.widget.TextView
 import android.widget.Toast
-import androidx.dynamicanimation.animation.FloatPropertyCompat
-import androidx.dynamicanimation.animation.SpringAnimation
-import androidx.dynamicanimation.animation.SpringForce
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import java.time.LocalDate
@@ -45,6 +31,7 @@ import java.util.ArrayList
 import java.util.Arrays
 import java.util.Collections
 import java.util.HashSet
+import java.util.Locale
 
 /**
  * tvOS style home: black, a pinned dock row, an app grid, and one glass highlight that springs between tiles.
@@ -65,11 +52,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         @JvmField
         var COLUMNS = 4
         private const val MINUTE_MS = 60_000L
-        /**
-         * 2025-01-01. TVs without a clock battery boot at the epoch (08:00 in China) and keep it until network
-         * time arrives; the clock, date and greeting stay hidden before then.
-         */
-        private const val TIME_VALID_AFTER_MS = 1_735_689_600_000L
         // Static so they survive the activity being destroyed while another app is open (low-memory TVs,
         // or Developer options → "Don't keep activities"); they only reset when the process dies.
         private var lastFocused = 0
@@ -77,25 +59,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         private var lastFocusedKey: String? = null
         /** The day the petal shower last played, so it greets the first Home of each day only. */
         private var lastPetalShower: LocalDate? = null
-
-        private fun setFestiveIcon(pill: TextView, icon: Drawable) {
-            // The pills tint their icons to follow focus; the festive ones keep their own colours.
-            pill.compoundDrawableTintList = null
-            pill.setCompoundDrawablesRelativeWithIntrinsicBounds(icon, null, null, null)
-        }
-
-        /** Runs [action] when the view gains focus, keeping any focus listener it already had. */
-        private fun addFocusAction(view: View, action: Runnable) {
-            val previous = view.onFocusChangeListener
-            view.setOnFocusChangeListener { v, focused ->
-                previous?.onFocusChange(v, focused)
-                if (focused) action.run()
-            }
-        }
-
-
-
-
     }
 
     private var rtlAppGrid = false
@@ -117,51 +80,40 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     private lateinit var adapter: AppAdapter
     private lateinit var grid: RecyclerView
     private lateinit var root: FrameLayout
-    private lateinit var clockHeader: LauncherClockHeader
     private lateinit var wallpaperPlayer: WallpaperPlayer
-    private lateinit var glass: GlassView
     private lateinit var shelf: LauncherShelf
     private var cinematic = false
     private var appGlow = false
     private var cinematicWhiteFocus = false
-    private var glassAccent = 0
     private var animations = false
     private var advancedEffects = false
+    private lateinit var greeting: TextView
+    private lateinit var clockBlock: View
     private lateinit var btnInputs: View
-    /** config show_inputs_pill: false keeps the Inputs pill hidden even when the TV has inputs. */
-    private var showInputsPill = true
     private lateinit var btnWifi: TextView
     /** The pills have been filled in once; later resumes refresh them after the first frame. */
     private var pillsShown = false
+    private lateinit var shamsiDate: TextView
+    /** lunar_date: the lunisolar date under the date line, and the time zone it is computed for. */
+    private lateinit var lunarDate: TextView
+    private var lunar = false
+    private var lunarOffset = 0
     private var stats: TextView? = null
     private lateinit var sportsPanel: LauncherSportsPanel
     /** config.xml show_stats, overridable by a theme. Off: the line is gone and nothing is read. */
     private var showStats = false
     /** config.xml inputs_connected_only: the Inputs menu lists only connected inputs, the rest behind "More inputs". */
     private var inputsConnectedOnly = false
+    private var shamsi = false
+    /** greeting_name: said after the greeting, which is shown in capitals. */
+    private var greetingName = ""
     /** Optional time-of-day backdrop (config.xml, sky_intensity); 0 keeps it hidden. */
     private lateinit var sky: SkyView
     private lateinit var btnVpn: TextView
     private lateinit var networkPills: LauncherNetworkPills
-    private lateinit var springX: SpringAnimation
-    private lateinit var springY: SpringAnimation
-    private var glassTargetX = 0f
-    private var glassTargetY = 0f
-    // How far the grid has scrolled the glass. springY works without it, in grid content space, so a
-    // scroll moves the glass in lockstep with its tile instead of becoming a moving spring target.
-    private var glassScrollShift = 0f
-    /** The same for springX, when single_row scrolls the grid sideways. */
-    private var glassScrollShiftX = 0f
-    private var glassCardW = 0   // width of the tile the glass was last fitted to
-    private var glassShown = false
-    private val tileRect = Rect()
-    private val revealRect = Rect()
     private var density = 0f
     /** Module cards (res/values/config.xml, module_cards): discovered on resume, shown only after the owner's Show. */
     private var moduleCards = false
-    /** config settings_key_keycodes / settings_key_panel, so the Settings button works on Home without HomeKeyService. */
-    private var settingsKeycodes: IntArray = intArrayOf()
-    private var settingsKeyPanel = false
     /** Calmer motion for weak GPUs (config.xml, reduced_motion): stiff spring, short fades, no replay. */
     private var reducedMotion = false
     /** config.xml dock_row: the first row is a separate dock (band, parked low, top shelf) rather than plain grid. */
@@ -173,30 +125,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     /** Festive skin from the theme (see Festival); applied while it is active today. */
     private var festival: Festival = Festival.NONE
     private var festive = false
-    private var diya: DiyaDrawable? = null
-    private var bell: BellDrawable? = null
-    private var marigold: MarigoldDrawable? = null
-    /** boot_to_live_tv: open the Live TV app on the first Home of each boot. */
-    private var bootToLiveTv = false
-    /** open_on_start_choice: the app picked in Launcher settings may open on the first Home of each boot. */
-    private var openOnStartChoice = false
-    /** open_on_start_network_wait, in ms; the boot's app while it waits for the network, and until when. */
-    private var openOnStartWaitMs = 0L
-    @Volatile
-    private var startPending: Intent? = null
-    private var startDeadline = 0L
-    /** Opens the boot's app once the network is validated (networkCallback posts this) or the wait is over. */
-    private val openWhenOnline = object : Runnable {
-        override fun run() {
-            if (startPending == null) return
-            if (!OpenOnStart.opensNow(OpenOnStart.online(this@MainActivity), SystemClock.elapsedRealtime(),
-                    startDeadline)) return
-            handler.removeCallbacks(this)   // the deadline's run, when the network came first
-            val i = startPending
-            startPending = null
-            open(i!!)
-        }
-    }
+    private var greetingColor = 0
     /** hidden_apps as the adapter sees them (config.xml or a theme's config.json): a hidden app gets no card either. */
     private var hiddenApps: Set<String> = Collections.emptySet()
     /** library_excluded_apps: packages the App library catalogue never offers. */
@@ -249,7 +178,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         rtlAppGrid = { rtlAppGrid },
         fillDockLeavesSlots = { fillDockLeavesSlots },
         dockApps = { dockApps },
-        setAccent = { glass.setAccent(it) },
+        setAccent = { glassHighlight.setAccent(it) },
         defaultAccent = { if (festive) festival.accentColor() else 0 },
         setButtonActive = { btnReorder.isActivated = it },
         reloadTiles = this::reloadTiles,
@@ -268,79 +197,15 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         dropIn = { popup, panel, anchor, gravity -> popups.dropIn(popup, panel, anchor, gravity) },
     )
     private val launcherStats = LauncherStats(this, handler, { stats }, { showStats })
-    /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
-    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
-        override fun onAvailable(network: Network) {
-            handler.post { networkPills.refresh() }
-        }
-
-        override fun onLost(network: Network) {
-            handler.post { networkPills.refresh() }
-        }
-
-        /** wifi_status_warnings follows validation; signal-strength updates also land here, so skip those. */
-        private var lastValidated = false
-
-        override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
-            val validated = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-            // open_on_start_network_wait: the boot's app opens on the first validated network.
-            if (validated && startPending != null) handler.post(openWhenOnline)
-            if (validated == lastValidated) return
-            lastValidated = validated
-            if (networkPills.warnsAboutInternet) handler.post { networkPills.refresh() }
-        }
-    }
-    /** Shows the Inputs pill once the TV registers an input: at boot HDMI inputs can appear after Home is shown. */
-    private val inputCallback = object : TvInputManager.TvInputCallback() {
-        override fun onInputAdded(inputId: String) {
-            updateInputsButton()
-        }
-
-        override fun onInputRemoved(inputId: String) {
-            updateInputsButton()
-        }
-    }
-    /** Listens for any VPN coming up or going down, even one this app's traffic is excluded from. */
-    private val vpnCallback = object : ConnectivityManager.NetworkCallback() {
-        override fun onAvailable(network: Network) {
-            handler.post { networkPills.refresh() }
-        }
-
-        override fun onLost(network: Network) {
-            handler.post { networkPills.refresh() }
-        }
-    }
-    private val packageFilter = IntentFilter()
-    private val packageReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            // Updates send REMOVED followed by ADDED; keep the tile until the new APK is ready.
-            if (Intent.ACTION_PACKAGE_REMOVED == intent.action
-                    && intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return
-            // In the background this only marks the tiles stale; onResume rebuilds them once.
-            if (!tileRefresh.onPackagesChanged()) return
-            reloadApps(false)
-            appLibrary?.refresh()
-        }
-    }
-    // Right after boot the clock is often wrong until network time arrives; don't wait a minute to catch up.
-    private val timeFilter = IntentFilter(Intent.ACTION_TIME_CHANGED)
-    private val timeReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            updateClockVisibility()
-        }
-    }
-    private val minuteTick = object : Runnable {
-        override fun run() {
-            updateGreeting()
-            sportsPanel.update()
-            // The pill follows the network callbacks and each return to Home; only the diya's flame follows the
-            // signal level, so only it needs this minute's binder calls (about 7 ms on the UI thread).
-            if (festive) networkPills.refresh()
-            sky.update()
-            wallpaperPlayer.update()
-            handler.postDelayed(this, MINUTE_MS)
-        }
-    }
+    /** The extracted pieces of Home, built in onCreate once their views and config values exist. */
+    private lateinit var headerClock: MainClockBlock
+    private lateinit var bootOpener: MainBootOpener
+    private lateinit var festiveSkin: MainFestiveSkin
+    private lateinit var homeCallbacks: MainHomeCallbacks
+    private lateinit var glassHighlight: MainGlassHighlight
+    private lateinit var tileNavigation: MainTileNavigation
+    private lateinit var topPills: MainTopPills
+    private lateinit var settingsKey: MainSettingsKey
 
     private var homeAppKeys: Map<Int, String> = Collections.emptyMap()
 
@@ -359,8 +224,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         if (cfg.restoreKeyServices) ServiceRepair.restore(this)
         settingsRevision = settingsRevision()
         applyViewInputsHandler(cfg.handleViewInputs)
-        settingsKeycodes = cfg.settingsKeycodes
-        settingsKeyPanel = cfg.settingsKeyPanel
+        settingsKey = MainSettingsKey(this, cfg.settingsKeycodes, cfg.settingsKeyPanel, this::open)
         COLUMNS = cfg.columns
         animations = cfg.animations
         advancedEffects = cfg.animations && cfg.advancedEffects
@@ -372,9 +236,9 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         festive = festival.active(LocalDate.now())
         liveTvPkg = cfg.liveTvPackage
         idleClockMs = cfg.homeIdleClockMinutes * MINUTE_MS
-        bootToLiveTv = cfg.bootToLiveTv
-        openOnStartChoice = cfg.openOnStartChoice
-        openOnStartWaitMs = cfg.openOnStartNetworkWait * 1000L
+        bootOpener = MainBootOpener(this, handler, cfg.openOnStartNetworkWait * 1000L,
+                cfg.openOnStartChoice, cfg.bootToLiveTv, cfg.liveTvPackage,
+                inputActions::liveTvIntent, this::open)
         liveTvInputId = cfg.liveTvInputId
         appLibraryEnabled = cfg.appLibrary
         tileMenuEnabled = cfg.tileMenu
@@ -387,22 +251,64 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         // black under it is a second full-screen fill on every frame for nothing. The starting window still uses
         // the theme's background, so launch looks the same.
         window.setBackgroundDrawable(null)
+        festiveSkin = MainFestiveSkin(this, root, density, reducedMotion) { !isFinishing && !isDestroyed }
         wallpaperPlayer = WallpaperPlayer(this, root, cfg)
         sky = findViewById(R.id.sky)
         sky.setIntensity(cfg.skyIntensity)
-        glass = findViewById(R.id.glass)
-        glass.setStyle(cfg.glassStyle)
-        if (festive) glass.setAccent(festival.accentColor())
+        val glassView = findViewById<GlassView>(R.id.glass)
+        glassView.setStyle(cfg.glassStyle)
+        if (festive) glassView.setAccent(festival.accentColor())
         appGlow = cfg.appGlow
         cinematic = cfg.cinematicHome
         cinematicWhiteFocus = cfg.cinematicWhiteFocus
         shelf = LauncherShelf(this, cfg, density, { adapter }, { rtlAppGrid })
-        clockHeader = LauncherClockHeader(this, cfg, density)
+        greeting = findViewById(R.id.greeting)
+        clockBlock = findViewById(R.id.leftBlock)
+        greetingColor = greeting.currentTextColor
+        if (!cfg.showGreeting) greeting.visibility = View.GONE
+        if (cfg.headerWhite) {
+            // The clock's own white for the date and the line before it, instead of their dimmed whites.
+            findViewById<TextView>(R.id.date).setTextColor(Color.WHITE)
+            findViewById<View>(R.id.clockDivider).setBackgroundColor(Color.WHITE)
+        }
+        if (resources.getBoolean(R.bool.rtl_menu_bar)) {
+            // Center Hebrew greetings over the numeric time, independent of a visible AM/PM label. The clock's row
+            // is watched too: date_below_clock can move the whole row right under a wider date.
+            val clock = findViewById<View>(R.id.clock)
+            val clockRow = clock.parent as View
+            val centerGreeting = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                val params = greeting.layoutParams
+                if (params.width != clock.width) {
+                    params.width = clock.width
+                    greeting.layoutParams = params
+                }
+                greeting.translationX = (clockRow.left + clock.left).toFloat()
+            }
+            clock.addOnLayoutChangeListener(centerGreeting)
+            clockRow.addOnLayoutChangeListener(centerGreeting)
+        }
         btnWifi = findViewById(R.id.btnWifi)
+        shamsiDate = findViewById(R.id.shamsiDate)
         stats = findViewById(R.id.stats)
         sportsPanel = LauncherSportsPanel(this, handler, cfg, density) { stopped }
         showStats = cfg.showStats
         inputsConnectedOnly = cfg.inputsConnectedOnly
+        shamsi = cfg.shamsiDate
+        lunarDate = findViewById(R.id.lunarDate)
+        lunar = cfg.lunarDate
+        lunarOffset = Lunar.offsetFor(cfg.lunarUtcOffset, Locale.getDefault())
+        if (lunar) lunarDate.visibility = View.VISIBLE
+        greetingName = cfg.greetingName
+        if (cfg.dateBelowClock) LauncherHeaderLayout.moveDateBelowClock(this, density)
+        if (shamsi) {
+            shamsiDate.visibility = View.VISIBLE
+            val date = findViewById<TextView>(R.id.date)
+            date.setTextSize(11f)
+            lunarDate.setTextSize(11f)
+            date.setPadding(0, (4 * density).toInt(), 0, 0)
+        }
+        headerClock = MainClockBlock(this, handler, clockBlock, greeting, shamsiDate, lunarDate,
+                greetingName, greetingColor, festive, festival, shamsi, lunar, lunarOffset)
         btnVpn = findViewById(R.id.btnVpn)
         moduleCards = cfg.moduleCards
         hiddenApps = HashSet(cfg.hiddenApps)
@@ -491,63 +397,31 @@ class MainActivity : Activity(), AppAdapter.TileListener {
             }
             // Cold start or column count > 4: the first focus can run before the grid has its final width or
             // padding, leaving the glass at the XML design size until a key is pressed.
-            grid.post(this::refitGlass)
+            grid.post { glassHighlight.refit(lastFocused, gridFocus.libraryFocusPending) }
         }
 
-        // Keep the glass glued to its tile while the grid scrolls.
-        grid.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
-                if (!glassShown) return
-                glassTargetY -= dy.toFloat()
-                glassScrollShift -= dy.toFloat()
-                glass.translationY = glass.translationY - dy.toFloat()
-                // single_row scrolls sideways: the same bookkeeping on the other axis.
-                if (dx != 0) {
-                    glassTargetX -= dx.toFloat()
-                    glassScrollShiftX -= dx.toFloat()
-                    glass.translationX = glass.translationX - dx.toFloat()
-                }
-            }
-        })
+        glassHighlight = MainGlassHighlight(
+            glassView, root, grid, shelf, { adapter }, density,
+            animations, reducedMotion, advancedEffects, cinematic, appGlow, cinematicWhiteFocus,
+            festive, singleRow, dockRow, focusOvershoot,
+            { isDestroyed }, this::onTileFocused,
+        )
+        tileNavigation = MainTileNavigation(
+            { adapter }, grid, gridFocus, singleRow, rtlAppGrid, { lastFocused }, this::firstTopButton,
+        )
 
-        sportsPanel.attachToGrid(grid, clockHeader.clockBlock)
-
-        // Liquid feel: soft springs on the highlight's position.
-        springX = SpringAnimation(glass, object : FloatPropertyCompat<View>("glassContentX") {
-            override fun getValue(v: View): Float {
-                return v.translationX - glassScrollShiftX
-            }
-
-            override fun setValue(v: View, value: Float) {
-                v.translationX = value + glassScrollShiftX
-            }
-        })
-        springY = SpringAnimation(glass, object : FloatPropertyCompat<View>("glassContentY") {
-            override fun getValue(v: View): Float {
-                return v.translationY - glassScrollShift
-            }
-
-            override fun setValue(v: View, value: Float) {
-                v.translationY = value + glassScrollShift
-            }
-        })
-        for (s in arrayOf(springX, springY)) {
-            if (reducedMotion) {
-                Motion.reduce(s)
-            } else if (!focusOvershoot) {
-                // Critically damped: glides straight onto the tile without swinging past it.
-                s.setSpring(SpringForce().setStiffness(if (advancedEffects) 520f else 440f).setDampingRatio(1f))
-            } else {
-                s.setSpring(SpringForce().setStiffness(if (advancedEffects) 320f else 260f)
-                        .setDampingRatio(if (advancedEffects) 0.76f else 0.58f))
-            }
-        }
+        sportsPanel.attachToGrid(grid, clockBlock)
 
         btnInputs = findViewById(R.id.btnInputs)
+        topPills = MainTopPills(
+            this, handler, root, density, btnInputs, { networkPills }, inputActions,
+            sourcePanelService, coocaaSources, cfg.showInputsPill, appLibraryEnabled, this::open,
+            { onLibraryRequested(); libraryFromVpnPill = true }, { isDestroyed },
+        )
         val btnSettings = findViewById<View>(R.id.btnSettings)
         btnInputs.setOnClickListener { showInputs() }
-        btnWifi.setOnClickListener { openNetworkPill() }
-        btnVpn.setOnClickListener { openVpnPill() }
+        btnWifi.setOnClickListener { topPills.openNetworkPill() }
+        btnVpn.setOnClickListener { topPills.openVpnPill() }
         btnWifi.setOnLongClickListener {
             open(systemIntent(Settings.ACTION_WIFI_SETTINGS))
             true
@@ -566,7 +440,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         btnReorder.setOnClickListener { reorder.toggleReorder() }
         btnReorder.visibility = if (cfg.reorderButton) View.VISIBLE else View.GONE
         if (!cfg.showNetworkPill) btnWifi.visibility = View.GONE
-        showInputsPill = cfg.showInputsPill
         showInputsMenuRow = cfg.showInputsPill
         btnLibraryTop = findViewById(R.id.btnLibraryTop)
         btnLibraryTop.setOnClickListener {
@@ -574,21 +447,21 @@ class MainActivity : Activity(), AppAdapter.TileListener {
             libraryFromTopBar = true   // closing it goes back to this button, not to the pill after the last row
         }
         btnLibraryTop.visibility = if (cfg.libraryButton && cfg.appLibrary) View.VISIBLE else View.GONE
-        addTopBarApps(cfg.topBarApps, cfg.launchActions)
+        LauncherHeaderLayout.addApps(this, cfg, btnWifi, btnVpn, density, topAppButtons, this::open)
         iconOnlyButtons = cfg.iconOnlyButtons
         topMenu = cfg.topMenu
         networkPills = LauncherNetworkPills(
-            this, cfg, btnWifi, btnVpn, density, { if (festive) diya else null }, this::firstTopButton,
+            this, cfg, btnWifi, btnVpn, density, { if (festive) festiveSkin.diya else null }, this::firstTopButton,
         )
         if (cfg.topMenu) {
             // One gear: Inputs and Wi-Fi move into its dropdown. The Wi-Fi pill stays hidden but keeps its
             // label up to date, which the menu's Wi-Fi row shows.
-            showInputsPill = false
+            topPills.showInputsPill = false
             btnInputs.visibility = View.GONE
             btnWifi.visibility = View.GONE
             (btnSettings as TextView).setText(R.string.settings)
             (btnSettings as TextView).setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_settings, 0, 0, 0)
-            if (!iconOnlyButtons) makeIconOnly(btnSettings as TextView)
+            if (!iconOnlyButtons) topPills.makeIconOnly(btnSettings as TextView)
             btnSettings.setOnClickListener { showTopMenu() }
             // The lone gear sits at the header's middle, not on its bottom line like the row of pills.
             val topButtons = findViewById<LinearLayout>(R.id.topButtons)
@@ -600,11 +473,11 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         }
         if (iconOnlyButtons) {
             if (cfg.wifiLabelWidth > 0) btnWifi.maxWidth = Math.round(cfg.wifiLabelWidth * density)
-            else makeIconOnly(btnWifi)
-            makeIconOnly(btnSettings as TextView)
+            else topPills.makeIconOnly(btnWifi)
+            topPills.makeIconOnly(btnSettings as TextView)
         }
-        if (cfg.iconOnlyInputs) makeIconOnly(btnInputs as TextView)
-        networkPills.captureVpnStyle(this::makeIconOnly)
+        if (cfg.iconOnlyInputs) topPills.makeIconOnly(btnInputs as TextView)
+        networkPills.captureVpnStyle(topPills::makeIconOnly)
         btnSettings.setOnLongClickListener {
             showSettingsMenu()
             true
@@ -648,36 +521,38 @@ class MainActivity : Activity(), AppAdapter.TileListener {
                 }
             }
         }
-        if (festive) applyFestiveSkin(btnInputs as TextView, btnSettings as TextView)
+        if (festive) festiveSkin.apply(btnInputs as TextView, btnWifi, btnSettings as TextView)
 
         // Hide the glass when focus leaves the tiles.
         window.decorView.viewTreeObserver.addOnGlobalFocusChangeListener { _, newF ->
             val onTile = newF != null && newF.id == R.id.card
-            if (!onTile) hideGlass()
+            if (!onTile) glassHighlight.hide()
         }
 
-        packageFilter.addAction(Intent.ACTION_PACKAGE_ADDED)
-        packageFilter.addAction(Intent.ACTION_PACKAGE_REMOVED)
-        packageFilter.addAction(Intent.ACTION_PACKAGE_CHANGED)
-        packageFilter.addDataScheme("package")
-        timeFilter.addAction(Intent.ACTION_TIMEZONE_CHANGED)
-        // Registered for the activity's whole life, not only while it is started: an app installed or updated while
-        // another app is in front must still mark the tiles stale, or Home would have to rebuild on every return.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(packageReceiver, packageFilter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(packageReceiver, packageFilter)
-        }
-        val cm = getSystemService(ConnectivityManager::class.java)
-        val tim = getSystemService(TV_INPUT_SERVICE) as? TvInputManager
-        tim?.registerCallback(inputCallback, handler)
-        if (cm != null) {
-            cm.registerDefaultNetworkCallback(networkCallback)
-            cm.registerNetworkCallback(NetworkRequest.Builder()
-                    .addTransportType(NetworkCapabilities.TRANSPORT_VPN)
-                    .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
-                    .build(), vpnCallback)
-        }
+        homeCallbacks = MainHomeCallbacks(
+            this, handler, MINUTE_MS,
+            onNetworkChanged = { handler.post { networkPills.refresh() } },
+            onNetworkValidated = { bootOpener.onNetworkValidated() },
+            warnsAboutInternet = { networkPills.warnsAboutInternet },
+            onInputChanged = { topPills.updateInputsButton() },
+            onPackagesChanged = {
+                if (tileRefresh.onPackagesChanged()) {
+                    reloadApps(false)
+                    appLibrary?.refresh()
+                }
+            },
+            onTimeChanged = { headerClock.updateClockVisibility() },
+            onMinuteTick = {
+                headerClock.updateGreeting()
+                sportsPanel.update()
+                // The pill follows the network callbacks and each return to Home; only the diya's flame follows the
+                // signal level, so only it needs this minute's binder calls (about 7 ms on the UI thread).
+                if (festive) networkPills.refresh()
+                sky.update()
+                wallpaperPlayer.update()
+            },
+        )
+        homeCallbacks.registerPersistent()
         // Not after recreate(): the launch intent survives it and would open the settings again.
         if (savedInstanceState == null && !openLauncherSettingsIfAsked(intent)) openInputsIfAsked(intent)
     }
@@ -767,12 +642,8 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         super.onStart()
         stopped = false
         started = true
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(timeReceiver, timeFilter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(timeReceiver, timeFilter)
-        }
-        updateClockVisibility()
+        homeCallbacks.registerTime()
+        headerClock.updateClockVisibility()
         tileRefresh.onStart()
     }
 
@@ -806,31 +677,31 @@ class MainActivity : Activity(), AppAdapter.TileListener {
             }
             TileRefresh.Action.NOTHING -> {}
         }
-        if (openLiveTvAfterBoot()) return
-        updateGreeting()
+        if (bootOpener.openAfterBoot()) return
+        headerClock.updateGreeting()
         sportsPanel.update()
         // The network and Inputs pills keep their state while Home is in the background, and callbacks update them
         // when the network or the inputs change, so this refresh only catches anything missed. Its binder calls
         // (about 7 ms on a TCL C755, most of it WifiManager.getConnectionInfo) would hold up the first frame back
         // on Home, so after the first resume it runs once that frame is drawn.
         if (pillsShown) {
-            refreshPillsAfterNextDraw()
+            topPills.refreshAfterNextDraw()
         } else {
             networkPills.refresh()
-            updateInputsButton()
+            topPills.updateInputsButton()
             pillsShown = true
         }
         if (showStats) launcherStats.start()
         sportsPanel.start()
         sky.update()
         wallpaperPlayer.start()
-        handler.postDelayed(minuteTick, MINUTE_MS)
-        if (festive && diya != null) {
-            diya!!.start()
+        homeCallbacks.startMinuteTick()
+        if (festive && festiveSkin.diya != null) {
+            festiveSkin.diya!!.start()
             val today = LocalDate.now()
             if (!reducedMotion && today != lastPetalShower) {
                 lastPetalShower = today
-                handler.postDelayed({ playPetalShower() }, 450)
+                handler.postDelayed({ festiveSkin.playPetalShower() }, 450)
             }
         }
     }
@@ -888,8 +759,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         val returnSlot = lastFocused
         val restoreFocus = appLibrary == null && (animate || grid.hasFocus())
         if (restoreFocus) {
-            glassShown = false
-            glass.alpha = 0f
+            glassHighlight.resetForReload()
             shelf.resetForReload()
         }
         if (rebuild) reloadTiles()
@@ -988,12 +858,11 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         wallpaperPlayer.stop()
         shelf.stopAmbientAnimation()
         shelf.cancelAnimations()
-        handler.removeCallbacks(minuteTick)
-        handler.removeCallbacks(openWhenOnline)
-        startPending = null   // leaving Home before the network came back: the boot's app stays closed
+        homeCallbacks.stopMinuteTick()
+        bootOpener.cancel()
         launcherStats.stop()
         sportsPanel.stop()
-        diya?.stop()
+        festiveSkin.diya?.stop()
         gridFocus.cancelPendingFocusScroll()
         // Nothing of ours stays on screen over another app; an undecided prompt simply returns next time.
         moduleCardMenus.dismissPrompt()
@@ -1004,8 +873,8 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     override fun onStop() {
         super.onStop()
         started = false
-        unregisterReceiver(timeReceiver)
-        handler.removeCallbacks(clockCheck)
+        homeCallbacks.unregisterTime()
+        headerClock.cancelPendingCheck()
         stopped = true
         tileRefresh.onStop()
     }
@@ -1042,33 +911,8 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     override fun onDestroy() {
         super.onDestroy()
         sportsPanel.shutdown()
-        unregisterReceiver(packageReceiver)
+        homeCallbacks.unregisterPersistent()
         wallpaperPlayer.close()
-        val cm = getSystemService(ConnectivityManager::class.java)
-        val tim = getSystemService(TV_INPUT_SERVICE) as? TvInputManager
-        tim?.unregisterCallback(inputCallback)
-        if (cm != null) {
-            cm.unregisterNetworkCallback(networkCallback)
-            cm.unregisterNetworkCallback(vpnCallback)
-        }
-    }
-
-    /**
-     * A Settings button sent as a keycode (settings_key_keycodes, e.g. 83 on TCL Google TV remotes) opens the same
-     * thing HomeKeyService would. While that service runs it consumes the key first; without it (not enabled,
-     * or switched off by a force-stop) the stock launcher that used to handle the key is gone, and the button did
-     * nothing even on Home.
-     */
-    private fun handleSettingsKey(event: KeyEvent): Boolean {
-        for (code in settingsKeycodes) {
-            if (event.keyCode != code) continue
-            if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) {
-                open(if (settingsKeyPanel) Intent(this, QuickSettingsActivity::class.java)
-                        else systemIntent(Settings.ACTION_SETTINGS))
-            }
-            return true
-        }
-        return false
     }
 
     // ---- reorder ---------------------------------------------------------------------------------
@@ -1083,7 +927,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         // Vendor keys (TCL Netflix button, 4062) never reach the key services, only the focused window.
         if (event.keyCode >= 1000 && RemoteKeys.handle(this, event, homeAppKeys[event.keyCode], null)) return true
-        if (handleSettingsKey(event)) return true
+        if (settingsKey.handle(event)) return true
         if (tileMenuEnabled && !reorder.reordering && popups.current == null && !moduleCardMenus.promptShowing
                 && event.keyCode == KeyEvent.KEYCODE_MENU) {
             val position = reorder.focusedTilePosition()
@@ -1138,161 +982,17 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     override fun onTileFocused(position: Int, card: View) {
         lastFocused = position
         lastFocusedKey = adapter.keyAt(position)
-        // Focus restored before the first layout (cold start): the tile has no size yet, and the glass
-        // would be sized to 2*pad. Run again once the tile is laid out.
-        if (card.width == 0) {
-            card.post {
-                if (card.isFocused && card.width > 0) onTileFocused(position, card)
-            }
-            return
-        }
-        // Tile rect in root coordinates, using layout positions (ignores the scale animation).
-        val r = tileRect
-        r.set(0, 0, card.width, card.height)
-        root.offsetDescendantRectToMyCoords(card, r)
-        val pad = 6f * density        // matches GlassView's glow inset
-        val scale = adapter.focusScale()
-        val w = card.width * scale + 2 * pad
-        val h = card.height * scale + 2 * pad
-        val x = r.exactCenterX() - w / 2f
-        val y = r.exactCenterY() - h / 2f - (if (advancedEffects) 4f * density else 0f)
-
-        val lp = glass.layoutParams
-        if (lp.width != w.toInt() || lp.height != h.toInt() || card.width != glassCardW) {
-            lp.width = w.toInt()
-            lp.height = h.toInt()
-            glass.layoutParams = lp
-            // GlassView draws its slab inset by pad, i.e. exactly over the zoomed tile: same corners as the tile.
-            glass.setRadius(AppAdapter.cornerRadius(card.width, density) * scale)
-        }
-        glassCardW = card.width
-        glassTargetX = x
-        glassTargetY = y
-        // Cinematic shelf: the highlight glows in the dock app's colour, plain white in the grid (and on the dock with
-        // cinematic_white_focus). app_glow: every tile. In a single row every tile is the dock's kind.
-        val coloured = (appGlow || cinematic && !cinematicWhiteFocus && (singleRow || position < COLUMNS)) && !festive
-        val accent = if (coloured) adapter.ambientColorAt(position) else 0
-        if ((cinematic || appGlow) && !festive && accent != glassAccent) {
-            glassAccent = accent
-            glass.setAccent(accent)
-        }
-        if (!glassShown) {
-            springX.cancel()
-            springY.cancel()
-            glass.translationX = x
-            glass.translationY = y
-            if (animations && !reducedMotion) glass.animate().alpha(1f).setDuration(180).start()
-            else glass.alpha = 1f
-            glassShown = true
-        } else if (!animations) {
-            springX.cancel()
-            springY.cancel()
-            glass.translationX = x
-            glass.translationY = y
-        } else {
-            springX.animateToFinalPosition(x - glassScrollShiftX)
-            springY.animateToFinalPosition(y - glassScrollShift)
-        }
-        val item = card.parent as View
-        if (dockRow && (singleRow || position < COLUMNS)) {
-            // Dock: park it at the bottom of the screen and show the top shelf for this app. In a single row
-            // every tile is in the dock's row, which never scrolls vertically.
-            val decoratedTop = item.top - (6 * density).toInt()
-            val dy = decoratedTop - grid.paddingTop
-            // A 1px mismatch used to start a scroll on every dock move. Only scroll when the row is
-            // actually off; reduced motion does it in one jump so it does not fight the highlight.
-            val scroll = !singleRow && Math.abs(dy) > (8 * density).toInt()
-            if (scroll) {
-                if (!animations || reducedMotion) grid.scrollBy(0, dy)
-                else grid.smoothScrollBy(0, dy)
-            }
-            shelf.showHero(position, if (scroll) (r.top - dy).toFloat() else r.top.toFloat())
-        } else {
-            // Below the dock (or in a plain grid) the glow follows the tile without the big name; letting it
-            // fade out left the grid on plain black.
-            shelf.showGlowOnly(position)
-            // Scroll just enough so the whole glass (not only the tile) is visible.
-            revealRect.set(0, -pad.toInt() * 2, item.width, item.height + pad.toInt())
-            grid.requestChildRectangleOnScreen(item, revealRect, reducedMotion)
-        }
-    }
-
-    /** Refits the glass to the focused holder once the grid layout and tile dimensions settle. */
-    private fun refitGlass() {
-        if (isDestroyed || adapter.appCount() == 0 || gridFocus.libraryFocusPending) return
-        val pos = Math.max(0, Math.min(lastFocused, adapter.appCount() - 1))
-        val vh = grid.findViewHolderForAdapterPosition(pos)
-        val card: View? = vh?.itemView?.findViewById(R.id.card)
-        if (card == null || card.width <= 0 || !card.isFocused) return
-        val pad = 6f * density
-        val scale = adapter.focusScale()
-        val w = (card.width * scale + 2 * pad).toInt()
-        val h = (card.height * scale + 2 * pad).toInt()
-        if (!glassShown || card.width != glassCardW || glass.width != w || glass.height != h) {
-            onTileFocused(pos, card)
-        }
-    }
-
-    private fun hideGlass() {
-        if (!glassShown) return
-        glassShown = false
-        glass.animate().cancel()
-        if (animations && !reducedMotion) glass.animate().alpha(0f).setDuration(160).start()
-        else glass.alpha = 0f
+        glassHighlight.onTileFocused(position, card)
     }
 
     // ---- navigation ------------------------------------------------------------------------------
 
-    override fun onTileVerticalKey(position: Int, keyCode: Int): Boolean {
-        val count = adapter.appCount()
-        if (singleRow) {
-            // One row: Up leaves for the top bar, Down has nowhere to go, and Left/Right walk the whole row,
-            // stopping at its two ends (the default focus search scrolls the row to the next tile).
-            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) return false
-            if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) return true
-            val forward = if (rtlAppGrid) keyCode == KeyEvent.KEYCODE_DPAD_LEFT else keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
-            val last = adapter.focusablePosition(count - 1)
-            if (forward && position >= last) {
-                if (adapter.isLibraryAt(count)) gridFocus.focusLibrary()
-                return true
-            }
-            return !forward && position == 0
-        }
-        // Horizontal: swallow the key at a row's ends so focus never wraps to the next row or
-        // escapes up into the top bar. Mid-row moves fall through to the default focus search.
-        if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-            val forward = if (rtlAppGrid) keyCode == KeyEvent.KEYCODE_DPAD_LEFT else keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
-            if (forward && position == adapter.focusablePosition(count - 1) && adapter.isLibraryAt(count)) {
-                gridFocus.focusLibrary()
-                return true
-            }
-            // In the dock, the last app is the row's end: the empty slots after it take no focus.
-            val rowCount = if (position < COLUMNS) Math.min(count, adapter.dockFilled()) else count
-            return GridNavigation.atHorizontalEdge(position, rowCount, COLUMNS,
-                    rtlAppGrid, keyCode == KeyEvent.KEYCODE_DPAD_LEFT)
-        }
-        val target: Int
-        if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-            if (position < COLUMNS) return false          // dock row: let focus move to the top bar
-            target = position - COLUMNS
-        } else {
-            val lastRowStart = ((count - 1) / COLUMNS) * COLUMNS
-            if (position >= lastRowStart) {
-                if (adapter.isLibraryAt(count)) gridFocus.focusLibrary()
-                return true
-            }
-            target = Math.min(position + COLUMNS, count - 1)
-        }
-        gridFocus.focusTile(target)
-        // The default focus search clicks for Left/Right; Up/Down are handled here, so click for them too.
-        grid.playSoundEffect(if (keyCode == KeyEvent.KEYCODE_DPAD_UP)
-                SoundEffectConstants.NAVIGATION_UP else SoundEffectConstants.NAVIGATION_DOWN)
-        return true
-    }
+    override fun onTileVerticalKey(position: Int, keyCode: Int): Boolean =
+            tileNavigation.onTileVerticalKey(position, keyCode)
 
     override fun onLibraryFocused() {
         gridFocus.libraryFocusPending = false
-        hideGlass()
+        glassHighlight.hide()
         shelf.hideHero()
     }
 
@@ -1309,90 +1009,9 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     /** top_bar_apps buttons, in bar order. */
     private val topAppButtons: MutableList<View> = ArrayList()
 
-    /**
-     * Puts each top_bar_apps app in the top bar as a round pill with the app's own logo, left of the network pill.
-     * The logo keeps its colours: the pill style's tint, which turns the other icons white, is cleared.
-     */
-    private fun addTopBarApps(packages: List<String>, launchActions: Map<String, String>) {
-        val bar = findViewById<ViewGroup>(R.id.topButtons)
-        val pm = packageManager
-        val size = Math.round(22 * density)
-        for (pkg in packages) {
-            var launch = pm.getLeanbackLaunchIntentForPackage(pkg)
-            if (launch == null) launch = pm.getLaunchIntentForPackage(pkg)
-            if (launch == null) continue   // not installed, or disabled
-            // Use the same configured launch_actions as tiles; retain the normal entry if unavailable.
-            launch = LaunchActions.select(pkg, launchActions, launch) { targetPackage, action ->
-                val custom = LaunchActions.intent(targetPackage, action)
-                if (pm.resolveActivity(custom, 0) != null) custom else null
-            }
-            val logo: Drawable
-            val label: CharSequence
-            try {
-                val info = pm.getApplicationInfo(pkg, 0)
-                logo = info.loadIcon(pm)
-                label = info.loadLabel(pm)
-            } catch (_: PackageManager.NameNotFoundException) {
-                continue
-            }
-            val button = layoutInflater.inflate(R.layout.top_app_button, bar, false) as TextView
-            // pillKeys finds the bar's ends by id: without one of its own, every app button would be an end.
-            button.id = View.generateViewId()
-            logo.setBounds(0, 0, size, size)
-            button.setCompoundDrawablesRelative(logo, null, null, null)
-            button.compoundDrawableTintList = null
-            button.contentDescription = label
-            val target = launch
-            button.setOnClickListener { open(Intent(target)) }
-            // After the network pill and the VPN pill; the Hebrew bar runs the other way, so before both there.
-            bar.addView(button, bar.indexOfChild(if (resources.getBoolean(R.bool.rtl_menu_bar)) btnVpn else btnWifi))
-            topAppButtons.add(button)
-        }
-    }
-
-    override fun onLibraryUp() {
-        if (adapter.appCount() == 0) { firstTopButton().requestFocus(); return }
-        val lastRow = ((adapter.appCount() - 1) / COLUMNS) * COLUMNS
-        gridFocus.focusTile(Math.min(lastRow + lastFocused % COLUMNS, adapter.appCount() - 1))
-    }
+    override fun onLibraryUp() = tileNavigation.onLibraryUp()
 
     // ---- top bar ---------------------------------------------------------------------------------
-
-    /** Some TVs (Coocaa OS) set the network time without ACTION_TIME_CHANGED, so keep checking until it is valid. */
-    private val clockCheck = Runnable { updateClockVisibility() }
-
-    private fun updateClockVisibility() {
-        val valid = System.currentTimeMillis() >= TIME_VALID_AFTER_MS
-        clockHeader.clockBlock.visibility = if (valid) View.VISIBLE else View.INVISIBLE
-        handler.removeCallbacks(clockCheck)
-        if (valid) {
-            updateGreeting()
-        } else {
-            handler.postDelayed(clockCheck, 1_000L)
-        }
-    }
-
-    private fun updateGreeting() {
-        clockHeader.update(festive, festival)
-    }
-
-    private fun refreshPillsAfterNextDraw() {
-        root.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
-            override fun onPreDraw(): Boolean {
-                root.viewTreeObserver.removeOnPreDrawListener(this)
-                // Posted from inside the frame's traversal, so it runs after that frame is drawn. A post straight
-                // from onResume would run first: the frame is only scheduled after onResume returns.
-                handler.post {
-                    if (!isDestroyed) {
-                        networkPills.refresh()
-                        updateInputsButton()
-                    }
-                }
-                return true
-            }
-        })
-        root.invalidate()   // a resume that changes nothing on screen still draws once, so the refresh runs
-    }
 
     /** config.xml icon_only_buttons. */
     private var iconOnlyButtons = false
@@ -1408,123 +1027,11 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     /** The open library came from the VPN pill (vpn_pill, no VPN app): closing it returns there while the pill still shows. */
     private var libraryFromVpnPill = false
 
-    /** Turns a labelled top pill into the round TopButtonIcon shape: no text, the icon centred by even padding. */
-    private fun makeIconOnly(pill: TextView) {
-        pill.contentDescription = pill.text
-        pill.text = null
-        pill.maxWidth = Int.MAX_VALUE
-        val pad = Math.round(10 * density)
-        pill.setPaddingRelative(pad, 0, pad, 0)
-        pill.compoundDrawablePadding = 0
-        pill.layoutParams.width = Math.round(42 * density)
-    }
-
-    // ---- festive skin ------------------------------------------------------------------------------
-
-    /**
-     * Swaps the pill icons for the festival's: a bell for Inputs that swings when focused, a diya for the
-     * network whose flame follows the connection, and a marigold for Settings that turns when focused.
-     */
-    private fun applyFestiveSkin(inputs: TextView, settings: TextView) {
-        val b = BellDrawable(density)
-        val m = MarigoldDrawable(density)
-        val d = DiyaDrawable(density)
-        bell = b
-        marigold = m
-        diya = d
-        b.setReducedMotion(reducedMotion)
-        m.setReducedMotion(reducedMotion)
-        d.setReducedMotion(reducedMotion)
-        setFestiveIcon(inputs, b)
-        setFestiveIcon(btnWifi, d)
-        setFestiveIcon(settings, m)
-        addFocusAction(inputs, b::ring)
-        addFocusAction(settings, m::turn)
-    }
-
-    private fun playPetalShower() {
-        if (isFinishing || isDestroyed) return
-        val shower = PetalShowerView(this)
-        root.addView(shower, FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        shower.play(60, 2200) { root.removeView(shower) }
-    }
-
-    /**
-     * The network pill opens the VPN app when one is configured and installed, otherwise Wi-Fi settings. With
-     * vpn_pill the VPN app has its own pill, so this one always opens Wi-Fi settings.
-     */
-    private fun openNetworkPill() {
-        val i = if (networkPills.vpnPill) null else networkPills.vpnAppIntent()
-        open(i ?: systemIntent(Settings.ACTION_WIFI_SETTINGS))
-    }
-
-    /**
-     * vpn_pill: the VPN app, where it is switched on and off. Without one installed, the App library to pick from, or
-     * Android's VPN settings when the theme turned the library off.
-     */
-    private fun openVpnPill() {
-        val i = networkPills.vpnAppIntent()
-        if (i != null || !appLibraryEnabled) {
-            open(i ?: systemIntent(Settings.ACTION_VPN_SETTINGS))
-            return
-        }
-        onLibraryRequested()
-        libraryFromVpnPill = true
-    }
+    // ---- opening ---------------------------------------------------------------------------------
 
     /** Every settings entry shares the standard intent and the vendor fallback (SystemSettings). */
     private fun systemIntent(standardAction: String): Intent {
         return SystemSettings.intent(this, standardAction)
-    }
-
-    /** Hides the Inputs pill when it would have nothing to list: streaming boxes have no HDMI-in, AV or tuner. */
-    private fun updateInputsButton() {
-        if (!showInputsPill) {
-            btnInputs.visibility = View.GONE
-            return
-        }
-        var any = inputActions.liveTvIntent() != null || sourcePanelService.isNotEmpty()
-                || (coocaaSources && CoocaaSources.list(this).isNotEmpty())
-        val tim = getSystemService(TV_INPUT_SERVICE) as? TvInputManager
-        if (!any && tim != null) {
-            for (info in tim.tvInputList) {
-                // Inputs hidden in Settings > Inputs are left out of the menu, so they don't count here either.
-                if (info.isPassthroughInput && !info.isHidden(this)) {
-                    any = true
-                    break
-                }
-            }
-        }
-        btnInputs.visibility = if (any) View.VISIBLE else View.GONE
-    }
-
-    /** boot_to_live_tv, or the Open on start app: the first time Home comes up after the TV starts, open that app
-     *  instead. Once per boot, keyed on Settings.Global.BOOT_COUNT and committed to disk before the app starts: on a
-     *  low-memory TV the app can push the launcher out of memory, and an apply() still in flight was lost then, so
-     *  every Home press opened the app again. */
-    private fun openLiveTvAfterBoot(): Boolean {
-        val app = (if (openOnStartChoice) getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE)
-                .getString(OpenOnStart.KEY, "") else "") ?: ""
-        if (!bootToLiveTv && app.isEmpty()) return false
-        val boot = OpenOnStart.boot(this)
-        val prefs = getSharedPreferences(OpenOnStart.BOOT_PREFS, MODE_PRIVATE)
-        val target = if (bootToLiveTv) liveTvPkg else app
-        if (!OpenOnStart.due(boot, prefs.getInt(OpenOnStart.BOOT_KEY, -1), target, packageName)) return false
-        if (!prefs.edit().putInt(OpenOnStart.BOOT_KEY, boot).commit()) return false
-        val i = if (bootToLiveTv) inputActions.liveTvIntent() else OpenOnStart.intent(packageManager, app)
-        if (i == null) return false
-        // open_on_start_network_wait: Home stays on screen until the network is back or the wait is over.
-        if (openOnStartWaitMs > 0 && !OpenOnStart.online(this)) {
-            startPending = i
-            startDeadline = SystemClock.elapsedRealtime() + openOnStartWaitMs
-            handler.postDelayed(openWhenOnline, openOnStartWaitMs)
-            // Validated between the check above and startPending: networkCallback may have skipped it.
-            if (OpenOnStart.online(this)) handler.post(openWhenOnline)
-            return false
-        }
-        open(i)
-        return true
     }
 
     private fun open(i: Intent) {
@@ -1563,7 +1070,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     private fun showTopMenu() {
         popups.showTopMenu(
             showInputsMenuRow, launcherSettingsButton, networkPills.label,
-            this::showInputs, this::openNetworkPill, reorder::toggleReorder,
+            this::showInputs, topPills::openNetworkPill, reorder::toggleReorder,
         )
     }
 

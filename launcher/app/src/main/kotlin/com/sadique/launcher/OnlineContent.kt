@@ -10,12 +10,12 @@ import javax.net.ssl.HttpsURLConnection
 object OnlineContent {
     private val imageHosts = setOf(
         "images.unsplash.com", "live.staticflickr.com", "upload.wikimedia.org", "thumb.wikimedia.org",
-        "oceanexplorer.noaa.gov", "wallspapers.org", "www.publicdomainpictures.net", "npgallery.nps.gov",
+        "oceanexplorer.noaa.gov", "wallpapers.org", "www.publicdomainpictures.net", "npgallery.nps.gov",
         "c.pxhere.com", "www.bing.com"
     )
     private val allowedHosts = imageHosts + setOf(
         "api.open-meteo.com", "geocoding-api.open-meteo.com", "wttr.in", "www.flickr.com",
-        "commons.wikimedia.org", "nominatim.openstreetmap.org"
+        "commons.wikimedia.org", "nominatim.openstreetmap.org", "api.openverse.org"
     )
     private val redirectStatuses = setOf(301, 302, 303, 307, 308)
 
@@ -39,7 +39,7 @@ object OnlineContent {
             connection.setRequestProperty("Cache-Control", "no-cache")
             connection.setRequestProperty("User-Agent", "PersonalLauncher/6.8 (https://github.com/sadique6571/PersonalLauncher)")
             val path = url.path
-            val wallpaperMetadata = host == "wallspapers.org" && !path.startsWith("/download/")
+            val wallpaperMetadata = host == "wallpapers.org" && !path.startsWith("/download/")
             val accept = when {
                 wallpaperMetadata || host == "www.flickr.com" -> "application/rss+xml,text/html"
                 host in imageHosts && path != "/HPImageArchive.aspx" -> "image/jpeg,image/webp,image/png"
