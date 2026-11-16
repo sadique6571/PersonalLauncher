@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
-import android.graphics.drawable.Drawable
 import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.os.Handler
@@ -300,7 +299,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         lunarOffset = Lunar.offsetFor(cfg.lunarUtcOffset, Locale.getDefault())
         if (lunar) lunarDate.visibility = View.VISIBLE
         greetingName = cfg.greetingName
-        if (cfg.dateBelowClock) moveDateBelowClock()
+        if (cfg.dateBelowClock) LauncherHeaderLayout.moveDateBelowClock(this, density)
         if (shamsi) {
             shamsiDate.visibility = View.VISIBLE
             val date = findViewById<TextView>(R.id.date)
@@ -448,7 +447,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
             libraryFromTopBar = true   // closing it goes back to this button, not to the pill after the last row
         }
         btnLibraryTop.visibility = if (cfg.libraryButton && cfg.appLibrary) View.VISIBLE else View.GONE
-        addTopBarApps(cfg.topBarApps, cfg.launchActions)
+        LauncherHeaderLayout.addApps(this, cfg, btnWifi, btnVpn, density, topAppButtons, this::open)
         iconOnlyButtons = cfg.iconOnlyButtons
         topMenu = cfg.topMenu
         networkPills = LauncherNetworkPills(
@@ -997,39 +996,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         shelf.hideHero()
     }
 
-    /**
-     * date_below_clock: the date column moves to its own line under the clock, in the vertical LinearLayout that holds
-     * the clock's row, and the line between them goes. In Hebrew (rtl_menu_bar) the date and the clock's row sit right.
-     */
-    private fun moveDateBelowClock() {
-        val column = findViewById<View>(R.id.date).parent as View
-        val clockRow = findViewById<View>(R.id.clock).parent as View
-        val clockColumn = clockRow.parent as LinearLayout
-        (column.parent as ViewGroup).removeView(column)
-        findViewById<View>(R.id.clockDivider).visibility = View.GONE
-        // Its own width, not the column's: in Hebrew the column is only as wide as the clock.
-        val lp = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        lp.topMargin = Math.round(4 * density)
-        if (resources.getBoolean(R.bool.rtl_menu_bar)) {
-            // Date and clock flush right; the greeting stays left and follows the clock by translation.
-            lp.gravity = Gravity.RIGHT
-            (clockRow.layoutParams as LinearLayout.LayoutParams).gravity = Gravity.RIGHT
-        }
-        clockColumn.addView(column, clockColumn.indexOfChild(clockRow) + 1, lp)
-        // The column now wraps its texts, so they must wrap too: a match_parent TextView does not ask for a new
-        // layout when its text gets longer, and the column kept the width of the day before ("TUESDAY 27 OCTOB…").
-        val texts = column as ViewGroup
-        for (i in 0 until texts.childCount) {
-            val text = texts.getChildAt(i)
-            val textLp = text.layoutParams as LinearLayout.LayoutParams
-            textLp.width = ViewGroup.LayoutParams.WRAP_CONTENT
-            // Keep each line where its own gravity put it (right in Hebrew) now that it no longer fills the column.
-            textLp.gravity = (text as TextView).gravity and Gravity.HORIZONTAL_GRAVITY_MASK
-            text.layoutParams = textLp
-        }
-    }
-
     /** The first top-bar button after Inputs that is shown, in bar order (top_bar_apps, the network pill, ...); Settings is always there. */
     private fun firstTopButton(): View {
         val bar = findViewById<ViewGroup>(R.id.topButtons)
@@ -1042,47 +1008,6 @@ class MainActivity : Activity(), AppAdapter.TileListener {
 
     /** top_bar_apps buttons, in bar order. */
     private val topAppButtons: MutableList<View> = ArrayList()
-
-    /**
-     * Puts each top_bar_apps app in the top bar as a round pill with the app's own logo, left of the network pill.
-     * The logo keeps its colours: the pill style's tint, which turns the other icons white, is cleared.
-     */
-    private fun addTopBarApps(packages: List<String>, launchActions: Map<String, String>) {
-        val bar = findViewById<ViewGroup>(R.id.topButtons)
-        val pm = packageManager
-        val size = Math.round(22 * density)
-        for (pkg in packages) {
-            var launch = pm.getLeanbackLaunchIntentForPackage(pkg)
-            if (launch == null) launch = pm.getLaunchIntentForPackage(pkg)
-            if (launch == null) continue   // not installed, or disabled
-            // Use the same configured launch_actions as tiles; retain the normal entry if unavailable.
-            launch = LaunchActions.select(pkg, launchActions, launch) { targetPackage, action ->
-                val custom = LaunchActions.intent(targetPackage, action)
-                if (pm.resolveActivity(custom, 0) != null) custom else null
-            }
-            val logo: Drawable
-            val label: CharSequence
-            try {
-                val info = pm.getApplicationInfo(pkg, 0)
-                logo = info.loadIcon(pm)
-                label = info.loadLabel(pm)
-            } catch (_: PackageManager.NameNotFoundException) {
-                continue
-            }
-            val button = layoutInflater.inflate(R.layout.top_app_button, bar, false) as TextView
-            // pillKeys finds the bar's ends by id: without one of its own, every app button would be an end.
-            button.id = View.generateViewId()
-            logo.setBounds(0, 0, size, size)
-            button.setCompoundDrawablesRelative(logo, null, null, null)
-            button.compoundDrawableTintList = null
-            button.contentDescription = label
-            val target = launch
-            button.setOnClickListener { open(Intent(target)) }
-            // After the network pill and the VPN pill; the Hebrew bar runs the other way, so before both there.
-            bar.addView(button, bar.indexOfChild(if (resources.getBoolean(R.bool.rtl_menu_bar)) btnVpn else btnWifi))
-            topAppButtons.add(button)
-        }
-    }
 
     override fun onLibraryUp() = tileNavigation.onLibraryUp()
 
