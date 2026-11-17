@@ -4,6 +4,8 @@ Personal Launcher gives an Android TV or Google TV a remote-friendly Home screen
 
 [Download the latest signed APK](https://github.com/sadique6571/PersonalLauncher/releases/latest/download/PersonalLauncher.apk) · [Release history](https://github.com/sadique6571/PersonalLauncher/releases)
 
+The launcher interface uses English.
+
 ## Start here
 
 1. Install the signed APK on the TV and open **Personal Launcher**.

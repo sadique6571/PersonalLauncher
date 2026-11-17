@@ -125,7 +125,6 @@ internal object ConfigLoader {
         var wifiStatusWarnings = res.getBoolean(R.bool.wifi_status_warnings)
         var dateBelowClock = res.getBoolean(R.bool.date_below_clock)
         var vpnPill = res.getBoolean(R.bool.vpn_pill)
-        var locale = res.getString(R.string.locale).trim()
         var topBarApps: MutableList<String> = res.getStringArray(R.array.top_bar_apps).toMutableList()
         var showGreeting = res.getBoolean(R.bool.show_greeting)
         var headerWhite = res.getBoolean(R.bool.header_white)
@@ -237,7 +236,6 @@ internal object ConfigLoader {
             wifiStatusWarnings = bool(json, "wifi_status_warnings", wifiStatusWarnings)
             dateBelowClock = bool(json, "date_below_clock", dateBelowClock)
             vpnPill = bool(json, "vpn_pill", vpnPill)
-            locale = string(json, "locale", locale).trim()
             topBarApps = stringList(json, "top_bar_apps", topBarApps)
             showGreeting = bool(json, "show_greeting", showGreeting)
             headerWhite = bool(json, "header_white", headerWhite)
@@ -308,7 +306,7 @@ internal object ConfigLoader {
             dockBand, cinematicDots, cinematicWhiteFocus, wifiStatusColor, cinematicScrim, cinematicArt, wallpaperMoods, gamepadPassthrough,
             consumeVolumeKeys, powerOnHome, homeLongPressHome, wifiStatusWarnings, topBarApps, showGreeting, headerWhite, clockWallpaper,
             Math.max(0, Math.min(90, clockWallpaperDim)), clockGlow, glassStyle, singleRow && dockRow, dockBandAll, lunar, lunarOffset,
-            dateBelowClock, vpnPill, locale, powerOnHomeAlways, inputsConnectedOnly,
+            dateBelowClock, vpnPill, powerOnHomeAlways, inputsConnectedOnly,
             Math.max(0, Math.min(600, openOnStartNetworkWait)), iconOnlyVpn, remoteKeysDebug, recoveryHomeRedirect)
     }
 

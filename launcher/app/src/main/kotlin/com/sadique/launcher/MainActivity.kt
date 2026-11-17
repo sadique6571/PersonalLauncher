@@ -31,14 +31,13 @@ import java.util.ArrayList
 import java.util.Arrays
 import java.util.Collections
 import java.util.HashSet
-import java.util.Locale
 
 /**
  * tvOS style home: black, a pinned dock row, an app grid, and one glass highlight that springs between tiles.
  */
 class MainActivity : Activity(), AppAdapter.TileListener {
     override fun attachBaseContext(base: Context) {
-        super.attachBaseContext(LauncherLocale.wrap(base))   // locale
+        super.attachBaseContext(LauncherLocale.wrap(base))
     }
 
     companion object {
@@ -272,7 +271,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
             findViewById<View>(R.id.clockDivider).setBackgroundColor(Color.WHITE)
         }
         if (resources.getBoolean(R.bool.rtl_menu_bar)) {
-            // Center Hebrew greetings over the numeric time, independent of a visible AM/PM label. The clock's row
+            // Center right-to-left greetings over the numeric time, independent of a visible AM/PM label. The clock's row
             // is watched too: date_below_clock can move the whole row right under a wider date.
             val clock = findViewById<View>(R.id.clock)
             val clockRow = clock.parent as View
@@ -296,7 +295,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         shamsi = cfg.shamsiDate
         lunarDate = findViewById(R.id.lunarDate)
         lunar = cfg.lunarDate
-        lunarOffset = Lunar.offsetFor(cfg.lunarUtcOffset, Locale.getDefault())
+        lunarOffset = Lunar.offsetFor(cfg.lunarUtcOffset, android.content.res.Resources.getSystem().configuration.locales[0])
         if (lunar) lunarDate.visibility = View.VISIBLE
         greetingName = cfg.greetingName
         if (cfg.dateBelowClock) LauncherHeaderLayout.moveDateBelowClock(this, density)

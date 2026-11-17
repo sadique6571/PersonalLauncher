@@ -50,6 +50,10 @@ import java.util.function.IntConsumer
 
 /** Responsive personal Home. Profile/search stay local; online scenery/weather use their own view. */
 class PersonalHomeActivity : Activity() {
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(LauncherLocale.wrap(base))
+    }
+
     /** Dark-on-light text scheme, used when the wallpaper behind the text is bright. */
     private val handler = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()

@@ -7,7 +7,7 @@ or enable both booleans in `config.xml`, to use the library as a Home visibility
 picker. It is off by default and the standard behavior below is unchanged.
 
 In selection mode, OK toggles the green checkmark. Checked apps come first; both
-groups are alphabetized by displayed name using the TV's locale. After hiding an
+groups are alphabetized by displayed name using the launcher locale. After hiding an
 app, focus stays nearby on the next app (the previous app at the end), rather
 than following the hidden app into the second group. Adding an app focuses it
 in the checked group. Hold-OK actions are omitted in this mode; it only controls
@@ -43,11 +43,10 @@ subtle tint. Updating an existing app does not mark it as new.
   the existing Inputs dropdown resources and stays over the selected card.
 - Back closes the menu first, then the library. Down from the last Home row or
   Right from the final app reaches the library pill; Up returns to the last row.
-  Hebrew mirrors the horizontal direction, so Left from the final app reaches it.
 
 With `"library_button": true` the library also has a round button in the top bar. Add
 `"show_library_pill": false` to drop the pill after the last row; the button is then the way in, and
-Down from the last row and Right from the final app (Left in Hebrew) stay where they are.
+Down from the last row and Right from the final app stay where they are.
 
 With `tile_menu` on, holding OK on a Home tile offers Remove from Home as well, next to Move and App info.
 The remote's Menu key opens that same menu on the focused tile. With `tile_menu` off,

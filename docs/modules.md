@@ -60,31 +60,7 @@ The launcher targets TVs with 1 GB of RAM, and the owners trust what they put on
 - Use your own art. Do not use other companies' logos as your banner or icon.
 - Describe every permission you request in your README.
 
-## 3. Test on a TV
-
-Install over ADB, press Home, and the card approval dialog appears:
-
-```bash
-adb install -r app/build/outputs/apk/release/app-release.apk
-adb shell input keyevent KEYCODE_HOME
-```
-
-Useful checks:
-
-```bash
-# Did the card filter and the meta-data land on the right activity?
-adb shell pm dump io.github.udhaykumarbala.retro | grep -B2 -A6 DOCK_CARD
-
-# Why was a card rejected? One line per reason.
-adb logcat -s TvHomeCards
-```
-
-Then: answer Keep hidden and check the app keeps its ordinary tile; hold OK on Settings, open the
-Module cards list, set it to Shown, and check the card takes the tile's place; press OK on the card
-and check your app opens; uninstall and check the card is gone. Take a screenshot of the card
-focused in the grid for your README.
-
-## 4. Release and keep your key
+## 3. Release and keep your key
 
 The owner's answer is pinned to your signing certificate. Publish the certificate digest with every
 release so people can check what they install:

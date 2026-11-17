@@ -322,7 +322,7 @@ internal class LauncherReorderController(
         // A single row has no rows to move between: Up and Down leave the carried tile where it is.
         if (singleRow() && (keyCode == KeyEvent.KEYCODE_DPAD_UP || keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) return
         val to = if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
-            // rtl_app_grid (Hebrew) mirrors the grid: position 0 is on the right, so Left moves towards the end.
+            // rtl_app_grid (right-to-left) mirrors the grid: position 0 is on the right, so Left moves towards the end.
             if (rtlAppGrid()) from + 1 else from - 1
         } else if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
             if (rtlAppGrid()) from - 1 else from + 1

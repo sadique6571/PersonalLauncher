@@ -1,11 +1,11 @@
 # Working on Personal Launcher
 
-This repository builds the Android TV launcher `com.sadique.launcher`. The Android project is in `launcher/`. Kotlin application code, Android resources and JVM tests live under `launcher/app/src/`. Start with the current implementation and the [maintainer's review notes](.github/maintainer/MAINTAINER.md). The [Xiaomi MiTV-AETP0 device note](docs/devices/xiaomi-mitv-aetp0-dofus.md) applies to the firmware documented there.
+This repository builds the Android TV launcher `com.sadique.launcher`. The Android project is in `launcher/`. Kotlin application code, Android resources and JVM tests live under `launcher/app/src/`. Start with the current implementation and the [maintainer's review notes](.github/maintainer/MAINTAINER.md).
 
 ## Make focused changes
 
 - Preserve the Home entry points, resource IDs used by the launcher, saved preferences, and remote and volume behavior. For settings, keep the meaning of persisted option indices and use stable keys for logic driven by menu labels.
-- Route new user-facing text through Android resources. Keep English defaults so other locales can fall back when a translation is missing.
+- Route new user-facing text through Android resources. Use English for launcher UI text.
 - Keep the signed updater's asset digest, package name, certificate and newer-version checks intact. Increment `versionCode` for app updates and keep `versionName` at 7.0 unless the maintainer requests a change.
 - Keep keystores, credentials, saved ADB identities, device addresses and diagnostic secrets out of commits. Handle security issues through [SECURITY.md](SECURITY.md).
 - Keep release workflow changes small and verify which commit a signed release points to.

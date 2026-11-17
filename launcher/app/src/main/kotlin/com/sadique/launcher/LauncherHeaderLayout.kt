@@ -13,7 +13,7 @@ import android.widget.TextView
 internal object LauncherHeaderLayout {
     /**
      * date_below_clock: the date column moves to its own line under the clock, in the vertical LinearLayout that holds
-     * the clock's row, and the line between them goes. In Hebrew (rtl_menu_bar) the date and the clock's row sit right.
+     * the clock's row, and the line between them goes. With right-to-left menus the date and the clock's row sit right.
      */
     fun moveDateBelowClock(host: Activity, density: Float) {
         val column = host.findViewById<View>(R.id.date).parent as View
@@ -21,7 +21,7 @@ internal object LauncherHeaderLayout {
         val clockColumn = clockRow.parent as LinearLayout
         (column.parent as ViewGroup).removeView(column)
         host.findViewById<View>(R.id.clockDivider).visibility = View.GONE
-        // Its own width, not the column's: in Hebrew the column is only as wide as the clock.
+        // Its own width, not the column's: with right-to-left menus the column is only as wide as the clock.
         val lp = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         lp.topMargin = Math.round(4 * density)
@@ -38,7 +38,7 @@ internal object LauncherHeaderLayout {
             val text = texts.getChildAt(i)
             val textLp = text.layoutParams as LinearLayout.LayoutParams
             textLp.width = ViewGroup.LayoutParams.WRAP_CONTENT
-            // Keep each line where its own gravity put it (right in Hebrew) now that it no longer fills the column.
+            // Keep each line where its own gravity put it (right in mirrored layouts) now that it no longer fills the column.
             textLp.gravity = (text as TextView).gravity and Gravity.HORIZONTAL_GRAVITY_MASK
             text.layoutParams = textLp
         }
@@ -82,7 +82,7 @@ internal object LauncherHeaderLayout {
             button.contentDescription = label
             val target = launch
             button.setOnClickListener { open(Intent(target)) }
-            // After the network pill and the VPN pill; the Hebrew bar runs the other way, so before both there.
+            // After the network pill and the VPN pill; the right-to-left bar runs the other way, so before both there.
             bar.addView(button, bar.indexOfChild(if (host.resources.getBoolean(R.bool.rtl_menu_bar)) btnVpn else btnWifi))
             topAppButtons.add(button)
         }

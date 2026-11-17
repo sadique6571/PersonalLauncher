@@ -277,7 +277,7 @@ internal class LauncherShelf(
         heroMeta.visibility = View.VISIBLE
     }
 
-    /** One dot per dock app, the focused one drawn long and white. Hebrew docks start on the right, so do the dots. */
+    /** One dot per dock app, the focused one drawn long and white. Right-to-left docks start on the right, so do the dots. */
     private fun updateHeroDots(position: Int) {
         if (!heroDotsShown) return
         val count = Math.min(adapter.dockFilled(), COLUMNS)
