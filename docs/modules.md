@@ -1,11 +1,8 @@
 # Making a module
 
-A module is a normal Android TV app that declares a card for this launcher. Your repo, your
-licence, your signing key, released as an APK wherever you like, for example on your GitHub
-Releases page with its SHA-256. The TV owner sideloads it like any other app. The launcher finds the
-card and asks the owner once; if they answer Show, your app appears as a card from then on: your
-label, an optional caption, and your colour in the ambient glow, placed ahead of the alphabetical
-grid.
+The released Home screen lists apps as ordinary tiles. Module-card discovery and the Game Day provider described here belong to the retained older Home implementation. These declarations describe that code and do not add a card or game panel to the current Home.
+
+A module is an Android TV app that declares a card for the older Home implementation. When active, that implementation can display the app's label, optional caption, and glow color after the owner approves the card.
 
 The contract is [`docs/specs/card.md`](specs/card.md). This page is the short version.
 
@@ -66,10 +63,9 @@ The owner's answer is pinned to your signing certificate. Publish the certificat
 release so people can check what they install:
 
 ```bash
-apksigner verify -print-certs app-release.apk | grep 'SHA-256'
+apksigner verify --print-certs app-release.apk | grep 'SHA-256'
 ```
 
-(`apksigner` accepts its options with one dash as well as two.)
 
 The line "Signer #1 certificate SHA-256 digest" is what the launcher computes on the TV. Sign every
 update with the same key: a different key makes every TV ask again, and the card stays hidden
@@ -78,19 +74,10 @@ Keep the keystore out of your repo.
 
 Publish the APK's own SHA-256 next to it as well.
 
-## Reference module
-
-Retro, an NES library for the TV, declares a card exactly as above:
-a separate retro-gaming module project.
-
-A launcher that wants other apps' Continue watching rows can read them, see
-[`docs/watch-next.md`](watch-next.md).
-
 ## Each team's next game on Home (game_day)
 
 An app can hand Home a short list of upcoming events, which the launcher shows in the F1 panel's place under the
-clock and rotates through, with the theme's F1 weekend as one more turn. The launcher only reads; it never writes
-to the app and never goes online, so the app does the fetching. The owner opts in by naming the app's package in
+clock and rotates through, with the configured F1 weekend as one more turn. The Game Day integration reads the provider. The module handles any network fetching. The owner opts in by naming the app's package in
 the `game_day` key (`config.xml` or a theme); there is no card prompt for it.
 
 1. Name a read-only content provider in a `meta-data` on your `<application>`:
@@ -112,8 +99,7 @@ the `game_day` key (`config.xml` or a theme); there is no card prompt for it.
    | `calendar` | text | Where the row came from; not shown. |
    | `turn_seconds` | integer | Seconds per turn, 10 to 120; anything else means 30. Read from the first row. |
 
-   An empty cursor hides the panel. Keep it to what Home shows anyway: the provider is exported without a
-   permission, so it must hold no links, accounts or other private data.
+   An empty cursor supplies no Game Day turns. The F1 turn can still appear when configured. The example provider is exported without a permission, so return only the public information to be shown on Home.
 3. Call `notifyChange` on that URI when the rows change. The launcher queries when Home comes back, when Home is
    pressed on Home, right after a row ends, and on each change, and watches only while Home is on screen.
 
