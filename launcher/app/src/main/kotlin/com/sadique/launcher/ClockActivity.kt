@@ -14,7 +14,7 @@ import android.view.View
  */
 open class ClockActivity : Activity() {
     override fun attachBaseContext(base: Context) {
-        super.attachBaseContext(LauncherLocale.wrap(base)) // locale
+        super.attachBaseContext(LauncherLocale.wrap(base))
     }
 
     private var scene: ClockScene? = null

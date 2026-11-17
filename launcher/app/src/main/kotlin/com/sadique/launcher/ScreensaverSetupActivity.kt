@@ -1,5 +1,6 @@
 package com.sadique.launcher
 
+import android.content.Context
 import android.app.Activity
 import android.content.ComponentName
 import android.content.Intent
@@ -11,6 +12,10 @@ import android.widget.Toast
 
 /** Android owns the selected dream; normal app permissions cannot replace it silently. */
 class ScreensaverSetupActivity : Activity() {
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(LauncherLocale.wrap(base))
+    }
+
     private lateinit var state: TextView
 
     override fun onCreate(saved: Bundle?) {

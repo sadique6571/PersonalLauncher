@@ -4,7 +4,7 @@ import java.util.Locale
 import java.util.regex.Matcher
 import java.util.regex.Pattern
 
-/** Isolate complete measurements, not individual digits, in the Hebrew stats paragraph. */
+/** Isolate complete measurements, not individual digits, in the right-to-left stats paragraph. */
 object StatsText {
     private val MEASUREMENT = Pattern.compile("[0-9]+(?:[.,][0-9]+)?(?:\\s*/\\s*[0-9]+(?:[.,][0-9]+)?)?(?:\\s+(?:MB|GB)|%)")
 

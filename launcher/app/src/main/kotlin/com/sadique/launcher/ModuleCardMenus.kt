@@ -197,7 +197,7 @@ internal class ModuleCardMenus(
         anchor.getLocationInWindow(at)
         val room = root().height - (at[1] + anchor.height) - (34 * density()).toInt()
         popup.height = Math.min(panel.measuredHeight, Math.max(room, (120 * density()).toInt()))
-        // Hebrew places Settings on the left: align the outer panel inward, like its parent menu.
+        // A mirrored header places Settings on the left: align the outer panel inward, like its parent menu.
         dropIn(popup, panel, anchor, if (host.resources.getBoolean(R.bool.rtl_menu_bar))
                 Gravity.START else Gravity.END)
         rows.getChildAt(0).requestFocus()

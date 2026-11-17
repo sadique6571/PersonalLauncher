@@ -120,7 +120,7 @@ internal class LauncherPopups(
         if (HomeKeyService.canOpenPowerMenu()) addSettingsMenuRow(rows, popup, R.string.power_menu, HomeKeyService::openPowerMenu)
         panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
         popup.width = Math.max((200 * density).toInt(), panel.measuredWidth)
-        // Hebrew puts Settings at the left of the header: grow the menu inward from it.
+        // A mirrored header puts Settings at the left of the header: grow the menu inward from it.
         dropIn(popup, panel, anchor, if (host.resources.getBoolean(R.bool.rtl_menu_bar))
                 Gravity.START else Gravity.END)
         rows.getChildAt(0).requestFocus()

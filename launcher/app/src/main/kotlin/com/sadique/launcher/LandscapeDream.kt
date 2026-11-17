@@ -1,9 +1,14 @@
 package com.sadique.launcher
 
+import android.content.Context
 import android.service.dreams.DreamService
 
 /** System-managed landscape screensaver. Any remote key returns to the previous app. */
 class LandscapeDream : DreamService() {
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(LauncherLocale.wrap(base))
+    }
+
     private var landscape: LandscapeView? = null
 
     override fun onAttachedToWindow() {

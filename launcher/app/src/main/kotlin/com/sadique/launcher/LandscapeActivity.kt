@@ -1,5 +1,6 @@
 package com.sadique.launcher
 
+import android.content.Context
 import android.app.Activity
 import android.os.Bundle
 import android.view.KeyEvent
@@ -7,6 +8,10 @@ import android.view.WindowManager
 
 /** Manual preview. Android's screensaver picker uses [LandscapeDream]. */
 class LandscapeActivity : Activity() {
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(LauncherLocale.wrap(base))
+    }
+
     private lateinit var landscape: LandscapeView
 
     override fun onCreate(state: Bundle?) {

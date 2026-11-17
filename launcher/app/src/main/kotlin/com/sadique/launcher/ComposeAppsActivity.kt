@@ -1,5 +1,6 @@
 package com.sadique.launcher
 
+import android.content.Context
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
@@ -33,6 +34,10 @@ import java.util.concurrent.Executors
 
 /** Optional Compose screen. The TV Home alias still opens the established launcher. */
 class ComposeAppsActivity : ComponentActivity() {
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(LauncherLocale.wrap(base))
+    }
+
     private data class App(val label: String, val component: String, val intent: Intent)
     private val loader = Executors.newSingleThreadExecutor()
     private var apps by mutableStateOf<List<App>?>(null)

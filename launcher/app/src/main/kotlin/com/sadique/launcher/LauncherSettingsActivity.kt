@@ -31,7 +31,7 @@ class LauncherSettingsActivity : Activity() {
     }
 
     override fun attachBaseContext(base: android.content.Context) {
-        super.attachBaseContext(LauncherLocale.wrap(base)) // locale
+        super.attachBaseContext(LauncherLocale.wrap(base))
     }
 
     private lateinit var choices: SharedPreferences

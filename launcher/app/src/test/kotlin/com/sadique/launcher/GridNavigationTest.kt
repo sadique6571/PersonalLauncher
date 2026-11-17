@@ -14,7 +14,7 @@ class GridNavigationTest {
         assertFalse(GridNavigation.atHorizontalEdge(3, 11, 4, true, false))
     }
 
-    @Test fun incompleteHebrewLastRowDoesNotWrapIntoEmptySpace() {
+    @Test fun incompleteRightToLeftLastRowDoesNotWrapIntoEmptySpace() {
         assertTrue(GridNavigation.atHorizontalEdge(8, 11, 4, true, false))
         assertTrue(GridNavigation.atHorizontalEdge(10, 11, 4, true, true))
         assertFalse(GridNavigation.atHorizontalEdge(9, 11, 4, true, true))

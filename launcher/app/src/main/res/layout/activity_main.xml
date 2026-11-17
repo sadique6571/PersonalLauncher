@@ -182,9 +182,7 @@
                 android:layout_marginEnd="16dp"
                 android:orientation="vertical">
 
-                <!-- The header texts use gravity left, not start: the launcher lays out left to right
-                     (no supportsRtl), and with start a right-to-left script such as Arabic would move to the
-                     right edge of these full-width lines instead of staying under the clock. -->
+                <!-- Keep these full-width lines aligned under the clock. -->
                 <TextView
                     android:id="@+id/greeting"
                     android:gravity="left"

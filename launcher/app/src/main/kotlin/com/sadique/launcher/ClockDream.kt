@@ -1,5 +1,6 @@
 package com.sadique.launcher
 
+import android.content.Context
 import android.service.dreams.DreamService
 
 /**
@@ -7,6 +8,10 @@ import android.service.dreams.DreamService
  * No network, no images: cheap enough for a 1 GB TV.
  */
 open class ClockDream : DreamService() {
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(LauncherLocale.wrap(base))
+    }
+
     private var scene: ClockScene? = null
 
     override fun onAttachedToWindow() {

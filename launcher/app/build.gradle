@@ -8,11 +8,12 @@ android {
     compileSdk 34
 
     defaultConfig {
-        // Opt-in identity for firmware with a package-name HOME allowlist; see docs/devices/xiaomi-mitv-aetp0-dofus.md.
+        // Optional package identity for firmware with a package-name Home allowlist.
         applicationId providers.gradleProperty('launcherApplicationId').getOrElse('com.sadique.launcher')
         minSdk 26
         targetSdk 34
-        versionCode 112
+        versionCode 113
+        resourceConfigurations += ['en']
         // Use the exact GitHub release build identifier for published APKs.
         def runNumber = providers.environmentVariable('GITHUB_RUN_NUMBER').orNull
         def releaseWorkflow = providers.environmentVariable('GITHUB_WORKFLOW').orNull == 'Build Personal Launcher APK'
@@ -45,8 +46,12 @@ android {
     }
 
     packagingOptions {
+        // Keep native support for every ABI while compressing the shared libraries in the APK.
+        jniLibs { useLegacyPackaging = true }
         resources {
-            excludes += ['META-INF/*.version', 'DebugProbesKt.bin']
+            // R8 removes the unused Picnic signature engines. ADB uses RSA and TLS.
+            excludes += ['META-INF/*.version', 'DebugProbesKt.bin',
+                         'org/bouncycastle/pqc/crypto/picnic/lowmc*.bin.properties']
         }
     }
 

@@ -201,8 +201,6 @@ internal class Config(
     @JvmField val dateBelowClock: Boolean,
     /** The VPN state as its own pill after the network pill, instead of a badge inside it (config.xml, vpn_pill). */
     @JvmField val vpnPill: Boolean,
-    /** Language tag the launcher shows itself in instead of the TV's, or "" for the TV's (config.xml, locale). */
-    @JvmField val locale: String,
     /** Home at every power-on, whatever the firmware put in front: an input, Live TV or an app (power_on_home_always). */
     @JvmField val powerOnHomeAlways: Boolean,
     /** The Inputs menu lists only inputs reporting connected; the rest fold behind a More inputs row (config.xml / theme inputs_connected_only). */
