@@ -84,7 +84,7 @@ jobs:
 
       - name: Create GitHub release
         run: |
-          TAG="v4.7-build-${{ github.run_number }}"
+          TAG="v7.0-build-${{ github.run_number }}"
           gh release create "$TAG" PersonalLauncher.apk \
             --target "$GITHUB_SHA" \
             --title "Personal Launcher 7.0 (build ${{ github.run_number }})" \
