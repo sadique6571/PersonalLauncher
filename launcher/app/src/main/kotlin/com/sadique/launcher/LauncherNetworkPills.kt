@@ -136,7 +136,7 @@ internal class LauncherNetworkPills(
             val name = TextUtils.ellipsize(text, paint, Math.max(0f, room), TextUtils.TruncateAt.END).toString()
             // A long badge ("VPN отключён") can leave room for a stub like "MT…", which says nothing and, after
             // rounding, can push the badge itself out of the pill. Show the badge alone then. On Ethernet the
-            // icon already names the link, and "Ethernet" cut to "Ethe…" or not depended on the font size (#961),
+            // icon already names the link, and "Ethernet" cut to "Ethe…" or not depended on the font size,
             // so Ethernet always shows the icon and the badge alone.
             // The space stays even then: a line holding only the span gets no font metrics and collapses.
             val stub = name.length < text.length && name.length < 5

@@ -35,7 +35,7 @@ internal object AppTileCatalog {
             val ai = ri.activityInfo
             if (ai != null) tvPackages.add(ai.packageName)
         }
-        // Copy before merging: LibraryApps.load() may return an immutable empty set (#419).
+        // Copy before merging: LibraryApps.load() may return an immutable empty set.
         val added = HashSet(LibraryApps.load(ctx))
         added.addAll(libraryPreload)
         val removed = LibraryApps.loadRemoved(ctx)
@@ -62,7 +62,7 @@ internal object AppTileCatalog {
             val card = cardByPkg[pkg]
             if (card != null && card.component != component) continue   // the card stands in for this tile
             // Same cleaner as the card prompt: an app label with a bidi override or line separator must not
-            // redraw the tile name as something else (#117).
+            // redraw the tile name as something else.
             val label = if (card != null) card.label else Cards.cleanLabel(
                 if (appLabels.containsKey(pkg)) appLabels[pkg] else ri.loadLabel(pm).toString(), pkg)
             if (!seen.add(pkg + "\n" + label)) continue

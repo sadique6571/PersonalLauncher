@@ -1,4 +1,3 @@
-tools/venv
 tools/adbkey/
 __pycache__/
 launcher/.gradle/
@@ -10,9 +9,9 @@ backup/
 # session screenshots and working notes (may show the Wi-Fi name or account avatar) stay local
 shots/
 work/
-# Perfetto traces from tools/trace.py: large, and they hold the TV's process list
+# Local Perfetto traces: large, and they hold the TV's process list
 traces/
-# Results from tools/bench.py: result.json carries the address the run was given and the TV's fingerprint.
+# Local benchmark results: result.json carries the address the run was given and the TV's fingerprint.
 bench-results/
 .DS_Store
 

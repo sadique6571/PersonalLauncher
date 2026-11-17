@@ -11,7 +11,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 
-/** Local-only, one-connection relay bounds the upstream library's pairing socket lifetime. */
+/** Local-only, one-connection relay bounds the ADB library's pairing socket lifetime. */
 internal class PairingRelay @JvmOverloads constructor(targetPort: Int, tlsOnly: Boolean = false) : AutoCloseable {
     private val listener: ServerSocket
     private val workers: ScheduledExecutorService = Executors.newScheduledThreadPool(3)

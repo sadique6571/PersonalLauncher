@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Outfit lacks 96 of the 134 Vietnamese accented letters, so words mixed two fonts; use the system's (#833). -->
+<!-- Outfit lacks 96 of the 134 Vietnamese accented letters, so words mixed two fonts; use the system's. -->
 <resources>
     <string name="font_body" translatable="false">sans-serif</string>
     <string name="font_regular" translatable="false">sans-serif</string>

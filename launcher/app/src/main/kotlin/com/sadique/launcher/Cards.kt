@@ -18,7 +18,7 @@ import org.xmlpull.v1.XmlPullParser
 
 /**
  * Module cards (docs/specs/card.md): an installed app can declare a card for its tile, with its own
- * label, caption and glow colour. Nothing is shown until the TV owner says so on the prompt; the
+ * label, caption and glow colour. Cards appear only after the TV owner approves them in the dialog; the
  * decision is pinned to the app's signing certificate in the launcher's private storage.
  *
  * Discovery, parsing, the signer digest and the decision file live here, with no UI code, so the
@@ -33,13 +33,13 @@ import org.xmlpull.v1.XmlPullParser
 internal class Cards private constructor() {
 
     enum class State {
-        /** No record for this package: the prompt is due. */
+        /** No record for this package: the card approval dialog is due. */
         NEW,
 
-        /** The record was made for a different signing key: it no longer applies and the prompt is due. */
+        /** The record was made for a different signing key: it no longer applies and the card approval dialog is due. */
         RESIGNED,
 
-        /** The card's label changed since the owner decided: the decision was for another name, the prompt is due. */
+        /** The card's label changed since the owner decided: the decision was for another name, the card approval dialog is due. */
         RELABELLED,
         SHOWN,
         HIDDEN
@@ -303,7 +303,7 @@ internal class Cards private constructor() {
         }
 
         /**
-         * An app's own label as the prompt shows it: control, format (bidi overrides, zero width joiners),
+         * An app's own label as the card approval dialog shows it: control, format (bidi overrides, zero width joiners),
          * line and paragraph separator characters become spaces, runs of spaces collapse, at most 40
          * characters (never cutting a surrogate pair), the fallback (package name) when nothing is left.
          */
@@ -471,7 +471,7 @@ internal class Cards private constructor() {
             return String(out)
         }
 
-        /** The first 12 hex characters in groups of four, as shown on the prompt: "7f3a 91c0 b2e4". */
+        /** The first 12 hex characters in groups of four, as shown in the card approval dialog: "7f3a 91c0 b2e4". */
         @JvmStatic
         fun shortDigest(digest: String): String {
             return grouped(if (digest.length >= 12) digest.substring(0, 12) else digest, 3)

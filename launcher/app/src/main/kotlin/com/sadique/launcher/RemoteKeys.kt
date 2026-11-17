@@ -127,7 +127,7 @@ internal class RemoteKeys private constructor() {
 
         /**
          * The flags on the KEYCODE_MENU pair that Xiaomi's China firmware (MiTV-MFTR0, Android 11) injects for a short
-         * press of the remote's Menu key, after keeping the real press for itself (#1637). They include FLAG_CANCELED,
+         * press of the remote's Menu key, after keeping the real press for itself. They include FLAG_CANCELED,
          * so the pair reads as a cancelled press, and the undocumented 0x1000, 0x2000 and 0x4000, which no real
          * cancelled press carries.
          */

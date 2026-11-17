@@ -16,11 +16,9 @@ Keep the existing app installed when updating so Android can retain your prefere
 
 | Feature | Guide |
 | --- | --- |
-| Home layout, dock and configuration | [Launcher guide](docs/launcher.md) |
 | App drawer and Home shortcuts | [App library](docs/app-library.md) |
 | Resume cards from supported TV apps | [Watch Next](docs/watch-next.md) |
-| Remote buttons and optional volume helper | [Remote controls](docs/REMOTE.md) · [Volume helper](docs/volume-hold-bridge.md) |
-| Device-specific quirks and recovery | [Troubleshooting](docs/TROUBLESHOOTING.md) · [Device notes](docs/devices/) |
+| Remote buttons and optional volume helper | [Volume helper](docs/volume-hold-bridge.md) |
 
 Online wallpaper, landscape photos and weather use an internet connection. The screensaver also has bundled photos for offline playback.
 
