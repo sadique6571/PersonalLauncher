@@ -4,7 +4,7 @@ import java.util.ArrayList
 
 /**
  * The dock is the first row of the grid. dock_apps decides what is in it, or the saved order once the owner
- * changed the dock on the TV: a slot left free stays empty instead of taking the first grid app (#162) when
+ * changed the dock on the TV: a slot left free stays empty instead of taking the first grid app when
  * fill_dock is false; by default they fill.
  */
 object DockSlots {
@@ -19,7 +19,7 @@ object DockSlots {
     }
 
     /**
-     * The order a reorder session saves when fill_dock is false (#499). Reorder mode shows no empty slots, so a
+     * The order a reorder session saves when fill_dock is false. Reorder mode shows no empty slots, so a
      * grid app slides into a free dock slot without being put there. Only the keys in [dock] (in the dock
      * when the session started, or carried into it) that end inside the first [dockSize] places stay in the
      * dock: they come first, in their order, and every other key follows in its order. The dock size to save is

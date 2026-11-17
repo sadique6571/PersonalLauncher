@@ -213,7 +213,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         density = resources.displayMetrics.density
-        // config.xml, overlaid by config.json from a pushed theme (see Config and tools/theme.sh).
+        // config.xml, overlaid by config.json in the app’s external files directory (see Config).
         val cfg = Config.load(this)
         inputActions = TvInputActions(this, cfg, this::open)
         homeAppKeys = RemoteKeys.parseAppKeys(cfg.appKeys)
@@ -618,7 +618,7 @@ class MainActivity : Activity(), AppAdapter.TileListener {
     /**
      * Home pressed while Home is already in front: singleTask delivers it here, then onResume runs.
      * Back to the top with the first dock tile focused, like the stock launcher. Back from an app
-     * never comes this way, so returning to the app you left from is unchanged (#118).
+     * never comes this way, so returning to the app you left from is unchanged.
      */
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)

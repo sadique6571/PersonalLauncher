@@ -228,7 +228,7 @@ internal class TvInputsPopup(
             val handler = tuned.resolveActivity(host.packageManager)
             if (handler != null) {
                 // On some MediaTek sets the tuner passthrough URI leaves the app's HDMI source selected.
-                // The stock launcher addresses the same activity with the root channel URI instead (#1941).
+                // The stock launcher addresses the same activity with the root channel URI instead.
                 liveTv = if (rootChannel)
                         Intent(Intent.ACTION_VIEW).setData(TvContract.Channels.CONTENT_URI).setComponent(handler)
                         else tuned

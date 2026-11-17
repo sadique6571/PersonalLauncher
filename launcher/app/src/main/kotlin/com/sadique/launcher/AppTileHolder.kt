@@ -36,7 +36,7 @@ internal class AppTileHolder(
     val restNameAlpha: Float = restNameAlpha
     val overshoot: Boolean = overshoot
 
-    /** A dock tile: it grows in place without advanced_effects' lift, which reads as off-centre in the band (#2135). */
+    /** A dock tile: it grows in place without advanced_effects' lift, which reads as off-centre in the band. */
     var inDock = false
 
     init {

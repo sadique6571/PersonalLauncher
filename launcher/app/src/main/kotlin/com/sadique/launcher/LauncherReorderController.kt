@@ -34,8 +34,8 @@ internal class LauncherReorderController(
     /** Tile order when reorder mode started, to save only when something moved. */
     private var orderAtStart: List<String>? = null
     /**
-     * fill_dock false: tiles in the dock when reorder mode started, plus those carried or swapped into it since
-     * (#499). A grid app that only slid into a free slot, which reorder mode does not show, is not one of them.
+     * fill_dock false: tiles in the dock when reorder mode started, plus those carried or swapped into it since.
+     * A grid app that only slid into a free slot, which reorder mode does not show, is not one of them.
      */
     private var dockInSession: MutableSet<String>? = null
     /** fill_dock false: how many dock slots held an app when reorder mode started. */
@@ -289,7 +289,7 @@ internal class LauncherReorderController(
         val before = orderAtStart
         orderAtStart = null
         // fill_dock false: the dock is what the owner put there, saved with its size, so the empty slots that
-        // come back after the mode go after it (#499). With fill_dock true every dock slot holds an app anyway.
+        // come back after the mode go after it. With fill_dock true every dock slot holds an app anyway.
         var docked = -1
         if (fillDockLeavesSlots()) {
             docked = DockSlots.dockCount(keys, COLUMNS, dockInSession!!)
@@ -337,7 +337,7 @@ internal class LauncherReorderController(
         }
         if (to < 0 || to >= n || to == from) return
         keepScroll { adapter.move(from, to) }
-        // The owner carries this tile: where it lands decides whether it is in the dock, not dock_apps (#499).
+        // The owner carries this tile: where it lands decides whether it is in the dock, not dock_apps.
         if (to < COLUMNS) dockInSession!!.add(key)
         else dockInSession!!.remove(key)
         refocusAfterLayout(to)

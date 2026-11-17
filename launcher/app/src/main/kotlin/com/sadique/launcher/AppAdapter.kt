@@ -495,7 +495,7 @@ class AppAdapter internal constructor(
 
     /**
      * A tile in the dock: one of the first savedDocked tiles of the saved order when one was recorded, so an app
-     * the owner moved into the dock stays there (#499); else a dock_apps entry.
+     * the owner moved into the dock stays there; else a dock_apps entry.
      */
     private fun isDocked(e: Entry): Boolean {
         if (savedDocked < 0) return favourites.contains(e.pkg)

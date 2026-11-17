@@ -100,7 +100,7 @@ internal class ModuleCardMenus(
                 cardPrompt = null
                 dialog.dismiss()
                 decideCard(card, v.id == R.id.btnShow)   // guards its own card calls; the tile reload stays outside
-                restoreFocus()   // the tiles changed under the prompt; this also chains the next prompt
+                restoreFocus()   // the tiles changed under the card approval dialog; this also chains the next prompt
             }
         }
         keep.setOnClickListener(choose)

@@ -13,7 +13,7 @@ class DockSlotsTest {
     }
 
     @Test fun anAppCarriedIntoTheDockStaysThere() {
-        // #499: Apple TV (not in dock_apps) carried into the 4th slot, YouTube carried out into the grid.
+        // Apple TV (not in dock_apps) carried into the 4th slot, YouTube carried out into the grid.
         val keys = Arrays.asList("tivimate", "jellyfin", "iplayer", "appletv", "my5", "youtube")
         val dock = set("tivimate", "jellyfin", "iplayer", "appletv")
         assertEquals(keys, DockSlots.dockFirst(keys, 4, dock))
@@ -21,7 +21,7 @@ class DockSlotsTest {
     }
 
     @Test fun aGridAppThatOnlySlidIntoAFreeSlotGoesBackToTheGrid() {
-        // #162: three dock apps and a free slot. Reorder mode shows no empty slot, so "my5" sits in the 4th place
+        // three dock apps and a free slot. Reorder mode shows no empty slot, so "my5" sits in the 4th place
         // without the owner putting it there; only a grid tile moved.
         val keys = Arrays.asList("tivimate", "jellyfin", "iplayer", "my5", "vlc", "appletv")
         val dock = set("tivimate", "jellyfin", "iplayer")

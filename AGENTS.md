@@ -1,6 +1,6 @@
 # Working on Personal Launcher
 
-This repository builds the Android TV launcher `com.sadique.launcher`. The Android project is in `launcher/`. Kotlin application code, Android resources and JVM tests live under `launcher/app/src/`. Start with the current implementation and the [maintainer's review notes](.github/maintainer/MAINTAINER.md). Device notes in `docs/devices/` describe particular firmware and must be read in that context.
+This repository builds the Android TV launcher `com.sadique.launcher`. The Android project is in `launcher/`. Kotlin application code, Android resources and JVM tests live under `launcher/app/src/`. Start with the current implementation and the [maintainer's review notes](.github/maintainer/MAINTAINER.md). The [Xiaomi MiTV-AETP0 device note](docs/devices/xiaomi-mitv-aetp0-dofus.md) applies to the firmware documented there.
 
 ## Make focused changes
 

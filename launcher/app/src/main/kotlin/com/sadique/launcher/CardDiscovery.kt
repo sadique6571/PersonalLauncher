@@ -131,7 +131,7 @@ internal object CardDiscovery {
         else state = if (Cards.DECISION_SHOW == r.decision) State.SHOWN else State.HIDDEN
         val pending = state == State.NEW || state == State.RESIGNED || state == State.RELABELLED
 
-        // Reserved words are policy and always apply. Name collisions only matter while the prompt is
+        // Reserved words are policy and always apply. Name collisions only matter while the card approval dialog is
         // due: they stop a newcomer from borrowing a name, and never undo a decision the owner made.
         // A decided card that changes its label becomes pending again (RELABELLED), so it cannot take
         // another app's name on an update either.

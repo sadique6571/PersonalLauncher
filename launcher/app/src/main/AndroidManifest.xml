@@ -164,7 +164,7 @@
         </activity>
         <!-- Remote Settings button panel (settings_key_panel); own task so the app behind stays put.
              No screenOrientation: a translucent activity may not request one on Android 8.0 (API 26),
-             which throws IllegalStateException in onCreate (#1122); a TV is landscape anyway. -->
+             which throws IllegalStateException in onCreate; a TV is landscape anyway. -->
         <activity
             android:name=".QuickSettingsActivity"
             android:exported="false"
@@ -257,7 +257,7 @@
             </intent-filter>
         </service>
 
-        <!-- tools/theme.sh writes the theme through this where the shell can't reach Android/data;
+        <!-- The shell can write the configuration overlay through this provider when Android/data is inaccessible;
              see ThemeProvider. WRITE_SECURE_SETTINGS: the adb shell has it, ordinary apps don't. -->
         <provider
             android:name=".ThemeProvider"

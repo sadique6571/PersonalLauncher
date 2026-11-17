@@ -428,7 +428,7 @@ class HomeKeyService : AccessibilityService() {
     }
 
     /** stock_home_redirect at boot: the stock home is often on screen before Android binds this service, so no
-     *  window event for it arrives (#1116). Once per boot, open ProbeActivity: when it closes, whatever was in
+     *  window event for it arrives. Once per boot, open ProbeActivity: when it closes, whatever was in
      *  front comes back and sends a window event, and onAccessibilityEvent covers it only if it is the stock home.
      *  An HDMI input or an app that the TV resumed at boot is left alone. */
     private fun probeAtBoot() {
@@ -449,7 +449,7 @@ class HomeKeyService : AccessibilityService() {
 
     /** stock_home_redirect on the Home key: when the stock home is already on screen (it came up at boot, before
      *  Android bound this service), Home brings it up again with no window change, so the redirect above never
-     *  fires and the TV stays on the stock home until another app opens (#1116). A short press opens this
+     *  fires and the TV stays on the stock home until another app opens. A short press opens this
      *  launcher shortly after the system has handled the key; a long press (Google TV's quick settings) is left
      *  alone. Held time, not repeats: key repeats are made after accessibility filtering, so none arrive here. */
     private fun redirectHomeKey(event: KeyEvent) {
@@ -479,7 +479,7 @@ class HomeKeyService : AccessibilityService() {
     /** stock_home_redirect while Android's Home is still the stock launcher (launcherx on Google TV outranks this
      *  one). A Home intent would then put this launcher in the home task and make it the home process, and from
      *  Android 10 the stock launcher, no longer exempt from the limits on background activity starts, can't open
-     *  apps for the remote's YouTube and Netflix buttons (#1274). openHome starts it like an app instead:
+     *  apps for the remote's YouTube and Netflix buttons. openHome starts it like an app instead:
      *  CATEGORY_HOME without ACTION_MAIN is not a Home intent, but still sends MainActivity back to the first tile.
      *  A MainActivity already in the home task, as the install scripts' first start leaves it, is reused as it is
      *  until that task goes (a restart or a reinstall). With this launcher or Android's chooser as Home, openHome

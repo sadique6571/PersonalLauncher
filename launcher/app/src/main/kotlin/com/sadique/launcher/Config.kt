@@ -11,7 +11,7 @@ import java.util.HashMap
  * {@code config.json} in the app's external files directory
  * ({@code /sdcard/Android/data/com.sadique.launcher/files/}). Every key in the JSON is optional and an
  * unknown or badly typed key is ignored, so a theme can change the dock and the look without a rebuild:
- * {@code tools/theme.sh themes/<name>} pushes a theme folder there and restarts Home.
+ * Push config.json there with adb, then reopen Home to load the overlay.
  *
  * Read once in {@link MainActivity#onCreate}; nothing here touches the network.
  */

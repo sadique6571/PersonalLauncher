@@ -1,5 +1,5 @@
 name: Bug
-description: The launcher, a script or the prompt did something wrong
+description: The launcher did something wrong
 labels: [bug]
 body:
   - type: dropdown
@@ -9,9 +9,6 @@ body:
       options:
         - Launcher (the home screen)
         - Install script (build-and-install)
-        - Debloat or restore scripts
-        - tools/tv.py or b64push.py
-        - The prompt (PROMPT.md)
         - GitHub documentation
     validations:
       required: true
