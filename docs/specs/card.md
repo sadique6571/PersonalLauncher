@@ -1,5 +1,7 @@
 # Module card, spec 1
 
+This reference describes the retained module-card implementation. The released Home screen does not wire up module discovery, approval prompts, or the Module cards menu.
+
 An installed Android TV app can declare a card for the launcher. A card is the app's tile with a
 label of its choice, an optional caption and an optional glow colour, placed ahead of the
 alphabetical grid. The launcher shows a card only after the TV owner has answered Show on a prompt, and it
@@ -72,7 +74,7 @@ A label is rejected when:
 - it contains `verified` or `official` anywhere: words that imply endorsement are reserved, and
   nothing a module declares is ever presented as endorsed (the same two words are refused in the
   caption);
-- it is one of the names the launcher's own UI uses, in English or in the TV's language: what its
+- it is one of the names the launcher's own UI uses, as defined in the launcher's UI strings: what its
   pills and dialogs say (`Home`, `Settings`, `Inputs`, `Wi-Fi`, `Live TV`, `App library`,
   `Choose default home`), the name of the clock screensaver in the TV's screensaver picker (`Clock`),
   `Default home` word for word, and the project name `Personal Launcher`;
@@ -136,13 +138,12 @@ any violation drops that one card, with a log line and no other effect.
 6. Placement. A shown card stands in for every tile of its package: the ordinary tile is not shown
    next to it. A package in `hidden_apps` (`config.xml`) shows neither a tile nor a card. A package in
    `dock_apps` gets its card in that dock slot. Other cards sort right after the configured dock apps
-   and before the alphabetical grid, by label. On the default configuration, four dock apps and four
-   columns, that is the first grid tile. With fewer `dock_apps` than columns, the free dock slots take
+   and before ordinary alphabetical tiles when they have no saved order or pinned position. With fewer `dock_apps` than columns, the free dock slots take
    the first grid apps (`fill_dock`, on by default), so a shown card fills the free dock slot, since
    the dock is then simply the first row; with `fill_dock` false the free slots stay empty and a
    shown card is the first grid tile. In the dock, the top shelf shows the label and the glow uses
    the accent; in the grid, the name line under the focused tile shows the label and the caption,
-   as far as they fit on one line. A card uses the app's own banner (or icon) for its artwork.
+   as far as they fit on one line. A card uses the normal artwork rules, including a configured banner override where applicable.
 7. Hide. A hidden card leaves the app's ordinary tile exactly as before: hiding a card never
    removes an app, and showing one never installs anything. A card is hidden or shown again from
    the Module cards list: hold OK on the Settings pill. The list shows every discovered card with
@@ -151,26 +152,22 @@ any violation drops that one card, with a log line and no other effect.
    signing key needs no new prompt.
 9. Launch. A card launches the declaring activity by explicit component with no extras and no data,
    the same way every tile is launched. No field of a card can name an intent, a URI, a class or a
-   package. Holding OK on a card opens the app's App info page, like any tile.
+   package. The tile's configured long-press behavior still applies.
 10. Off switch. `module_cards` in `config.xml` or the `config.json` theme overlay (default `true`). When `false` the launcher never looks
     for cards, never asks, and the Module cards list only says that none are installed.
 
 ## Security
 
-- The launcher never installs, downloads, enables or disables anything, binds no service, loads no
-  code, views or resources from a module beyond the one XML file and the label and artwork every
-  tile already uses. The card code itself makes no network calls.
+- Card discovery reads the declared XML, package metadata and regular tile artwork. The card feature does not install modules, load module code, or make network requests.
 - Nothing is shown until the owner says so, and the answer is pinned to the signing key. The owner
   judges a package name and an app label; the launcher judges the digest.
 - A card can only make its own activity look different; it cannot start anything else. Launching it
   is the same as launching the app's ordinary tile.
 - Label rules are ASCII only so that look-alike letters cannot imitate another name, and labels
   that match another installed app or the launcher's own UI are refused.
-- The card code can never take the home screen down: if any part of it fails on a TV, cards switch
-  off for that session with one log line and Home behaves as with `module_cards` false.
+- The card feature logs caught exceptions or linkage failures and disables module cards for the rest of that launcher process.
 - Residual risk: an app that holds the "draw over other apps" permission could draw over the card approval dialog
-  text. It cannot press the dialog's buttons from a remote. The dialog is shown only while Home has
-  window focus and is dismissed when Home leaves the front.
+  text. The dialog is shown only while Home has window focus and is dismissed when Home leaves the front.
 
 ## Rejections
 

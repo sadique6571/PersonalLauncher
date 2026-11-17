@@ -1,72 +1,15 @@
 # App library
 
-## Optional selection mode
+Open **Apps** in the Home toolbar on the Glass Home layout, or **All apps** on Harmony. Harmony opens a grid. The Glass library is a horizontal list.
 
-Set `"app_library_selection": true` along with `"app_library": true` in a theme,
-or enable both booleans in `config.xml`, to use the library as a Home visibility
-picker. It is off by default and the standard behavior below is unchanged.
+- Press **OK** to open an app, including apps hidden from Home.
+- Hold **OK** for **Open**, **Add to Home** or **Remove from Home**, and **App info**. Adding or removing an app changes its Home visibility. The app stays installed and remains available in the library.
+- Press **Back** to close the action menu or return to Home.
 
-In selection mode, OK toggles the green checkmark. Checked apps come first; both
-groups are alphabetized by displayed name using the launcher locale. After hiding an
-app, focus stays nearby on the next app (the previous app at the end), rather
-than following the hidden app into the second group. Adding an app focuses it
-in the checked group. Hold-OK actions are omitted in this mode; it only controls
-Home shortcuts and never uninstalls apps.
+To edit Home visibility directly, open **Launcher settings → Apps → Hide / unhide apps**. Select an app to toggle its visibility. This uses the same saved visibility choices as the app library.
 
-## Optional: OK opens every app
+The library lists installed apps with an Android TV or standard Android launch activity. When both are available, it prefers the TV entry. Apps hidden from Home appear first, with recent installations prioritized within that group. Apps visible on Home show a checkmark. Some standard Android apps may require a touch input or a mouse.
 
-Set `"library_ok_opens": true` along with `"app_library": true` when the library is where you open the
-apps a theme keeps off Home with `hidden_apps`. OK then opens every app, not only the ones on Home. Hold
-OK for Add to Home or Remove from Home, as before. Cards that are not on Home drop their "Add to Home"
-line (a new app keeps its green dot), and the hint reads "Press to open" for every app. It is off by
-default, and with `app_library_selection` also on, selection mode wins.
+The current Home saves visibility in its `hidden_apps` preference. The `app_library_selection`, `library_ok_opens`, and `show_library_pill` overlay options belong to the older Home implementation, as do the separate `library_apps.txt` and `library_home_removed.txt` shortcut files.
 
-## Standard behavior
-
-Set `"app_library": true` in a theme’s `config.json`, or enable the `app_library`
-bool in `config.xml`. It is off by default. A small glass pill appears after the
-last row of Home apps.
-
-The horizontal library lists installed apps with a TV or ordinary Android launch
-activity, preferring the TV entry when both exist. It excludes services and apps
-without a launch activity. Ordinary Android apps may still need touch or a mouse.
-
-Apps missing from Home come first. Apps first installed within the last seven
-days lead that group, newest first, with a green dot; older missing apps are
-alphabetical. Apps already on Home follow alphabetically, with a checkmark and a
-subtle tint. Updating an existing app does not mark it as new.
-
-- Press OK on a missing app to add it to Home. Focus advances to the next missing
-  app without following the new shortcut across the catalogue.
-- Press OK on a checked app to open it.
-- Hold OK for Open, Add to Home or Remove from Home, and App info. The menu uses
-  the existing Inputs dropdown resources and stays over the selected card.
-- Back closes the menu first, then the library. Down from the last Home row or
-  Right from the final app reaches the library pill; Up returns to the last row.
-
-With `"library_button": true` the library also has a round button in the top bar. Add
-`"show_library_pill": false` to drop the pill after the last row; the button is then the way in, and
-Down from the last row and Right from the final app stay where they are.
-
-With `tile_menu` on, holding OK on a Home tile offers Remove from Home as well, next to Move and App info.
-The remote's Menu key opens that same menu on the focused tile. With `tile_menu` off,
-Menu keeps its normal behavior. Settings-key mappings take priority; Menu is left alone
-on header buttons, while another popup is open, and during reordering.
-Every checked app can be removed from Home, including the theme’s default apps.
-It stays installed and remains in the library, where one press adds it back.
-There is no hidden-app section and no uninstall action.
-
-Choices are stored in the launcher’s private `library_apps.txt` and
-`library_home_removed.txt`, with at most 128 entries in each. Each file is written
-atomically. An unreadable file is left unchanged if an edit fails. Choices
-survive restarts and app updates; missing or disabled packages are omitted until
-they return. Explicit Home removals override theme defaults until re-added.
-Theme config, dock ordering, module-card decisions and other saved tile order
-are not edited. Disabling the library button keeps existing Home choices.
-
-The library uses the existing package receiver to refresh after app changes.
-Labels and Home membership are cached for each refresh; icons load only for
-bound cards. The highlight follows the launcher's animation setting, including
-instant movement when animations are off. There is no polling, network, backdrop capture, new service,
-permission or dependency. The additional manifest query covers ordinary
-LAUNCHER activities on Android 11 and later.
+Implementation: [Home](../launcher/app/src/main/kotlin/com/sadique/launcher/PersonalHomeActivity.kt), [app library](../launcher/app/src/main/kotlin/com/sadique/launcher/AppLibraryDialog.kt), and [Apps settings](../launcher/app/src/main/kotlin/com/sadique/launcher/HomeSettingsMenus.kt).
