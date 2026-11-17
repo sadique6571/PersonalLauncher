@@ -30,7 +30,6 @@
     <string name="h_your_apps">Your apps</string>
     <string name="h_apps_only">Apps-only mode</string>
     <string name="h_on">On</string><string name="h_off">Off</string>
-    <string name="h_diagnostics">Startup diagnostics</string>
     <string name="h_local_pin">Launcher PIN</string>
     <string name="h_local_pin_hint">Protect launcher settings</string>
     <string name="h_sleep_timer">Sleep timer</string>
@@ -51,8 +50,6 @@
     <string name="h_sleep_note">Standby timing may be delayed by Android. Timer is cleared by reboot; firmware decides standby behavior.</string>
     <string name="h_sleep_failed">Standby request unavailable. Check the Home key accessibility service.</string>
     <string name="h_minutes">%1$d minutes</string>
-    <string name="h_di_loading">Reading local status…</string>
-    <string name="h_di_note">Timings are from this process only. No device identifiers are collected. Android HOME can remain Google TV while redirect is enabled.</string>
     <string name="h_quick_settings">Quick settings</string>
     <string name="h_more_tools">More</string>
     <string name="h_single_identity">Name and photo</string>
