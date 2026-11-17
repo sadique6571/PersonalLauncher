@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings menus. IMPORTANT:
+     * s_* string NAMES are canonical chooser keys (HomeSettingsChoices matches on them).
+       Rename a string only together with HomeSettingsChoices.
+     * o_* array ORDER is persisted in SharedPreferences as indices. Never reorder items;
+       append-only, and update the matching IntArray logic if you ever extend one. -->
+<resources>
+
+    <!-- ===== Chooser / menu titles (canonical keys) ===== -->
+    <string name="s_launcher_settings">Launcher settings</string>
+    <string name="s_tiles">Tiles</string>
+    <string name="s_clock">Clock</string>
+    <string name="s_theme">Theme</string>
+    <string name="s_wallpaper">Wallpaper</string>
+    <string name="s_weather">Weather</string>
+    <string name="s_apps">Apps</string>
+    <string name="s_system">System</string>
+
+    <string name="s_app_columns">App columns</string>
+    <string name="s_tile_size">Tile size</string>
+    <string name="s_tile_spacing">Tile spacing</string>
+    <string name="s_tile_corners">Tile corners</string>
+    <string name="s_logo_size">Logo size</string>
+    <string name="s_app_label_size">App label size</string>
+    <string name="s_focus_title_size">Focused app title size</string>
+    <string name="s_focus_border">Focus border</string>
+
+    <string name="s_clock_size">Clock size</string>
+    <string name="s_clock_style">Clock style</string>
+    <string name="s_clock_font">Clock font</string>
+    <string name="s_time_format">Time format</string>
+    <string name="s_clock_align">Clock alignment</string>
+    <string name="s_clock_seconds">Clock seconds</string>
+    <string name="s_clock_glow">Clock glow</string>
+    <string name="s_clock_shadow">Clock shadow</string>
+    <string name="s_hide_clock">Hide clock</string>
+    <string name="s_hide_greeting">Hide greeting</string>
+    <string name="s_hijri_adjust">Hijri day adjustment</string>
+
+    <string name="s_harmony_clock">Harmony Vision Clock</string>
+    <string name="s_watch_face">Watch face</string>
+    <string name="s_metal_finish">Metal finish</string>
+    <string name="s_clock_accent">Clock accent</string>
+    <string name="s_second_hand">Second hand</string>
+    <string name="s_harmony_clock_size">Harmony clock size</string>
+    <string name="s_daily_thoughts">Daily thoughts</string>
+
+    <string name="s_visual_style">Visual style</string>
+    <string name="s_accent_preset">Accent preset</string>
+    <string name="s_custom_accent">Custom accent color</string>
+    <string name="s_launcher_font">Launcher font</string>
+    <string name="s_glass_intensity">Glass intensity</string>
+    <string name="s_glass_finish">Glass finish</string>
+    <string name="s_glass_edge">Glass edge</string>
+    <string name="s_panel_transparency">Panel transparency</string>
+    <string name="s_header_bg">Header background</string>
+    <string name="s_reset_theme">Reset theme</string>
+
+    <string name="s_home_wallpaper">Home wallpaper</string>
+    <string name="s_wallpaper_source">Wallpaper source</string>
+    <string name="s_wallpaper_darkness">Wallpaper darkness</string>
+    <string name="s_bottom_shade">Bottom shade</string>
+    <string name="s_focus_glow">Wallpaper focus glow</string>
+
+    <string name="s_hide_unhide">Hide / unhide apps</string>
+    <string name="s_rearrange">Rearrange apps</string>
+    <string name="s_continue_watching">Continue watching</string>
+    <string name="s_show_hide_apps">Show / hide apps</string>
+
+    <string name="s_screensaver_weather">Screensaver &amp; weather</string>
+    <string name="s_profile">Profile name &amp; photo</string>
+    <string name="s_performance">Performance</string>
+    <string name="s_updates">Updates</string>
+    <string name="s_export">Export settings</string>
+    <string name="s_import">Import settings</string>
+    <string name="s_reset_layout">Reset layout &amp; unhide apps</string>
+
+    <string name="s_weather_widget">Home weather widget</string>
+    <string name="s_widget_animation">Widget animation</string>
+    <string name="s_weather_city">Weather city</string>
+    <string name="s_temp_unit">Temperature unit</string>
+    <string name="s_forecast">Hourly / daily forecast</string>
+
+    <string name="s_screensaver">Online landscape screensaver</string>
+    <string name="s_preview">Preview</string>
+    <string name="s_idle_start_setting">Start after idle</string>
+    <string name="s_idle_start">Start screensaver after idle</string>
+    <string name="s_auto_screensaver">Set automatic screensaver</string>
+    <string name="s_avatar_shape">Avatar shape</string>
+
+    <!-- ===== Menu row hints ===== -->
+    <string name="hint_tiles">App cards layout</string>
+    <string name="hint_clock">Time display</string>
+    <string name="hint_theme">Colors &amp; appearance</string>
+    <string name="hint_wallpaper">Background</string>
+    <string name="hint_weather">Widget, city and forecast</string>
+    <string name="hint_apps">Your apps</string>
+    <string name="hint_system">Launcher system</string>
+
+    <string name="hint_app_columns">Number of cards per row</string>
+    <string name="hint_tile_size">Compact or large cards</string>
+    <string name="hint_tile_spacing">Gap between cards</string>
+    <string name="hint_tile_corners">Sharp, rounded or round</string>
+    <string name="hint_logo_size">App logo size in cards</string>
+    <string name="hint_app_label">App name on the tile</string>
+    <string name="hint_focus_title">Name above the app grid</string>
+    <string name="hint_focus_border">Thin, normal or thick</string>
+
+    <string name="hint_clock_size">Small, normal or large</string>
+    <string name="hint_clock_style">Digital or analog</string>
+    <string name="hint_clock_font">Bold, serif or mono</string>
+    <string name="hint_time_format">12-hour or 24-hour</string>
+    <string name="hint_clock_align">Left, center or right</string>
+    <string name="hint_clock_seconds">Show seconds</string>
+    <string name="hint_clock_glow">Halo behind the clock</string>
+    <string name="hint_clock_shadow">Shadow for readability</string>
+    <string name="hint_hide_clock">Hide the clock</string>
+    <string name="hint_hide_greeting">Hide the greeting</string>
+    <string name="hint_hijri">Adjust for local moon sighting</string>
+
+    <string name="hint_watch_face">Heritage, Chronograph, Skeleton</string>
+    <string name="hint_metal_finish">Space Blue, Obsidian, Titanium, Ceramic</string>
+    <string name="hint_clock_accent">Ice blue, Gold or Rose</string>
+    <string name="hint_second_hand">Smooth sweep or Quartz tick</string>
+    <string name="hint_harmony_clock_size">Fit the clock on the TV</string>
+    <string name="hint_hide_dial">Show or hide the dial</string>
+    <string name="hint_daily_thoughts">An original thought for every day</string>
+
+    <string name="hint_visual_style">Switch theme</string>
+    <string name="hint_accent_preset">Cyan, Orange, Purple or Custom</string>
+    <string name="hint_custom_accent">Custom theme color</string>
+    <string name="hint_launcher_font">Font for the launcher</string>
+    <string name="hint_glass_intensity">Transparency of panels</string>
+    <string name="hint_glass_finish">Soft, Clear or Frosted panels</string>
+    <string name="hint_glass_edge">Reflection around glass surfaces</string>
+    <string name="hint_panel_transparency">Solid panels when off; app drawer stays transparent</string>
+    <string name="hint_header_bg">Status-bar glass in host theme</string>
+    <string name="hint_reset_theme">Restore defaults for the active style</string>
+
+    <string name="hint_own_picture">Your own picture</string>
+    <string name="hint_wallpaper_source">Choose the home background</string>
+    <string name="hint_wallpaper_darkness">Keep the landscape visible</string>
+    <string name="hint_bottom_shade">Dark gradient behind tiles</string>
+    <string name="hint_focus_glow">Glow behind the focused app</string>
+
+    <string name="hint_hide_unhide">Choose which apps appear</string>
+    <string name="hint_rearrange">Choose the order of app cards</string>
+    <string name="hint_continue_watching">Resume titles shared by your TV apps</string>
+
+    <string name="hint_screensaver_weather">Photos, weather &amp; idle timer</string>
+    <string name="hint_profile">Name and local profile picture</string>
+    <string name="hint_performance">Light, Balanced or Full</string>
+    <string name="hint_updates">Automatic GitHub updates</string>
+    <string name="hint_export">Save to a file</string>
+    <string name="hint_import">Restore from a file</string>
+    <string name="hint_reset_layout">Restore the default layout</string>
+
+    <string name="hint_weather_widget">Saved separately for host theme</string>
+    <string name="hint_widget_animation">Animate only while Home is visible</string>
+    <string name="hint_weather_city">Shared weather location</string>
+    <string name="hint_temp_unit">Celsius or Fahrenheit</string>
+    <string name="hint_forecast">Open weather details</string>
+
+    <!-- ===== Option arrays (ORDER IS PERSISTED — never reorder) ===== -->
+    <string-array name="o_on_off"><item>@string/h_on</item><item>@string/h_off</item></string-array>
+    <string-array name="o_off_on"><item>@string/h_off</item><item>@string/h_on</item></string-array>
+    <string-array name="o_show_hide"><item>@string/o_show</item><item>@string/o_hide</item></string-array>
+    <string name="o_show">Show</string>
+    <string name="o_hide">Hide</string>
+
+    <string-array name="o_sizes3"><item>@string/o_small</item><item>@string/o_normal</item><item>@string/o_large</item></string-array>
+    <string-array name="o_sizes4"><item>@string/o_small</item><item>@string/o_normal</item><item>@string/o_large</item><item>@string/o_xlarge</item></string-array>
+    <string name="o_small">Small</string>
+    <string name="o_normal">Normal</string>
+    <string name="o_large">Large</string>
+    <string name="o_xlarge">Extra large</string>
+
+    <string-array name="o_app_columns"><item>@string/o_automatic</item><item>2</item><item>3</item><item>4</item><item>5</item><item>6</item></string-array>
+    <string name="o_automatic">Automatic</string>
+    <string-array name="o_tile_size"><item>@string/o_compact</item><item>@string/o_large</item></string-array>
+    <string name="o_compact">Compact</string>
+    <string-array name="o_tile_spacing"><item>@string/o_compact</item><item>@string/o_normal</item><item>@string/o_wide</item></string-array>
+    <string name="o_wide">Wide</string>
+    <string-array name="o_tile_corners"><item>@string/o_sharp</item><item>@string/o_rounded</item><item>@string/o_round</item></string-array>
+    <string name="o_sharp">Sharp</string>
+    <string name="o_rounded">Rounded</string>
+    <string name="o_round">Round</string>
+    <string-array name="o_focus_border"><item>@string/o_thin</item><item>@string/o_normal</item><item>@string/o_thick</item></string-array>
+    <string name="o_thin">Thin</string>
+    <string name="o_thick">Thick</string>
+
+    <string-array name="o_clock_style"><item>@string/o_digital</item><item>@string/o_analog</item></string-array>
+    <string name="o_digital">Digital</string>
+    <string name="o_analog">Analog</string>
+    <string-array name="o_clock_font"><item>@string/o_bold</item><item>@string/o_serif</item><item>@string/o_mono</item></string-array>
+    <string name="o_bold">Bold</string>
+    <string name="o_serif">Serif</string>
+    <string name="o_mono">Mono</string>
+    <string-array name="o_time_format"><item>@string/o_12h</item><item>@string/o_24h</item></string-array>
+    <string name="o_12h">12-hour</string>
+    <string name="o_24h">24-hour</string>
+    <string-array name="o_clock_align"><item>@string/o_left</item><item>@string/o_center</item><item>@string/o_right</item></string-array>
+    <string name="o_left">Left</string>
+    <string name="o_center">Center</string>
+    <string name="o_right">Right</string>
+    <string-array name="o_hijri"><item>@string/o_minus2</item><item>@string/o_minus1</item><item>@string/o_calculated</item><item>@string/o_plus1</item><item>@string/o_plus2</item></string-array>
+    <string name="o_minus2">-2 days</string>
+    <string name="o_minus1">-1 day</string>
+    <string name="o_calculated">Calculated date</string>
+    <string name="o_plus1">+1 day</string>
+    <string name="o_plus2">+2 days</string>
+
+    <string-array name="o_watch_faces"><item>Heritage</item><item>Chronograph</item><item>Skeleton</item></string-array>
+    <string-array name="o_metal_finish"><item>Space Blue</item><item>Obsidian</item><item>Titanium</item><item>Ceramic</item></string-array>
+    <string-array name="o_clock_accent"><item>Ice Blue</item><item>Gold</item><item>Rose</item></string-array>
+    <string-array name="o_second_hand"><item>@string/o_sweep</item><item>@string/o_quartz</item></string-array>
+    <string name="o_sweep">Smooth sweep</string>
+    <string name="o_quartz">Quartz tick</string>
+
+    <string-array name="o_visual_styles" translatable="false"><item>Sadique Glass OS</item><item>Classic</item><item>Dune Loom</item><item>Pearl Current</item><item>Cobalt Rail</item><item>Sage Fold</item><item>Pine Mist</item><item>Amber Night</item><item>Harmony Vision</item></string-array>
+    <string name="o_theme_default">Theme default</string>
+    <string name="o_harmony_blue">Harmony Blue</string>
+    <string name="o_midnight_cyan">Midnight Cyan</string>
+    <string name="o_sunset_orange">Sunset Orange</string>
+    <string name="o_deep_purple">Deep Purple</string>
+    <string name="o_custom">Custom</string>
+    <string-array name="o_accent_colors" translatable="false"><item>Cyan</item><item>Orange</item><item>Purple</item><item>Green</item><item>Red</item><item>Yellow</item><item>Pink</item><item>White</item><item>Black</item><item>Graphite</item><item>Silver</item><item>Blue</item><item>Teal</item><item>Gold</item><item>Rose</item><item>Indigo</item></string-array>
+    <string-array name="o_launcher_fonts"><item>@string/o_default</item><item>@string/o_serif</item><item>@string/o_mono</item><item>@string/o_light_font</item></string-array>
+    <string name="o_default">Default</string>
+    <string name="o_light_font">Light</string>
+    <string-array name="o_glass_intensity"><item>@string/o_airy</item><item>@string/o_normal</item><item>@string/o_solid</item></string-array>
+    <string name="o_airy">Airy</string>
+    <string name="o_solid">Solid</string>
+    <string-array name="o_glass_finish"><item>@string/o_soft</item><item>@string/o_clear</item><item>@string/o_frosted</item></string-array>
+    <string name="o_soft">Soft</string>
+    <string name="o_clear">Clear</string>
+    <string name="o_frosted">Frosted</string>
+    <string-array name="o_glass_edge"><item>@string/h_off</item><item>@string/o_subtle</item><item>@string/o_bright</item></string-array>
+    <string name="o_subtle">Subtle</string>
+    <string name="o_bright">Bright</string>
+    <string-array name="o_header_bg_full"><item>@string/h_off</item><item>@string/o_glass</item><item>@string/o_frosted</item></string-array>
+    <string-array name="o_header_bg_glass"><item>@string/h_off</item><item>@string/o_glass</item></string-array>
+    <string name="o_glass">Glass</string>
+    <string-array name="o_reset_theme"><item>@string/o_keep_settings</item><item>@string/o_reset_defaults</item></string-array>
+    <string name="o_keep_settings">Keep current settings</string>
+    <string name="o_reset_defaults">Reset to original defaults</string>
+
+    <string-array name="o_home_wallpaper"><item>@string/o_choose_picture</item><item>@string/o_saved_picture</item></string-array>
+    <string name="o_choose_picture">Choose picture</string>
+    <string name="o_saved_picture">Saved custom picture</string>
+    <string name="o_builtin">Built-in</string>
+    <string name="o_bing_daily">Bing daily</string>
+    <string name="o_favorite">Favorite</string>
+    <string name="o_gradient_only">Gradient only</string>
+    <string-array name="o_wallpaper_darkness"><item>@string/o_light_font</item><item>@string/o_medium</item><item>@string/o_dark</item></string-array>
+    <string name="o_medium">Medium</string>
+    <string name="o_dark">Dark</string>
+
+    <string-array name="o_continue_watching"><item>@string/o_show_below</item><item>@string/o_hide_row</item><item>@string/o_allow_watchnext</item></string-array>
+    <string name="o_show_below">Show below apps</string>
+    <string name="o_hide_row">Hide row</string>
+    <string name="o_allow_watchnext">Allow TV Watch Next access</string>
+
+    <string-array name="o_perf"><item>@string/o_auto</item><item>@string/o_light_font</item><item>@string/o_balanced</item><item>@string/o_full</item></string-array>
+    <string name="o_auto">Auto</string>
+    <string name="o_balanced">Balanced</string>
+    <string name="o_full">Full</string>
+
+    <string-array name="o_temp_unit"><item>@string/o_celsius</item><item>@string/o_fahrenheit</item></string-array>
+    <string name="o_celsius">Celsius</string>
+    <string name="o_fahrenheit">Fahrenheit</string>
+    <string-array name="o_idle_start"><item>@string/h_off</item><item>@string/o_min2</item><item>@string/o_min5</item><item>@string/o_min10</item><item>@string/o_min15</item></string-array>
+    <string name="o_min2">2 minutes</string>
+    <string name="o_min5">5 minutes</string>
+    <string name="o_min10">10 minutes</string>
+    <string name="o_min15">15 minutes</string>
+
+    <!-- ===== Home activity / dialogs / toasts ===== -->
+    <string name="h_tile_app_info">App info</string>
+    <string name="h_tile_hide">Hide from launcher</string>
+    <string name="h_tile_move">Move app</string>
+    <string name="h_home_offer_title">Use as Home screen?</string>
+    <string name="h_home_offer_body">Set Personal Launcher as your default launcher so the Home button opens it.</string>
+    <string name="h_home_offer_set">Set as default</string>
+    <string name="h_home_offer_later">Later</string>
+    <string name="h_unhide_first">Unhide an app first</string>
+    <string name="h_order_saved">App order saved</string>
+    <string name="h_photo_failed">Could not read this photo. Choose another image.</string>
+    <string name="h_theme_reset_done">Theme settings reset to defaults</string>
+    <string name="h_move_to_position">Move %1$s to position</string>
+    <string name="h_select_to_move">Select to move this app</string>
+    <string name="h_control_center">Control Center</string>
+    <string name="h_all_apps_button">All apps</string>
+    <string name="h_apps_button">Apps</string>
+    <string name="h_hidden_select_show">Hidden · select to show</string>
+    <string name="h_visible_select_hide">Visible · select to hide</string>
+    <string name="h_hidden_suffix">, hidden</string>
+    <string name="h_visible_suffix">, visible</string>
+    <string name="h_reset_layout_title">Reset layout and show all apps?</string>
+    <string name="h_reset">Reset</string>
+    <string name="h_no_picker">No image picker available on host device</string>
+    <string name="h_choose_picture_first">Choose a picture first</string>
+</resources>

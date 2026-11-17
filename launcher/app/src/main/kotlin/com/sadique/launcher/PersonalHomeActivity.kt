@@ -86,7 +86,6 @@ class PersonalHomeActivity : Activity() {
             prefs = prefs,
             tv = tv,
             settingsTransfer = settingsTransfer,
-            chooseSetting = this::chooseSetting,
             refreshApps = this::refreshApps,
             buildHomeSoon = this::buildHomeSoon,
             updateClock = this::updateClock,
@@ -913,7 +912,8 @@ class PersonalHomeActivity : Activity() {
     private fun updateTileFocusWallpaper(tile: View, app: PersonalApp, focus: Boolean) = homeTileFocus.updateTileFocusWallpaper(tile, app, focus)
 
     private fun showTileOptions(app: PersonalApp) {
-        ThemeDialogBuilder(this).setTitle(app.name).setItems(arrayOf("App info", "Hide from launcher", "Move app", getString(R.string.h_category))) { _, which ->
+        ThemeDialogBuilder(this).setTitle(app.name).setItems(arrayOf(getString(R.string.h_tile_app_info), getString(R.string.h_tile_hide),
+            getString(R.string.h_tile_move), getString(R.string.h_category))) { _, which ->
             if (which == 0) launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + app.info.activityInfo.packageName)))
             else if (which == 2) moveSession.start(app)
             else if (which == 3) HomeLibraryUi.category(this, app.info.activityInfo.packageName) { cachedApps?.let { renderApps(it) } }
@@ -969,7 +969,7 @@ class PersonalHomeActivity : Activity() {
             launch(Intent("com.android.tv.action.VIEW_INPUTS"))
             return
         }
-        chooseSetting("Inputs", labels.toTypedArray()) { which -> launch(targets[which]) }
+        chooseSetting(getString(R.string.h_inputs), labels.toTypedArray()) { which -> launch(targets[which]) }
     }
 
     private fun orderedApps(apps: List<PersonalApp>): MutableList<PersonalApp> {
@@ -990,11 +990,11 @@ class PersonalHomeActivity : Activity() {
         val visible = orderedApps(apps)
         val hidden = prefs.getStringSet("hidden_apps", emptySet())
         visible.removeIf { app -> hidden?.contains(app.info.activityInfo.packageName) == true }
-        if (visible.isEmpty()) { Toast.makeText(this, "Unhide an app first", Toast.LENGTH_SHORT).show(); return }
+        if (visible.isEmpty()) { Toast.makeText(this, R.string.h_unhide_first, Toast.LENGTH_SHORT).show(); return }
         val names = Array(visible.size) { "" }
         val hints = Array(visible.size) { "" }
-        for (i in visible.indices) { names[i] = visible[i].name; hints[i] = "Select to move this app" }
-        GlassSettings.options(this, "Rearrange apps", names, hints) { which -> moveApp(visible[which]) }
+        for (i in visible.indices) { names[i] = visible[i].name; hints[i] = getString(R.string.h_select_to_move) }
+        GlassSettings.options(this, getString(R.string.s_rearrange), names, hints) { which -> moveApp(visible[which]) }
     }
 
     private fun moveApp(moving: PersonalApp) {
@@ -1005,14 +1005,14 @@ class PersonalHomeActivity : Activity() {
         visible.removeIf { app -> hidden?.contains(app.info.activityInfo.packageName) == true }
         val positions = Array(visible.size) { "" }
         for (i in visible.indices) positions[i] = "${i + 1} · ${visible[i].name}"
-        chooseSetting("Move " + moving.name + " to position", positions) { which ->
+        chooseSetting(getString(R.string.h_move_to_position, moving.name), positions) { which ->
             val packages = ArrayList<String>()
             for (app in orderedApps(cachedApps!!)) packages.add(app.info.activityInfo.packageName)
             val destination = packages.indexOf(visible[which].info.activityInfo.packageName)
             val moved = AppOrder.move(packages, moving.info.activityInfo.packageName, destination)
             prefs.edit().putString("app_order", org.json.JSONArray(moved).toString()).apply()
             refreshApps()
-            Toast.makeText(this, "App order saved", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.h_order_saved, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1184,7 +1184,7 @@ class PersonalHomeActivity : Activity() {
         }
         applyAppearance()
         buildHomeSoon()
-        Toast.makeText(this, "Theme settings reset to defaults", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, R.string.h_theme_reset_done, Toast.LENGTH_SHORT).show()
     }
 
     private fun hasFavoriteWallpaper(): Boolean = homeWallpaper.hasFavoriteWallpaper()
@@ -1206,7 +1206,7 @@ class PersonalHomeActivity : Activity() {
     }
 
     private fun refreshApps() {
-        appHeading?.text = "Your apps"
+        appHeading?.setText(R.string.h_your_apps)
         val apps = cachedApps
         if (apps != null) { renderApps(apps); grid?.rebind() } else loadApps()
         // Style preferences can change while app identities/content remain unchanged.
@@ -1256,10 +1256,10 @@ class PersonalHomeActivity : Activity() {
         if (System.currentTimeMillis() < prefs.getLong("home_offer_snooze", 0)) return
         homeOfferShowing = true
         ThemeDialogBuilder(this)
-            .setTitle("Use as Home screen?")
-            .setMessage("Set Personal Launcher as your default launcher so the Home button opens it.")
-            .setPositiveButton("Set as default") { _, _ -> LauncherSetupUi.show(this) }
-            .setNegativeButton("Later") { _, _ -> prefs.edit().putLong("home_offer_snooze",
+            .setTitle(R.string.h_home_offer_title)
+            .setMessage(R.string.h_home_offer_body)
+            .setPositiveButton(R.string.h_home_offer_set) { _, _ -> LauncherSetupUi.show(this) }
+            .setNegativeButton(R.string.h_home_offer_later) { _, _ -> prefs.edit().putLong("home_offer_snooze",
                     System.currentTimeMillis() + 3L * 24 * 60 * 60 * 1000).apply() }
             .setOnDismissListener { homeOfferShowing = false; handler.postDelayed(notificationOffer, 1200) }
             .show()
@@ -1284,7 +1284,7 @@ class PersonalHomeActivity : Activity() {
                     else homeProfile.setAvatar(image)
                 }
             } catch (error: Exception) {
-                handler.post { if (!isDestroyed) Toast.makeText(this, "Could not read this photo. Choose another image.", Toast.LENGTH_LONG).show() }
+                handler.post { if (!isDestroyed) Toast.makeText(this, R.string.h_photo_failed, Toast.LENGTH_LONG).show() }
             }
         }
     }

@@ -428,6 +428,10 @@ internal object GlassSettings {
         options(host, title, names, hints, null, selected)
     }
 
+    fun navigation(host: Activity, title: String, names: Array<String>, selected: IntConsumer) {
+        options(host, title, names, null, null, selected, null, null, navigation = true)
+    }
+
     @JvmStatic
     fun choices(
         host: Activity, title: String, names: Array<String>, current: IntSupplier,
@@ -493,12 +497,12 @@ internal object GlassSettings {
 
     private fun options(
         host: Activity, title: String, names: Array<String>, hints: Array<String>?, icons: IntArray?,
-        selected: IntConsumer, current: IntSupplier?, visible: IntPredicate?
+        selected: IntConsumer, current: IntSupplier?, visible: IntPredicate?,
+        navigation: Boolean = hints != null,
     ) {
         val rows = LinearLayout(host)
         rows.orientation = LinearLayout.VERTICAL
         val dialog = panel(host, title, rows)
-        val navigation = hints != null || title == "Online landscape screensaver"
         for (i in names.indices) {
             val index = i
             val hint = if (hints != null && i < hints.size) hints[i] else null
