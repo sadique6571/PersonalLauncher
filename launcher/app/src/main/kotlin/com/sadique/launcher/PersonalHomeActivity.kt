@@ -71,6 +71,7 @@ class PersonalHomeActivity : Activity() {
     private lateinit var homeWeatherController: HomeWeatherController
     private lateinit var homeSurfaces: HomeSurfaces
     private lateinit var homeNetwork: HomeNetworkStatus
+    private lateinit var homeNetworkSpeed: NetworkSpeedMonitor
     private lateinit var homeLabelScheme: HomeLabelScheme
     private lateinit var homeTileGeometry: HomeTileGeometry
     private lateinit var homePerformance: HomePerformance
@@ -139,6 +140,7 @@ class PersonalHomeActivity : Activity() {
     private var date: TextView? = null
     private var ampm: TextView? = null
     private var networkStatus: TextView? = null
+    private var networkSpeed: TextView? = null
     private var appHeading: TextView? = null
     private var greeting: TextView? = null
     private var homeWeather: TextView? = null
@@ -283,6 +285,7 @@ class PersonalHomeActivity : Activity() {
         tv = modes != null && modes.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
         homeSurfaces = HomeSurfaces(this, prefs, this::dp, this::glassOs)
         homeNetwork = HomeNetworkStatus(this, prefs, this::dp, this::glassOs, { connectivity }, { networkStatus }, { avatar }, { homeWeatherController.refresh() })
+        homeNetworkSpeed = NetworkSpeedMonitor(prefs) { networkSpeed }
         homeLabelScheme = HomeLabelScheme(prefs, tv, this::dp, this::glassOs, clockContrast, { sky }, { liquidBackdrop }, { headerBackdrop }, { userName }, { greeting }, { homeWeather }, { networkStatus }, { time }, { ampm }, { date }, { islamicDate }, { appHeading })
         homeTileGeometry = HomeTileGeometry(this, prefs, tv, this::dp, { pageWidth }, { appBody }, { grid?.columnCount ?: 4 })
         homePerformance = HomePerformance(this, prefs) { sky }
@@ -558,6 +561,7 @@ class PersonalHomeActivity : Activity() {
         userName = headerViews.name
         greeting = headerViews.greeting
         networkStatus = headerViews.networkStatus
+        networkSpeed = headerViews.networkSpeed
         homeWeather = headerViews.weather
         bluetoothStatus = headerViews.bluetooth
         page.addView(header)
@@ -1313,6 +1317,7 @@ class PersonalHomeActivity : Activity() {
         handler.removeCallbacks(tick)
         tick.run()
         updateNetwork()
+        homeNetworkSpeed.start()
         val watching = continueWatching
         if (watching != null && !prefs.getBoolean("apps_only", false)) watching.start()
         homeWeatherController.refresh()
@@ -1343,6 +1348,7 @@ class PersonalHomeActivity : Activity() {
         handler.removeCallbacks(themeMenuRefresh)
         VolumeKeys.stop()
         VolumeSlider.hide(this)
+        homeNetworkSpeed.stop()
         resumed = false
         weatherWidget?.active(false)
         analogClock?.active(false)

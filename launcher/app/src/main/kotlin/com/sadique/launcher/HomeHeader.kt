@@ -35,6 +35,7 @@ internal class HomeHeader(
         val name: TextView,
         val greeting: TextView,
         val networkStatus: TextView,
+        val networkSpeed: TextView,
         val weather: TextView,
         val bluetooth: TextView?,
         val actions: LinearLayout,
@@ -118,6 +119,12 @@ internal class HomeHeader(
         bar.gravity = Gravity.END or Gravity.CENTER_VERTICAL
         if (glassOs) { bar.id = R.id.topButtons; netStatus.isFocusable = true; netStatus.setOnKeyListener { v, _, e -> toolbarKey(v, e) } }
         bar.addView(netStatus, LinearLayout.LayoutParams(-2, dp(44)))
+        val speedView = text("0 Kbps/0 MB", 13, MUTED)
+        speedView.gravity = Gravity.CENTER
+        speedView.isSingleLine = true
+        speedView.setPadding(dp(if (tv) 13 else 11), dp(8), dp(if (tv) 13 else 11), dp(8))
+        speedView.contentDescription = "Network speed and today's usage"
+        bar.addView(speedView, LinearLayout.LayoutParams(-2, dp(44)))
         val weatherView = text("Unavailable", 13, MUTED)
         weatherView.gravity = Gravity.CENTER
         weatherView.setPadding(dp(10), dp(8), dp(10), dp(8))
@@ -143,7 +150,7 @@ internal class HomeHeader(
             bar.addView(btStatus, LinearLayout.LayoutParams(-2, dp(40)))
             btStatus
         } else null
-        return Views(photo, nameView, greetView, netStatus, weatherView, btStatus, bar)
+        return Views(photo, nameView, greetView, netStatus, speedView, weatherView, btStatus, bar)
     }
 
     private fun dp(value: Int): Int = Math.round(value * host.resources.displayMetrics.density)
