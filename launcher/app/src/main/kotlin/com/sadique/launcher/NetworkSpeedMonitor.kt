@@ -1,5 +1,6 @@
 package com.sadique.launcher
 
+import android.content.Context
 import android.content.SharedPreferences
 import android.net.TrafficStats
 import android.os.Handler
@@ -7,7 +8,6 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.View
 import android.widget.TextView
-import java.time.LocalDate
 
 /**
  * Header network speed + today's TOTAL device usage, e.g. "500 Kbps/30 MB".
@@ -24,14 +24,42 @@ internal class NetworkSpeedMonitor(
     private val prefs: SharedPreferences,
     private val view: () -> TextView?,
 ) {
-    /** Persisted day state plus the total derived from it. */
-    data class DayUsage(val base: Long, val accum: Long, val last: Long, val total: Long)
-
     companion object {
-        private const val DAY_KEY = "net_speed_day"
-        private const val BASE_KEY = "net_day_base"
-        private const val ACCUM_KEY = "net_day_accum"
-        private const val LAST_KEY = "net_day_last"
+        private var daily: DailyNetworkUsage? = null
+        private var backgroundReaderStarted = false
+
+        private fun totalBytes(): Long {
+            val rx = TrafficStats.getTotalRxBytes()
+            val tx = TrafficStats.getTotalTxBytes()
+            return if (rx < 0 || tx < 0) -1 else rx + tx
+        }
+
+        private fun tracker(context: Context, prefs: SharedPreferences): DailyNetworkUsage {
+            val app = context.applicationContext
+            val tracker = daily ?: run {
+                val store = app.getSharedPreferences("device_daily_usage", Context.MODE_PRIVATE)
+                if (!store.contains("net_speed_day") && prefs.contains("net_speed_day")) {
+                    val edit = store.edit()
+                    for (key in listOf("net_speed_day", "net_day_base", "net_day_accum", "net_day_last")) {
+                        if (prefs.contains(key)) edit.putLong(key, prefs.getLong(key, 0L))
+                    }
+                    edit.apply()
+                }
+                DailyNetworkUsage(app, store).also { daily = it }
+            }
+            if (!backgroundReaderStarted) {
+                backgroundReaderStarted = true
+                val handler = Handler(Looper.getMainLooper())
+                handler.postDelayed(object : Runnable {
+                    override fun run() {
+                        tracker.sample(totalBytes())
+                        handler.postDelayed(this, 10_000L)
+                    }
+                }, 10_000L)
+            }
+            return tracker
+        }
+
         private const val INTERVAL_MS = 1000L
         private const val MB = 1024L * 1024L
         private const val GB = MB * 1024L
@@ -55,23 +83,6 @@ internal class NetworkSpeedMonitor(
             return "${tenths / 10L}.${tenths % 10L} GB"
         }
 
-        /**
-         * Rolls the persisted day state forward for one [current] device-wide
-         * counter reading. A reading below the last one means the counters
-         * reset (reboot), so the usage counted before the reboot is banked
-         * into [DayUsage.accum] and the baseline restarts at [current].
-         */
-        @JvmStatic
-        fun rollDay(current: Long, base: Long, accum: Long, last: Long): DayUsage {
-            var newBase = base
-            var newAccum = accum
-            if (current < last) {
-                newAccum += (last - newBase).coerceAtLeast(0L)
-                newBase = current
-            }
-            val total = newAccum + (current - newBase).coerceAtLeast(0L)
-            return DayUsage(newBase, newAccum, current, total)
-        }
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -101,14 +112,6 @@ internal class NetworkSpeedMonitor(
         handler.removeCallbacks(tick)
     }
 
-    private fun totalBytes(): Long {
-        val rx = TrafficStats.getTotalRxBytes()
-        val tx = TrafficStats.getTotalTxBytes()
-        val unsupported = TrafficStats.UNSUPPORTED.toLong()
-        if (rx == unsupported && tx == unsupported) return -1L
-        return (if (rx < 0) 0L else rx) + (if (tx < 0) 0L else tx)
-    }
-
     private fun sample() {
         val textView = view() ?: return
         val current = totalBytes()
@@ -117,23 +120,7 @@ internal class NetworkSpeedMonitor(
             return
         }
         textView.visibility = View.VISIBLE
-        val today = LocalDate.now().toEpochDay()
-        val usage = if (prefs.getLong(DAY_KEY, -1L) != today) {
-            val fresh = DayUsage(current, 0L, current, 0L)
-            prefs.edit().putLong(DAY_KEY, today).putLong(BASE_KEY, fresh.base)
-                .putLong(ACCUM_KEY, 0L).putLong(LAST_KEY, current).apply()
-            fresh
-        } else {
-            val rolled = rollDay(
-                current,
-                prefs.getLong(BASE_KEY, current),
-                prefs.getLong(ACCUM_KEY, 0L),
-                prefs.getLong(LAST_KEY, current),
-            )
-            prefs.edit().putLong(BASE_KEY, rolled.base).putLong(ACCUM_KEY, rolled.accum)
-                .putLong(LAST_KEY, rolled.last).apply()
-            rolled
-        }
+        val usage = tracker(textView.context, prefs).sample(current)
         val now = SystemClock.elapsedRealtime()
         val bytesPerSecond = if (lastBytes < 0) 0L else {
             val delta = (current - lastBytes).coerceAtLeast(0L)
@@ -142,6 +129,6 @@ internal class NetworkSpeedMonitor(
         }
         lastBytes = current
         lastTime = now
-        textView.text = formatSpeed(bytesPerSecond) + "/" + formatTotal(usage.total)
+        textView.text = formatSpeed(bytesPerSecond) + "/" + formatTotal(usage)
     }
 }

@@ -30,32 +30,17 @@ class NetworkSpeedFormatTest {
         assertEquals("2.0 GB", NetworkSpeedMonitor.formatTotal(2L * 1024L * 1024L * 1024L))
     }
 
-    @Test fun dayTotalIsCurrentMinusBaseline() {
-        val usage = NetworkSpeedMonitor.rollDay(1000L, 100L, 0L, 900L)
-        assertEquals(900L, usage.total)
-        assertEquals(100L, usage.base)
-        assertEquals(0L, usage.accum)
-        assertEquals(1000L, usage.last)
+    @Test fun rebootBanksPreviousTotalAndIncludesNewBootTraffic() {
+        for (current in listOf(50L, 1500L)) {
+            val state = DailyNetworkUsage.roll(current, 100L, 20L, 900L, reboot = true)
+            assertEquals(0L, state.base)
+            assertEquals(820L, state.bank)
+            val next = DailyNetworkUsage.roll(current + 25, state.base, state.bank, current, false)
+            assertEquals(820L + current + 25, next.bank + current + 25 - next.base)
+        }
     }
 
-    @Test fun dayTotalBanksUsageBeforeReboot() {
-        val usage = NetworkSpeedMonitor.rollDay(50L, 100L, 0L, 900L)
-        assertEquals(800L, usage.total)
-        assertEquals(50L, usage.base)
-        assertEquals(800L, usage.accum)
-        assertEquals(50L, usage.last)
-    }
-
-    @Test fun dayTotalKeepsBankedUsageAfterReboot() {
-        val usage = NetworkSpeedMonitor.rollDay(150L, 50L, 800L, 50L)
-        assertEquals(900L, usage.total)
-        assertEquals(50L, usage.base)
-        assertEquals(800L, usage.accum)
-        assertEquals(150L, usage.last)
-    }
-
-    @Test fun dayTotalNeverGoesNegative() {
-        val usage = NetworkSpeedMonitor.rollDay(50L, 100L, 0L, 40L)
-        assertEquals(0L, usage.total)
+    @Test fun sameBootKeepsBaselineAcrossProcessRestarts() {
+        assertEquals(DailyNetworkUsage.State(100, 20), DailyNetworkUsage.roll(1200, 100, 20, 900, false))
     }
 }
